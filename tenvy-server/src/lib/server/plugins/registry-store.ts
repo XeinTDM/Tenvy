@@ -168,6 +168,35 @@ export interface PluginRegistryStore {
 export const createPluginRegistryStore = (
 	runtimeStore: PluginRuntimeStore = createPluginRuntimeStore()
 ): PluginRegistryStore => {
+	const ensureDependenciesApproved = async (manifest: PluginManifest) => {
+		const dependencies = manifestDependencies(manifest);
+		if (!dependencies || dependencies.length === 0) {
+			return;
+		}
+
+		const missing: string[] = [];
+		for (const dependency of dependencies) {
+			const runtime = await runtimeStore.find(dependency);
+			if (!runtime) {
+				missing.push(`${dependency} (not registered)`);
+				continue;
+			}
+			if (runtime.approvalStatus !== 'approved') {
+				missing.push(`${dependency} (approval ${runtime.approvalStatus})`);
+				continue;
+			}
+			if (runtime.signatureStatus !== 'trusted') {
+				missing.push(`${dependency} (signature ${runtime.signatureStatus})`);
+			}
+		}
+
+		if (missing.length > 0) {
+			throw new PluginRegistryError(
+				`Plugin dependencies for ${manifest.id} are not satisfied: ${missing.join(', ')}`
+			);
+		}
+	};
+
 	const verifyManifest = async (
 		manifest: PluginManifest,
 		preverifiedSummary?: PluginSignatureVerificationSummary | null
@@ -194,6 +223,8 @@ export const createPluginRegistryStore = (
 				);
 			}
 		}
+
+		await ensureDependenciesApproved(manifest);
 
 		const pluginId = manifest.id.trim();
 		if (!pluginId) {

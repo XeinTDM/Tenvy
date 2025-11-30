@@ -454,11 +454,15 @@ export class PluginTelemetryStore {
 
 			const signatureType = resolveManifestSignature(manifest).type;
 			const signatureReason = verificationBlockReason(record);
+			const dependencyReason = await this.dependencyBlockReason(manifest);
 
 			const signedHash = manifest.package.hash?.toLowerCase();
 			const observedHash = installation.hash?.toLowerCase();
 
-			if (signatureReason) {
+			if (dependencyReason) {
+				status = 'blocked';
+				reason = reason ?? dependencyReason;
+			} else if (signatureReason) {
 				status = 'blocked';
 				reason = signatureReason;
 			} else if (approvalStatus !== 'approved') {
@@ -895,15 +899,43 @@ export class PluginTelemetryStore {
 			});
 		}
 
-		entries.sort((a, b) => a.pluginId.localeCompare(b.pluginId));
+		const entriesById = new Map(entries.map((entry) => [entry.pluginId, entry]));
+		let removedDependencies: string[];
+		do {
+			removedDependencies = [];
+			for (const [pluginId, entry] of entriesById) {
+				const deps = entry.dependencies ?? [];
+				for (const dependency of deps) {
+					if (!entriesById.has(dependency)) {
+						removedDependencies.push(pluginId);
+						break;
+					}
+				}
+			}
+
+			if (removedDependencies.length > 0) {
+				for (const pluginId of removedDependencies) {
+					const entry = entriesById.get(pluginId);
+					if (!entry) continue;
+					const missing = (entry.dependencies ?? []).filter((dep) => !entriesById.has(dep));
+					console.warn(
+						`Skipping plugin ${pluginId} for manifest snapshot: missing dependencies ${missing.join(', ')}`
+					);
+					entriesById.delete(pluginId);
+				}
+			}
+		} while (removedDependencies.length > 0);
+
+		const filteredEntries = Array.from(entriesById.values());
+		filteredEntries.sort((a, b) => a.pluginId.localeCompare(b.pluginId));
 
 		const digests = new Map(
-			entries.map((entry) => [
+			filteredEntries.map((entry) => [
 				entry.pluginId,
 				buildDescriptorFingerprint(entry.manifestDigest, entry.manualPushAt ?? null)
 			])
 		);
-		const versionSeed = entries
+		const versionSeed = filteredEntries
 			.map(
 				(entry) =>
 					`${entry.pluginId}:${buildDescriptorFingerprint(
@@ -914,7 +946,7 @@ export class PluginTelemetryStore {
 			.join('|');
 		const version = createHash('sha256').update(versionSeed, 'utf8').digest('hex');
 
-		this.manifestSnapshot = { version, entries, digests };
+		this.manifestSnapshot = { version, entries: filteredEntries, digests };
 	}
 
 	private async ensureManifestIndex(): Promise<void> {
@@ -934,6 +966,31 @@ export class PluginTelemetryStore {
 		}
 		this.manifestLoadedAt = now;
 		this.manifestSnapshot = null;
+	}
+
+	private async dependencyBlockReason(manifest: PluginManifest): Promise<string | null> {
+		const dependencies = manifestDependencies(manifest);
+		if (!dependencies || dependencies.length === 0) {
+			return null;
+		}
+
+		const issues: string[] = [];
+		for (const dependency of dependencies) {
+			const runtime = await this.runtimeStore.find(dependency);
+			if (!runtime) {
+				issues.push(`${dependency} not registered`);
+				continue;
+			}
+			if (runtime.approvalStatus !== 'approved') {
+				issues.push(`${dependency} approval ${runtime.approvalStatus}`);
+				continue;
+			}
+			if (runtime.signatureStatus !== 'trusted') {
+				issues.push(`${dependency} signature ${runtime.signatureStatus}`);
+			}
+		}
+
+		return issues.length > 0 ? `dependencies not satisfied: ${issues.join(', ')}` : null;
 	}
 
 	private async refreshAggregates(pluginId: string): Promise<void> {
