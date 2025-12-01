@@ -108,6 +108,32 @@ const parseMetadata = (payload: string | null | undefined): PluginRegistryMetada
 const computeManifestDigest = (manifestJson: string): string =>
 	createHash('sha256').update(manifestJson, 'utf8').digest('hex');
 
+const normalizeDependencies = (values: readonly string[] | undefined): string[] => {
+	if (!values || values.length === 0) {
+		return [];
+	}
+	const unique = new Set<string>();
+	const normalized: string[] = [];
+	for (const value of values) {
+		const trimmed = value?.trim();
+		if (!trimmed) {
+			continue;
+		}
+		const lowered = trimmed.toLowerCase();
+		if (unique.has(lowered)) {
+			continue;
+		}
+		unique.add(lowered);
+		normalized.push(trimmed);
+	}
+	return normalized;
+};
+
+function manifestDependencies(manifest: PluginManifest): string[] | undefined {
+	const normalized = normalizeDependencies(manifest.dependencies);
+	return normalized.length > 0 ? normalized : undefined;
+}
+
 const toDateValue = (value: Date | string | number | null | undefined): Date | null => {
 	if (value == null) {
 		return null;
@@ -226,6 +252,8 @@ export const createPluginRegistryStore = (
 
 		await ensureDependenciesApproved(manifest);
 
+		const verification = await verifyManifest(manifest, input.preverifiedSummary ?? null);
+
 		const pluginId = manifest.id.trim();
 		if (!pluginId) {
 			throw new PluginRegistryError('Plugin manifest is missing id');
@@ -240,64 +268,65 @@ export const createPluginRegistryStore = (
 		const digest = computeManifestDigest(manifestJson);
 		const artifactHash = manifest.package?.hash?.trim().toLowerCase() ?? null;
 		const artifactSize = manifest.package?.sizeBytes ?? null;
-
 		const metadata = serializeMetadata(input.metadata);
 
-		const existing = await db
-			.select({ id: registryTable.id })
-			.from(registryTable)
-			.where(and(eq(registryTable.pluginId, pluginId), eq(registryTable.version, version)))
-			.limit(1);
+		return await db.transaction(async (tx) => {
+			const existing = await tx
+				.select({ id: registryTable.id })
+				.from(registryTable)
+				.where(and(eq(registryTable.pluginId, pluginId), eq(registryTable.version, version)))
+				.limit(1);
 
-		if (existing.length > 0) {
-			throw new PluginRegistryError(`Plugin ${pluginId} version ${version} is already published`);
-		}
+			if (existing.length > 0) {
+				throw new PluginRegistryError(`Plugin ${pluginId} version ${version} is already published`);
+			}
 
-		const now = new Date();
-		const id = randomUUID();
+			const now = new Date();
+			const id = randomUUID();
 
-		await db
-			.insert(registryTable)
-			.values({
-				id,
-				pluginId,
-				version,
-				manifest: manifestJson,
-				manifestDigest: digest,
-				artifactHash,
-				artifactSizeBytes: artifactSize ?? null,
-				metadata,
+			await tx
+				.insert(registryTable)
+				.values({
+					id,
+					pluginId,
+					version,
+					manifest: manifestJson,
+					manifestDigest: digest,
+					artifactHash,
+					artifactSizeBytes: artifactSize ?? null,
+					metadata,
+					approvalStatus: 'pending',
+					publishedBy: input.actorId ?? null,
+					publishedAt: now,
+					approvalNote: input.approvalNote ?? null,
+					createdAt: now,
+					updatedAt: now
+				})
+				.run();
+
+			const runtimeStoreTx = createPluginRuntimeStore(tx);
+			const loadedRecord = {
+				source: `registry:${id}`,
+				manifest,
+				verification,
+				raw: manifestJson
+			} satisfies Parameters<PluginRuntimeStore['ensure']>[0];
+
+			await runtimeStoreTx.ensure(loadedRecord);
+			await runtimeStoreTx.update(pluginId, {
 				approvalStatus: 'pending',
-				publishedBy: input.actorId ?? null,
-				publishedAt: now,
-				approvalNote: input.approvalNote ?? null,
-				createdAt: now,
-				updatedAt: now
-			})
-			.run();
+				approvedAt: null,
+				approvalNote: input.approvalNote ?? null
+			});
 
-		const verification = await verifyManifest(manifest, input.preverifiedSummary ?? null);
-		const loadedRecord = {
-			source: `registry:${id}`,
-			manifest,
-			verification,
-			raw: manifestJson
-		} satisfies Parameters<PluginRuntimeStore['ensure']>[0];
+			const [row] = await tx.select().from(registryTable).where(eq(registryTable.id, id)).limit(1);
 
-		await runtimeStore.ensure(loadedRecord);
-		await runtimeStore.update(pluginId, {
-			approvalStatus: 'pending',
-			approvedAt: null,
-			approvalNote: input.approvalNote ?? null
+			if (!row) {
+				throw new PluginRegistryError('Failed to persist registry entry');
+			}
+
+			return toRegistryRecord(row);
 		});
-
-		const [row] = await db.select().from(registryTable).where(eq(registryTable.id, id)).limit(1);
-
-		if (!row) {
-			throw new PluginRegistryError('Failed to persist registry entry');
-		}
-
-		return toRegistryRecord(row);
 	};
 
 	const approve = async (input: ApprovePluginInput): Promise<PluginRegistryRecord> => {

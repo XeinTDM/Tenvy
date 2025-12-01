@@ -1,8 +1,9 @@
 import { env } from '$env/dynamic/private';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { isAbsolute } from 'node:path';
 import type { AgentPluginSignaturePolicy } from '../../../../../shared/types/config';
 import type { PluginSignatureVerificationOptions } from '../../../../../shared/types/plugin-manifest';
+import { resolveProjectPath } from '$lib/server/path-utils.js';
 
 type ServerSignaturePolicy = {
 	sha256AllowList: string[];
@@ -18,10 +19,15 @@ const DEFAULT_POLICY: ServerSignaturePolicy = {
 
 let cachedPolicy: ServerSignaturePolicy | null = null;
 
+const resolveRootRelativePath = (value: string): string =>
+	isAbsolute(value) ? value : resolveProjectPath(value);
+
 const policyPath = (): string => {
 	const override = env.TENVY_PLUGIN_TRUST_CONFIG?.trim();
-	const target = override && override.length > 0 ? override : 'resources/plugin-signers.json';
-	return resolve(process.cwd(), target);
+	if (override && override.length > 0) {
+		return resolveRootRelativePath(override);
+	}
+	return resolveProjectPath('resources', 'plugin-signers.json');
 };
 
 const normalizeHex = (value: string | undefined | null): string =>

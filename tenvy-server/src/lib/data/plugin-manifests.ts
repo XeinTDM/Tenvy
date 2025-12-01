@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { readdir, readFile } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import type {
 	PluginManifest,
 	PluginSignatureVerificationError,
@@ -22,6 +22,7 @@ import {
 	summarizeVerificationFailure,
 	summarizeVerificationSuccess
 } from '$lib/server/plugins/signature-summary.js';
+import { resolveProjectPath } from '$lib/server/path-utils.js';
 
 export interface LoadedPluginManifest {
 	source: string;
@@ -35,17 +36,20 @@ export interface LoadedPluginManifest {
 	};
 }
 
-const defaultManifestDirectory = resolve(process.cwd(), 'resources/plugin-manifests');
+const defaultManifestDirectory = resolveProjectPath('resources', 'plugin-manifests');
+
+const resolveRelativeToRoot = (value: string): string =>
+	isAbsolute(value) ? value : resolveProjectPath(value);
 
 const isJsonFile = (entryName: string): boolean => entryName.toLowerCase().endsWith('.json');
 
 const resolveDirectory = (directory?: string): string => {
 	if (directory && directory.trim().length > 0) {
-		return resolve(directory);
+		return resolveRelativeToRoot(directory.trim());
 	}
 
 	if (env.TENVY_PLUGIN_MANIFEST_DIR && env.TENVY_PLUGIN_MANIFEST_DIR.trim().length > 0) {
-		return resolve(env.TENVY_PLUGIN_MANIFEST_DIR);
+		return resolveRelativeToRoot(env.TENVY_PLUGIN_MANIFEST_DIR.trim());
 	}
 
 	return defaultManifestDirectory;

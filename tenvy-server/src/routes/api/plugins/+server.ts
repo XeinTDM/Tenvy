@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { isAbsolute, join, resolve, sep } from 'node:path';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createPluginRepository } from '$lib/data/plugins.js';
@@ -23,6 +23,7 @@ import {
 	type PluginSignatureVerificationSummary
 } from '../../../../../shared/types/plugin-manifest';
 import { summarizeVerificationSuccess } from '$lib/server/plugins/signature-summary.js';
+import { resolveProjectPath } from '$lib/server/path-utils.js';
 
 const MANIFEST_FILE_EXTENSION = '.json';
 const PLUGIN_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -32,8 +33,18 @@ const registryStore = createPluginRegistryStore();
 
 const resolveManifestDirectory = (): string => {
 	const configured = process.env.TENVY_PLUGIN_MANIFEST_DIR?.trim();
-	const directory = configured && configured.length > 0 ? configured : 'resources/plugin-manifests';
-	return resolve(process.cwd(), directory);
+	if (configured && configured.length > 0) {
+		return isAbsolute(configured) ? configured : resolveProjectPath(configured);
+	}
+	return resolveProjectPath('resources', 'plugin-manifests');
+};
+
+const resolveArtifactDirectory = (): string => {
+	const configured = process.env.TENVY_PLUGIN_ARTIFACT_DIR?.trim();
+	if (configured && configured.length > 0) {
+		return isAbsolute(configured) ? configured : resolveProjectPath(configured);
+	}
+	return resolveProjectPath('var', 'plugin-artifacts');
 };
 
 const requireFile = (value: FormDataEntryValue | null, name: string): File => {
@@ -89,7 +100,7 @@ const writeArtifact = async (directory: string, fileName: string, payload: Uint8
 	const normalizedBase = directory.endsWith(sep) ? directory : `${directory}${sep}`;
 	const resolved = resolve(target);
 	if (!resolved.startsWith(normalizedBase)) {
-		throw error(400, { message: 'Resolved artifact path is outside the manifest directory' });
+		throw error(400, { message: 'Resolved artifact path is outside the artifact directory' });
 	}
 	await writeFile(target, payload);
 };
@@ -216,7 +227,8 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			});
 		}
 
-		const artifactPath = join(manifestDirectory, artifactName);
+		const artifactDirectory = resolveArtifactDirectory();
+		const artifactPath = join(artifactDirectory, artifactName);
 		const manifestPath = join(manifestDirectory, `${pluginId}${MANIFEST_FILE_EXTENSION}`);
 		const writtenPaths: string[] = [];
 		const recordWritten = (path: string) => {
@@ -229,7 +241,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		};
 
 		try {
-			await writeArtifact(manifestDirectory, artifactName, artifactBuffer);
+			await writeArtifact(artifactDirectory, artifactName, artifactBuffer);
 			recordWritten(artifactPath);
 			await writeManifest(manifestDirectory, pluginId, manifest);
 			recordWritten(manifestPath);
