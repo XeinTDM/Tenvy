@@ -27,7 +27,7 @@
 		FilePlus,
 		Pencil,
 		Trash2,
-		Loader2,
+		LoaderCircle,
 		Search,
 		Folder,
 		File as FileIcon,
@@ -1168,7 +1168,7 @@
 			<div class="ms-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
 				{#if loading}
 					<span class="inline-flex items-center gap-2">
-						<Loader2 class="h-3.5 w-3.5 animate-spin" />
+						<LoaderCircle class="h-3.5 w-3.5 animate-spin" />
 						Loading…
 					</span>
 				{/if}
