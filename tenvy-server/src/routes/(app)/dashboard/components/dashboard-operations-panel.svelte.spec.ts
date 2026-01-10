@@ -14,9 +14,7 @@ vi.mock('./components/client-presence-map.lazy.svelte', () => ({
 				options.target.appendChild(placeholder);
 			}
 		}
-		// eslint-disable-next-line @typescript-eslint/no-empty-function
 		$destroy() {}
-		// eslint-disable-next-line @typescript-eslint/no-empty-function
 		$set() {}
 	}
 }));

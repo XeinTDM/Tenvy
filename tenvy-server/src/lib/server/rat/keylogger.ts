@@ -61,19 +61,12 @@ export class KeyloggerManager {
 			const telemetry: KeyloggerTelemetryState = {
 				batches: batches.map((b) => ({
 					batchId: b.id,
-					capturedAt:
-						b.capturedAt instanceof Date
-							? b.capturedAt.toISOString()
-							: new Date(b.capturedAt).toISOString(),
+					capturedAt: b.capturedAt?.toISOString() ?? new Date().toISOString(),
 					totalEvents: b.totalEvents,
 					events: JSON.parse(b.events) as KeyloggerKeystroke[]
 				})),
 				totalEvents: sessionRecord?.totalEvents ?? 0,
-				lastCapturedAt: sessionRecord?.lastCapturedAt
-					? sessionRecord.lastCapturedAt instanceof Date
-						? sessionRecord.lastCapturedAt.toISOString()
-						: new Date(sessionRecord.lastCapturedAt).toISOString()
-					: undefined
+				lastCapturedAt: sessionRecord?.lastCapturedAt?.toISOString()
 			};
 
 			return {
@@ -82,18 +75,11 @@ export class KeyloggerManager {
 							sessionId: sessionRecord.id,
 							agentId: sessionRecord.agentId,
 							mode: sessionRecord.mode as KeyloggerMode,
-							startedAt:
-								sessionRecord.startedAt instanceof Date
-									? sessionRecord.startedAt.toISOString()
-									: new Date(sessionRecord.startedAt).toISOString(),
-							active: Boolean(sessionRecord.active),
+							startedAt: sessionRecord.startedAt!.toISOString(),
+							active: sessionRecord.active,
 							config: JSON.parse(sessionRecord.config) as KeyloggerStartConfig,
 							totalEvents: sessionRecord.totalEvents,
-							lastCapturedAt: sessionRecord.lastCapturedAt
-								? sessionRecord.lastCapturedAt instanceof Date
-									? sessionRecord.lastCapturedAt.toISOString()
-									: new Date(sessionRecord.lastCapturedAt).toISOString()
-								: undefined
+							lastCapturedAt: sessionRecord.lastCapturedAt?.toISOString()
 						}
 					: null,
 				telemetry
@@ -116,8 +102,8 @@ export class KeyloggerManager {
 		try {
 			// Deactivate any existing sessions for this agent
 			db.update(keyloggerSession)
-				.set({ active: 0, updatedAt: now })
-				.where(and(eq(keyloggerSession.agentId, agentId), eq(keyloggerSession.active, 1)))
+				.set({ active: false, updatedAt: now })
+				.where(and(eq(keyloggerSession.agentId, agentId), eq(keyloggerSession.active, true)))
 				.run();
 
 			db.insert(keyloggerSession)
@@ -126,7 +112,7 @@ export class KeyloggerManager {
 					agentId,
 					mode: normalized.mode,
 					startedAt: now,
-					active: 1,
+					active: true,
 					config: JSON.stringify(normalized),
 					totalEvents: 0,
 					createdAt: now,
@@ -161,7 +147,7 @@ export class KeyloggerManager {
 			const sessionRecord = db
 				.select()
 				.from(keyloggerSession)
-				.where(and(eq(keyloggerSession.agentId, agentId), eq(keyloggerSession.active, 1)))
+				.where(and(eq(keyloggerSession.agentId, agentId), eq(keyloggerSession.active, true)))
 				.get();
 
 			if (!sessionRecord) {
@@ -177,18 +163,11 @@ export class KeyloggerManager {
 				sessionId: sessionRecord.id,
 				agentId: sessionRecord.agentId,
 				mode: sessionRecord.mode as KeyloggerMode,
-				startedAt:
-					sessionRecord.startedAt instanceof Date
-						? sessionRecord.startedAt.toISOString()
-						: new Date(sessionRecord.startedAt).toISOString(),
+				startedAt: sessionRecord.startedAt!.toISOString(),
 				active: true,
 				config: normalized,
 				totalEvents: sessionRecord.totalEvents,
-				lastCapturedAt: sessionRecord.lastCapturedAt
-					? sessionRecord.lastCapturedAt instanceof Date
-						? sessionRecord.lastCapturedAt.toISOString()
-						: new Date(sessionRecord.lastCapturedAt).toISOString()
-					: undefined
+				lastCapturedAt: sessionRecord.lastCapturedAt?.toISOString()
 			};
 		} catch (err) {
 			logger.error('Failed to update keylogger config', { agentId }, err);
@@ -201,7 +180,7 @@ export class KeyloggerManager {
 		try {
 			const where = sessionId
 				? eq(keyloggerSession.id, sessionId)
-				: and(eq(keyloggerSession.agentId, agentId), eq(keyloggerSession.active, 1));
+				: and(eq(keyloggerSession.agentId, agentId), eq(keyloggerSession.active, true));
 
 			const sessionRecord = db.select().from(keyloggerSession).where(where).get();
 
@@ -210,7 +189,7 @@ export class KeyloggerManager {
 			}
 
 			db.update(keyloggerSession)
-				.set({ active: 0, updatedAt: now })
+				.set({ active: false, updatedAt: now })
 				.where(eq(keyloggerSession.id, sessionRecord.id))
 				.run();
 
@@ -218,18 +197,11 @@ export class KeyloggerManager {
 				sessionId: sessionRecord.id,
 				agentId: sessionRecord.agentId,
 				mode: sessionRecord.mode as KeyloggerMode,
-				startedAt:
-					sessionRecord.startedAt instanceof Date
-						? sessionRecord.startedAt.toISOString()
-						: new Date(sessionRecord.startedAt).toISOString(),
+				startedAt: sessionRecord.startedAt!.toISOString(),
 				active: false,
 				config: JSON.parse(sessionRecord.config) as KeyloggerStartConfig,
 				totalEvents: sessionRecord.totalEvents,
-				lastCapturedAt: sessionRecord.lastCapturedAt
-					? sessionRecord.lastCapturedAt instanceof Date
-						? sessionRecord.lastCapturedAt.toISOString()
-						: new Date(sessionRecord.lastCapturedAt).toISOString()
-					: undefined
+				lastCapturedAt: sessionRecord.lastCapturedAt?.toISOString()
 			};
 		} catch (err) {
 			logger.error('Failed to stop keylogger session', { agentId, sessionId }, err);

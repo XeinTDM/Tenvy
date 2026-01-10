@@ -161,7 +161,7 @@ describe('system info workspace', () => {
 			json: vi.fn().mockResolvedValue(snapshot)
 		} as unknown as Response);
 
-		const { component, unmount } = render(SystemInfoWorkspace, {
+		const { unmount } = render(SystemInfoWorkspace, {
 			target: document.body,
 			props: { client: baseClient }
 		});
@@ -189,7 +189,7 @@ describe('system info workspace', () => {
 			text: vi.fn().mockResolvedValue('Timed out waiting for agent response')
 		} as unknown as Response);
 
-		const { component, unmount } = render(SystemInfoWorkspace, {
+		const { unmount } = render(SystemInfoWorkspace, {
 			target: document.body,
 			props: { client: baseClient }
 		});

@@ -17,8 +17,9 @@ export const GET: RequestHandler = ({ params, locals }) => {
 		const payload = downloadCatalogueSchema.parse(downloads);
 		return json({ downloads: payload });
 	} catch (err) {
-		if (err instanceof RegistryError) {
-			throw error(err.status, err.message);
+		if (err && typeof err === 'object' && 'isRegistryError' in err) {
+			const regErr = err as { status: number; message: string };
+			throw error(regErr.status, regErr.message);
 		}
 		throw error(500, 'Failed to load downloads catalogue');
 	}

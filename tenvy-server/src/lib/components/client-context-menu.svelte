@@ -9,6 +9,7 @@
 		ContextMenuSubTrigger
 	} from '$lib/components/ui/context-menu/index.js';
 	import { goto, invalidateAll } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { browser } from '$app/environment';
 	import type { Client } from '$lib/data/clients';
 	import ClientToolDialog from '$lib/components/client-tool-dialog.svelte';
@@ -176,7 +177,7 @@
 			dialogTool = null;
 			const url = buildClientToolUrl(client.id, tool);
 			if (browser) {
-				goto(url as any);
+				goto(resolve(url as any));
 			}
 			return;
 		}
@@ -193,11 +194,11 @@
 		if (!browser) return;
 
 		if (target === '_self') {
-			goto(url as any);
+			goto(resolve(url as any));
 			return;
 		}
 
-		window.open(url, target, 'noopener,noreferrer');
+		window.open(resolve(url as any), target, 'noopener,noreferrer');
 	}
 
 	function handleDialogClose() {

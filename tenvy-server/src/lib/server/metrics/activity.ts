@@ -143,10 +143,7 @@ function normalizeModuleName(commandName: string | null | undefined): string {
 	if (!commandName) {
 		return 'Unknown';
 	}
-	const cleaned = commandName
-		.replace(/[\-_]+/g, ' ')
-		.replace(/\s+/g, ' ')
-		.trim();
+	const cleaned = commandName.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
 	if (!cleaned) {
 		return 'Unknown';
 	}

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import NotesWorkspace from './notes-workspace.svelte';
 import type { Client } from '$lib/data/clients';
@@ -26,7 +26,7 @@ describe('NotesWorkspace', () => {
 
 	beforeEach(() => {
 		vi.restoreAllMocks();
-		globalThis.fetch = vi.fn() as any;
+		globalThis.fetch = vi.fn();
 	});
 
 	afterEach(() => {
@@ -35,7 +35,7 @@ describe('NotesWorkspace', () => {
 	});
 
 	it('loads existing notes and persists updates', async () => {
-		const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+		const fetchMock = globalThis.fetch as Mock;
 
 		fetchMock.mockResolvedValueOnce(
 			new Response(

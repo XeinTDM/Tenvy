@@ -270,10 +270,10 @@ describe('trigger monitor API', () => {
 	});
 
 	it('rejects requests that exceed the trigger monitor payload size limit', async () => {
-		const { POST, MAX_TRIGGER_MONITOR_REQUEST_BYTES } = await modulePromise;
+		const { POST, _MAX_TRIGGER_MONITOR_REQUEST_BYTES } = await modulePromise;
 		if (!POST) throw new Error('POST handler missing');
 
-		const requestBody = 'x'.repeat(MAX_TRIGGER_MONITOR_REQUEST_BYTES + 1);
+		const requestBody = 'x'.repeat(_MAX_TRIGGER_MONITOR_REQUEST_BYTES + 1);
 
 		await expect(
 			POST(

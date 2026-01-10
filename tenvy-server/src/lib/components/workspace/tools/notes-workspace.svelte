@@ -6,10 +6,16 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import type { Client } from '$lib/data/clients';
+	import type { Snippet } from 'svelte';
 
-	const { client, class: className = '' } = $props<{
+	const {
+		client,
+		class: className = '',
+		secondary
+	} = $props<{
 		client: Client;
 		class?: string;
+		secondary?: Snippet<[{ noteSavePending: boolean }]>;
 	}>();
 
 	let noteText = $state(client.notes ?? '');
@@ -22,7 +28,7 @@
 
 	function parseTags(input: string): string[] {
 		return input
-			.split(/[\,\s]+/)
+			.split(/[,\s]+/)
 			.map((tag) => tag.trim())
 			.filter(Boolean);
 	}
@@ -205,7 +211,7 @@
 		{/if}
 	</div>
 	<div class="flex items-center justify-end gap-2 border-t border-border/70 bg-muted/30 px-6 py-4">
-		<slot name="secondary" {noteSavePending} />
+		{@render secondary?.({ noteSavePending })}
 		<Button type="submit" disabled={noteSavePending}>
 			{#if noteSavePending}
 				Saving…

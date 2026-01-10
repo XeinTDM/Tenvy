@@ -73,7 +73,10 @@ describe('environment variables API', () => {
 		const response = await GET(createEvent(GET));
 
 		expect(requireViewer).toHaveBeenCalledWith({ id: 'tester' });
-		expect(dispatchEnvironmentCommand).toHaveBeenCalledWith('agent-1', { action: 'list' });
+		expect(dispatchEnvironmentCommand).toHaveBeenCalledWith(
+			'agent-1',
+			expect.objectContaining({ action: 'list', timestamp: expect.any(String) })
+		);
 		expect(await response.json()).toEqual(snapshot);
 	});
 
@@ -91,13 +94,12 @@ describe('environment variables API', () => {
 
 		dispatchEnvironmentCommand.mockResolvedValueOnce(mutation);
 
-		const timestamp = new Date().toISOString();
 		const body = {
 			action: 'set',
 			key: 'PATH',
 			value: 'C:/bin',
 			scope: 'machine',
-			timestamp
+			timestamp: new Date().toISOString()
 		};
 
 		const response = await POST(
@@ -112,9 +114,19 @@ describe('environment variables API', () => {
 		);
 
 		expect(requireOperator).toHaveBeenCalledWith({ id: 'tester' });
-		expect(dispatchEnvironmentCommand).toHaveBeenCalledWith('agent-1', body, {
-			operatorId: 'tester'
-		});
+		expect(dispatchEnvironmentCommand).toHaveBeenCalledWith(
+			'agent-1',
+			expect.objectContaining({
+				action: 'set',
+				key: 'PATH',
+				value: 'C:/bin',
+				scope: 'machine',
+				timestamp: expect.any(String)
+			}),
+			{
+				operatorId: 'tester'
+			}
+		);
 		expect(await response.json()).toEqual(mutation);
 	});
 

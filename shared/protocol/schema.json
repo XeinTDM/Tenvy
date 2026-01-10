@@ -1,0 +1,107 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://tenvy.io/schemas/protocol.json",
+  "title": "Tenvy Protocol",
+  "description": "Unified communication protocol between tenvy-server and tenvy-client.",
+  "type": "object",
+  "properties": {
+    "agentMetadata": { "$ref": "#/definitions/AgentMetadata" },
+    "command": { "$ref": "#/definitions/Command" },
+    "commandResult": { "$ref": "#/definitions/CommandResult" },
+    "agentRegistrationRequest": { "$ref": "#/definitions/AgentRegistrationRequest" },
+    "agentSyncRequest": { "$ref": "#/definitions/AgentSyncRequest" },
+    "pingCommandPayload": { "$ref": "#/definitions/PingCommandPayload" },
+    "shellCommandPayload": { "$ref": "#/definitions/ShellCommandPayload" },
+    "agentControlCommandPayload": { "$ref": "#/definitions/AgentControlCommandPayload" }
+  },
+  "definitions": {
+    "PingCommandPayload": {
+      "type": "object",
+      "properties": {
+        "message": { "type": "string" }
+      }
+    },
+    "ShellCommandPayload": {
+      "type": "object",
+      "properties": {
+        "command": { "type": "string" },
+        "timeoutSeconds": { "type": "integer" },
+        "workingDirectory": { "type": "string" },
+        "elevated": { "type": "boolean" },
+        "environment": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "required": ["command"]
+    },
+    "AgentControlCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["disconnect", "reconnect", "shutdown", "restart", "sleep", "logoff"] },
+        "reason": { "type": "string" },
+        "force": { "type": "boolean" }
+      },
+      "required": ["action"]
+    },
+    "AgentMetadata": {
+      "type": "object",
+      "properties": {
+        "hostname": { "type": "string" },
+        "username": { "type": "string" },
+        "os": { "type": "string" },
+        "architecture": { "type": "string" },
+        "ipAddress": { "type": "string" },
+        "publicIpAddress": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "version": { "type": "string" },
+        "hardwareId": { "type": "string" }
+      },
+      "required": ["hostname", "username", "os", "architecture"]
+    },
+    "Command": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "payload": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "signature": { "type": "string" }
+      },
+      "required": ["id", "name", "payload", "createdAt"]
+    },
+    "CommandResult": {
+      "type": "object",
+      "properties": {
+        "commandId": { "type": "string" },
+        "success": { "type": "boolean" },
+        "output": { "type": "string" },
+        "error": { "type": "string" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["commandId", "success", "completedAt"]
+    },
+    "AgentRegistrationRequest": {
+      "type": "object",
+      "properties": {
+        "token": { "type": "string" },
+        "metadata": { "$ref": "#/definitions/AgentMetadata" }
+      },
+      "required": ["metadata"]
+    },
+    "AgentSyncRequest": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["online", "offline", "busy"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "memoryBytes": { "type": "integer" },
+            "goroutines": { "type": "integer" },
+            "uptimeSeconds": { "type": "integer" }
+          }
+        },
+        "results": { "type": "array", "items": { "$ref": "#/definitions/CommandResult" } }
+      },
+      "required": ["status", "timestamp"]
+    }
+  }
+}

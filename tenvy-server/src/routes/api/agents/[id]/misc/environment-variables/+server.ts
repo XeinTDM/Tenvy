@@ -17,7 +17,10 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	requireViewer(locals.user);
 
 	try {
-		const snapshot = await dispatchEnvironmentCommand(id, { action: 'list' });
+		const snapshot = await dispatchEnvironmentCommand(id, {
+			action: 'list',
+			timestamp: new Date().toISOString()
+		});
 		return json(snapshot satisfies EnvironmentSnapshot);
 	} catch (err) {
 		if (err instanceof EnvironmentAgentError) {
@@ -51,7 +54,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	command = {
 		...command,
 		key: command.key.trim(),
-		...(command.action === 'set' ? { value: command.value } : {})
+		...(command.action === 'set' ? { value: command.value } : {}),
+		timestamp: new Date().toISOString()
 	} as typeof command;
 
 	if (command.key.length === 0) {

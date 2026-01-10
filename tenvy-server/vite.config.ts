@@ -46,6 +46,10 @@ const testAliases: AliasOptions = isVitest
 			{
 				find: '$env/dynamic/private',
 				replacement: fileURLToPath(new URL('./tests/mocks/env-dynamic-private.ts', import.meta.url))
+			},
+			{
+				find: '$lib',
+				replacement: fileURLToPath(new URL('./src/lib', import.meta.url))
 			}
 		]
 	: [];
@@ -65,7 +69,6 @@ const browserProjects = [
 	{
 		test: {
 			name: 'client',
-			environment: 'browser' as const,
 			browser: {
 				enabled: true,
 				provider: playwrightProvider,

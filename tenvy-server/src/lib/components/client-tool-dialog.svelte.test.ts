@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import ClientToolDialog from './client-tool-dialog.svelte';
 import type { Client } from '$lib/data/clients';
@@ -13,9 +13,9 @@ class MockEventSource {
 	readonly url: string;
 	readonly withCredentials = false;
 	readyState = 0;
-	onerror: ((this: EventSource, ev: Event) => any) | null = null;
-	onmessage: ((this: EventSource, ev: MessageEvent) => any) | null = null;
-	onopen: ((this: EventSource, ev: Event) => any) | null = null;
+	onerror: ((this: EventSource, ev: Event) => void) | null = null;
+	onmessage: ((this: EventSource, ev: MessageEvent) => void) | null = null;
+	onopen: ((this: EventSource, ev: Event) => void) | null = null;
 	private listeners: EventListenerMap = new Map();
 
 	constructor(url: string) {
@@ -104,13 +104,13 @@ describe('ClientToolDialog - App VNC workspace', () => {
 
 	beforeEach(() => {
 		vi.restoreAllMocks();
-		globalThis.fetch = vi.fn() as any;
+		globalThis.fetch = vi.fn();
 		globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
 		globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
 			callback(0);
 			return 1;
-		}) as any;
-		globalThis.cancelAnimationFrame = vi.fn() as any;
+		}) as unknown as typeof requestAnimationFrame;
+		globalThis.cancelAnimationFrame = vi.fn();
 	});
 
 	afterEach(() => {
@@ -132,7 +132,7 @@ describe('ClientToolDialog - App VNC workspace', () => {
 	});
 
 	it('manages an App VNC session lifecycle inside the dialog workspace', async () => {
-		const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+		const fetchMock = globalThis.fetch as Mock;
 		fetchMock.mockResolvedValueOnce(
 			new Response(JSON.stringify({ session: null }), { status: 200 })
 		);

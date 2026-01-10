@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { join } from 'node:path';
 import { rm } from 'node:fs/promises';
+import type { RequestEvent } from '@sveltejs/kit';
 
 class MockRegistryError extends Error {
 	status = 400;
@@ -17,16 +18,13 @@ vi.mock('../src/lib/server/rat/store.js', () => ({
 
 const modulePromise = import('../src/routes/api/agents/[id]/options/script/+server.js');
 
-function createEvent<T extends (...args: any[]) => any>(
-	handler: T,
-	init: Partial<Parameters<T>[0]>
-) {
+function createEvent(init: Partial<RequestEvent>) {
 	return {
 		params: {},
 		request: new Request('https://controller.test', { method: 'GET' }),
 		setHeaders: vi.fn(),
 		...init
-	} as Parameters<T>[0] & { setHeaders: ReturnType<typeof vi.fn> };
+	} as unknown as any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 describe('options script staging API', () => {
@@ -47,7 +45,7 @@ describe('options script staging API', () => {
 		const form = new FormData();
 		form.set('script', file);
 
-		const postEvent = createEvent(POST, {
+		const postEvent = createEvent({
 			params: { id: 'agent-script' },
 			request: new Request('https://controller.test', {
 				method: 'POST',
@@ -70,7 +68,7 @@ describe('options script staging API', () => {
 
 		authorizeAgent.mockImplementation(() => undefined);
 
-		const getEvent = createEvent(GET, {
+		const getEvent = createEvent({
 			params: { id: 'agent-script' },
 			request: new Request(
 				`https://controller.test/api?token=${encodeURIComponent(staged.stagingToken)}`,
@@ -88,7 +86,7 @@ describe('options script staging API', () => {
 
 		const buffer = new Uint8Array(await getResponse.arrayBuffer());
 		expect(buffer.byteLength).toBeGreaterThan(0);
-		const headers = getEvent.setHeaders.mock.calls[0]?.[0] as Record<string, string>;
+		const headers = (getEvent.setHeaders as Mock).mock.calls[0]?.[0] as Record<string, string>;
 		expect(headers['X-Tenvy-Script-Name']).toBe('utility.ps1');
 		expect(headers['X-Tenvy-Script-Type']).toBe('text/x-powershell');
 		expect(headers['X-Tenvy-Script-Size']).toBe(String(buffer.byteLength));
@@ -102,7 +100,7 @@ describe('options script staging API', () => {
 		const form = new FormData();
 		form.set('script', file);
 
-		const event = createEvent(POST, {
+		const event = createEvent({
 			params: { id: 'agent-large' },
 			request: new Request('https://controller.test', {
 				method: 'POST',

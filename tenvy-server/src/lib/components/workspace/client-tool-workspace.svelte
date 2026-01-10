@@ -9,7 +9,8 @@
 		getKeyloggerMode,
 		getWorkspaceComponent,
 		isWorkspaceTool,
-		workspaceRequiresAgent
+		workspaceRequiresAgent,
+		type WorkspaceProps
 	} from '$lib/data/client-tool-workspaces';
 	import KeyloggerWorkspace from '$lib/components/workspace/tools/keylogger-workspace.svelte';
 	import { notifyToolActivationCommand } from '$lib/utils/agent-commands.js';
@@ -33,10 +34,10 @@
 	const requiresAgent = dialogToolId ? workspaceRequiresAgent.has(dialogToolId) : false;
 	const missingAgent = requiresAgent && !agent;
 
-	const workspaceProps: Record<string, unknown> | null =
+	const workspaceProps: WorkspaceProps | null =
 		dialogToolId && workspaceComponent
 			? (() => {
-					const base: Record<string, unknown> = { client };
+					const base: WorkspaceProps = { client };
 					if (dialogToolId === 'cmd') {
 						base.agent = agent;
 					}
@@ -86,7 +87,8 @@
 {:else if keyloggerMode}
 	<KeyloggerWorkspace {client} mode={keyloggerMode} />
 {:else if workspaceComponent && workspaceProps}
-	<svelte:component this={workspaceComponent} {...workspaceProps} />
+	{@const Component = workspaceComponent}
+	<Component {...workspaceProps} />
 {:else}
 	<Alert>
 		<AlertCircle class="h-4 w-4" />

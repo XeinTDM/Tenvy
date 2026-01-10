@@ -21,6 +21,25 @@ function isMimeTypeAllowed(type: string | undefined): boolean {
 	return ALLOWED_MIME_PREFIXES.some((prefix) => normalized.startsWith(prefix));
 }
 
+function guessMimeType(filename: string): string | undefined {
+	const ext = filename.split('.').pop()?.toLowerCase();
+	switch (ext) {
+		case 'ps1':
+			return 'text/x-powershell';
+		case 'js':
+			return 'text/javascript';
+		case 'json':
+			return 'application/json';
+		case 'txt':
+			return 'text/plain';
+		case 'bat':
+		case 'cmd':
+			return 'text/plain';
+		default:
+			return undefined;
+	}
+}
+
 function getBearerToken(header: string | null): string | undefined {
 	if (!header) {
 		return undefined;
@@ -57,9 +76,11 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		throw error(413, 'Script exceeds maximum size');
 	}
 
+	const contentType = file.type || guessMimeType(file.name);
+
 	const record = await optionsScriptManager.stage(id, {
 		name: file.name ?? 'script',
-		type: file.type || undefined,
+		type: contentType || undefined,
 		data: buffer
 	});
 

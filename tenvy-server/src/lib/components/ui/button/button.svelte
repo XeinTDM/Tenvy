@@ -43,7 +43,7 @@
 </script>
 
 <script lang="ts">
-	import { base } from '$app/paths';
+	import { resolve } from '$app/paths';
 
 	let {
 		class: className,
@@ -59,11 +59,7 @@
 </script>
 
 {#if href}
-	{@const computedHref = typeof href === 'string' ? href : href.toString()}
-	{@const resolvedHref =
-		computedHref.startsWith('/') && !computedHref.startsWith('//')
-			? `${base}${computedHref}`
-			: computedHref}
+	{@const resolvedHref = resolve((typeof href === 'string' ? href : href.toString()) as any)}
 	{#if disabled}
 		<a
 			bind:this={ref}

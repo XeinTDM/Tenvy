@@ -61,7 +61,7 @@
 		enqueueEvent,
 		dispose
 	} = createAppVncSessionController({
-		clientId: client.id,
+		clientId: data.client.id,
 		initialSession: data.session ?? null
 	});
 	let quality = $state<AppVncSessionSettings['quality']>(
@@ -389,7 +389,7 @@
 							>
 						</SelectTrigger>
 						<SelectContent>
-							{#each qualityOptions as option}
+							{#each qualityOptions as option (option.value)}
 								<SelectItem value={option.value}>{option.label}</SelectItem>
 							{/each}
 						</SelectContent>
@@ -491,6 +491,8 @@
 			</CardDescription>
 		</CardHeader>
 		<CardContent class="space-y-4">
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<div
 				class="relative flex h-[420px] w-full items-center justify-center overflow-hidden rounded-lg border bg-black"
 				role="application"

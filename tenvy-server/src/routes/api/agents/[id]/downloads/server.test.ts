@@ -20,7 +20,7 @@ function createEvent(agentId: string, userRole: 'viewer' | 'operator' = 'viewer'
 				role: userRole
 			}
 		}
-	} as unknown;
+	} as unknown as any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 describe('/api/agents/[id]/downloads', () => {
@@ -42,7 +42,7 @@ describe('/api/agents/[id]/downloads', () => {
 			}
 		]);
 
-		const response = await getHandler(createEvent('agent-123') as any);
+		const response = await getHandler(createEvent('agent-123'));
 		expect(spy).toHaveBeenCalledWith('agent-123');
 		expect(response.status).toBe(200);
 		const payload = await response.json();
@@ -61,7 +61,7 @@ describe('/api/agents/[id]/downloads', () => {
 	it('returns an empty array when no downloads are available', async () => {
 		vi.spyOn(registry, 'getDownloadsCatalogue').mockReturnValue([]);
 
-		const response = await getHandler(createEvent('agent-empty') as any);
+		const response = await getHandler(createEvent('agent-empty'));
 		expect(response.status).toBe(200);
 		const payload = await response.json();
 		expect(payload).toEqual({ downloads: [] });
@@ -73,7 +73,7 @@ describe('/api/agents/[id]/downloads', () => {
 		});
 
 		try {
-			getHandler(createEvent('missing') as any);
+			getHandler(createEvent('missing'));
 			throw new Error('Expected handler to throw');
 		} catch (error) {
 			const err = error as { status?: number; body?: { message?: string } };

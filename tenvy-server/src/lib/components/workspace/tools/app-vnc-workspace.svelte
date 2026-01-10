@@ -846,8 +846,11 @@
 			</CardDescription>
 		</CardHeader>
 		<CardContent class="space-y-4">
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<div
 				class="relative flex h-[360px] w-full items-center justify-center overflow-hidden rounded-lg border bg-black"
+				role="application"
 				tabindex={0}
 				bind:this={viewportEl}
 				data-testid="app-vnc-viewport"

@@ -269,10 +269,9 @@
 				</div>
 				{#if includeMap && result.mapUrl}
 					<a
-						class="block rounded-lg border border-border/60 bg-muted/30 p-4 text-sm text-foreground hover:bg-muted/50"
-						href={resolve(result.mapUrl as any)}
-						target="_blank"
-						rel="noreferrer"
+						                                                class="block rounded-lg border border-border/60 bg-muted/30 p-4 text-sm text-foreground hover:bg-muted/50"
+						                                                href={resolve(result.mapUrl as any)}
+						                                                target="_blank"						rel="noreferrer"
 					>
 						Open map preview
 					</a>

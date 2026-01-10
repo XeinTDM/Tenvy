@@ -68,8 +68,8 @@
 	let loadError = $state<string | null>(null);
 	let creating = $state(false);
 	let createError = $state<string | null>(null);
-	let toggling = $state(new SvelteSet<string>());
-	let removing = $state(new SvelteSet<string>());
+	let toggling = new SvelteSet<string>();
+	let removing = new SvelteSet<string>();
 	let newName = $state('');
 	let newPath = $state('');
 	let newPublisher = $state('');
@@ -201,23 +201,19 @@
 	}
 
 	function updateTogglePending(entryId: string, pending: boolean) {
-		const next = new Set(toggling);
 		if (pending) {
-			next.add(entryId);
+			toggling.add(entryId);
 		} else {
-			next.delete(entryId);
+			toggling.delete(entryId);
 		}
-		toggling = next;
 	}
 
 	function updateRemoving(entryId: string, pending: boolean) {
-		const next = new Set(removing);
 		if (pending) {
-			next.add(entryId);
+			removing.add(entryId);
 		} else {
-			next.delete(entryId);
+			removing.delete(entryId);
 		}
-		removing = next;
 	}
 
 	function resetForm() {

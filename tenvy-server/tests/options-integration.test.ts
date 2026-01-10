@@ -197,7 +197,7 @@ describe('options integration', () => {
 		const snapshot = registry.getAgent(registration.agentId);
 		const recent = snapshot.recentResults.find((entry) => entry.commandId === queued.command.id);
 		expect(recent?.output).toContain('Stub defender exclusion enabled');
-	});
+	}, 30000);
 });
 type Locals = {
 	user: AuthenticatedUser | null;

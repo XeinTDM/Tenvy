@@ -28,7 +28,8 @@
 		getKeyloggerMode,
 		getWorkspaceComponent,
 		isWorkspaceTool,
-		workspaceRequiresAgent
+		workspaceRequiresAgent,
+		type WorkspaceProps
 	} from '$lib/data/client-tool-workspaces';
 	import { notifyToolActivationCommand } from '$lib/utils/agent-commands.js';
 	import KeyloggerWorkspace from '$lib/components/workspace/tools/keylogger-workspace.svelte';
@@ -80,7 +81,7 @@
 	const keyloggerMode = getKeyloggerMode(toolId);
 	const isWorkspaceDialog = isWorkspaceTool(toolId);
 	const missingAgent = workspaceRequiresAgent.has(toolId) && !agent;
-	const workspaceProps: Record<string, unknown> | null = (() => {
+	const workspaceProps: WorkspaceProps | null = (() => {
 		if (!activeWorkspace) {
 			return null;
 		}
@@ -89,14 +90,10 @@
 			return null;
 		}
 
-		const base: Record<string, unknown> = { client };
+		const base: WorkspaceProps = { client };
 
 		if (toolId === 'cmd' && agent) {
 			base.agent = agent;
-		}
-
-		if (toolId === 'remote-desktop') {
-			base.initialSession = null;
 		}
 
 		return base;
@@ -330,7 +327,8 @@
 									</CardHeader>
 								</Card>
 							{:else if activeWorkspace && workspaceProps}
-								<svelte:component this={activeWorkspace} {...workspaceProps} />
+								{@const Component = activeWorkspace}
+								<Component {...workspaceProps} />
 							{:else}
 								<Card class="border-dashed">
 									<CardHeader>
@@ -356,13 +354,13 @@
 						<SystemInformationDialog {client} />
 					{:else if toolId === 'notes'}
 						<NotesWorkspace {client}>
-							<svelte:fragment slot="secondary" let:noteSavePending>
+							{#snippet secondary({ noteSavePending })}
 								<Dialog.Close>
 									{#snippet child({ props })}
 										<Button variant="outline" disabled={noteSavePending} {...props}>Cancel</Button>
 									{/snippet}
 								</Dialog.Close>
-							</svelte:fragment>
+							{/snippet}
 						</NotesWorkspace>
 					{:else if toolId === 'open-url'}
 						<form class="flex h-full flex-col" onsubmit={handleOpenUrlSubmit}>

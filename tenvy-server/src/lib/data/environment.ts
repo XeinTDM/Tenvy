@@ -54,7 +54,8 @@ export async function setEnvironmentVariable(agentId: string, input: SetEnvironm
 		key: input.key,
 		value: input.value,
 		scope: input.scope ?? 'user',
-		restartProcesses: input.restartProcesses ?? false
+		restartProcesses: input.restartProcesses ?? false,
+		timestamp: new Date().toISOString()
 	});
 
 	const response = await fetch(`/api/agents/${agentId}/misc/environment-variables`, {
@@ -76,7 +77,8 @@ export async function removeEnvironmentVariable(agentId: string, input: RemoveEn
 	const body = environmentCommandRequestSchema.parse({
 		action: 'remove',
 		key: input.key,
-		scope: input.scope ?? 'user'
+		scope: input.scope ?? 'user',
+		timestamp: new Date().toISOString()
 	});
 
 	const response = await fetch(`/api/agents/${agentId}/misc/environment-variables`, {

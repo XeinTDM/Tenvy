@@ -366,6 +366,7 @@ export class AudioBridgeManager {
 		}
 		return Array.from(uploads.values()).map((upload) => ({
 			...upload,
+			uploadedAt: upload.uploadedAt.toISOString(),
 			filename: upload.originalName,
 			downloadUrl: `/api/agents/${agentId}/audio/uploads/${upload.id}`
 		}));

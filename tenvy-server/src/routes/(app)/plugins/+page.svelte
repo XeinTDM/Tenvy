@@ -25,8 +25,6 @@
 	import {
 		pluginCategories,
 		pluginCategoryLabels,
-		pluginStatusLabels,
-		pluginStatusStyles,
 		pluginApprovalLabels,
 		type Plugin,
 		type PluginCategory,

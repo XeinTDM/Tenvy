@@ -12,7 +12,7 @@ import {
 } from '$lib/types/trigger-monitor';
 import { ZodError } from 'zod';
 
-export const MAX_TRIGGER_MONITOR_REQUEST_BYTES = 16 * 1024; // 16 KiB
+export const _MAX_TRIGGER_MONITOR_REQUEST_BYTES = 16 * 1024; // 16 KiB
 
 function formatValidationError(err: ZodError) {
 	const issue = err.issues[0];
@@ -87,7 +87,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 	const user = requireOperator(locals.user);
 
-	await enforceRequestSizeLimit(request, MAX_TRIGGER_MONITOR_REQUEST_BYTES);
+	await enforceRequestSizeLimit(request, _MAX_TRIGGER_MONITOR_REQUEST_BYTES);
 
 	let payload: unknown;
 	try {

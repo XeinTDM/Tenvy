@@ -115,7 +115,7 @@ describe('trigger-monitor workspace suggestions', () => {
 			throw new Error(`Unhandled fetch: ${url}`);
 		});
 
-		const { component, unmount } = render(TriggerMonitorWorkspace, {
+		const { unmount } = render(TriggerMonitorWorkspace, {
 			target: document.body,
 			props: { client: baseClient }
 		});
@@ -163,7 +163,7 @@ describe('trigger-monitor workspace suggestions', () => {
 			throw new Error(`Unhandled fetch: ${url}`);
 		});
 
-		const { component, unmount } = render(TriggerMonitorWorkspace, {
+		const { unmount } = render(TriggerMonitorWorkspace, {
 			target: document.body,
 			props: { client: baseClient }
 		});

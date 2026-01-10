@@ -1,11 +1,11 @@
 import type { PageServerLoad } from './$types';
-import { requireAdmin } from '$lib/server/authorization.js';
+import { requireOperator } from '$lib/server/authorization.js';
 import { db } from '$lib/server/db/index.js';
 import { voucher, user } from '$lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const admin = requireAdmin(locals.user);
+	const operator = requireOperator(locals.user);
 	const records = await db
 		.select({
 			id: user.id,
@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.orderBy(user.createdAt);
 
 	return {
-		user: admin,
+		user: operator,
 		members: records.map((record) => {
 			if (!record.createdAt) {
 				throw new Error('User record missing creation timestamp');

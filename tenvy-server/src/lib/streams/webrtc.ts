@@ -148,7 +148,7 @@ export class WebRTCPipeline {
 			return false;
 		}
 		try {
-			this.channel.send(data);
+			this.channel.send(data as any);
 			return true;
 		} catch (err) {
 			console.warn('Failed to send binary data over WebRTC data channel', err);
@@ -583,7 +583,7 @@ function extractDiagnostics(
 					currentRoundTripTime?: number;
 					availableOutgoingBitrate?: number;
 					totalRoundTripTime?: number;
-				}; // eslint-disable-line @typescript-eslint/naming-convention
+				};
 				if (typeof pair.availableOutgoingBitrate === 'number') {
 					availableBitrate = Math.max(0, Math.round(pair.availableOutgoingBitrate / 1000));
 				}

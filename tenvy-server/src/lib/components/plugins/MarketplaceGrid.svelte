@@ -18,6 +18,7 @@
 		MarketplaceListing,
 		MarketplaceStatus
 	} from '$lib/data/marketplace.js';
+	import type { Plugin } from '$lib/data/plugin-view.js';
 
 	let {
 		listings,

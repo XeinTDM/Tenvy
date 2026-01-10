@@ -12,6 +12,6 @@
 <PopoverPrimitive.Trigger
 	bind:ref
 	data-slot="popover-trigger"
-	class={cn('', className)}
+	class={cn('cursor-pointer', className)}
 	{...restProps}
 />

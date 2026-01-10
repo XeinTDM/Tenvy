@@ -21,10 +21,6 @@ export const GET: RequestHandler = ({ request, params, getClientAddress }) => {
 		throw error(400, 'Expected WebSocket upgrade request');
 	}
 
-	const url = new URL(request.url);
-	if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
-	}
-
 	const id = params.id;
 	if (!id) {
 		throw error(400, 'Missing agent identifier');

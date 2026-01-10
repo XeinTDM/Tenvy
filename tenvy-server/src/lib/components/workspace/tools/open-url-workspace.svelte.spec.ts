@@ -167,7 +167,7 @@ describe('open-url workspace', () => {
 		);
 
 		const tool = getClientTool('open-url');
-		const { component, unmount } = render(ClientToolWorkspace, {
+		const { unmount } = render(ClientToolWorkspace, {
 			target: document.body,
 			props: {
 				client: baseClient,

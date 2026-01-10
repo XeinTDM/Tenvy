@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import {
@@ -10,6 +11,7 @@
 		CardTitle
 	} from '$lib/components/ui/card/index.js';
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs/index.js';
+	import { Tooltip, TooltipTrigger, TooltipContent } from '$lib/components/ui/tooltip/index.js';
 	import { onDestroy, onMount, tick } from 'svelte';
 	import type { Component } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -119,6 +121,7 @@
 	const DEFAULT_TAB: BuildTab = 'connection';
 	let activeTab = $state<BuildTab>(DEFAULT_TAB);
 
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	type TabComponent = Component<any, any, any>;
 	type TabLoader = () => Promise<{ default: TabComponent }>;
 
@@ -138,32 +141,27 @@
 		}
 	};
 
-	type TabSummary = {
-		title: string;
-		description: string;
-	};
+	 type TabSummary = {
+	 	description: string;
+	 };
 
 	const TAB_METADATA: Record<BuildTab, TabSummary> = {
-		connection: {
-			title: 'Connection blueprint',
-			description:
-				'Define how the agent reaches your controller, from connection endpoints to protocol and module selection.'
-		},
-		persistence: {
-			title: 'Persistence & delivery',
-			description:
-				'Configure installation paths, startup hooks, and runtime hardening to keep the agent alive and stealthy.'
-		},
-		execution: {
-			title: 'Execution guardrails',
-			description:
-				'Control execution timing, allowed users/locales, and internet requirements so the agent behaves predictably.'
-		},
-		presentation: {
-			title: 'Presentation polish',
-			description:
-				'Tweak the binary’s icon, metadata, and file appearance so it blends with legitimate software on the target.'
-		}
+	 	connection: {
+	 		description:
+	 			'Define how the agent reaches your controller, from connection endpoints to protocol and module selection.'
+	 	},
+	 	persistence: {
+	 		description:
+	 			'Configure installation paths, startup hooks, and runtime hardening to keep the agent alive and stealthy.'
+	 	},
+	 	execution: {
+	 		description:
+	 			'Control execution timing, allowed users/locales, and internet requirements so the agent behaves predictably.'
+	 	},
+	 	presentation: {
+	 		description:
+	 			'Tweak the binary’s icon, metadata, and file appearance so it blends with legitimate software on the target.'
+	 	}
 	};
 
 	const BUILD_STATUS_BADGE: Record<BuildStatus, { label: string; classes: string }> = {
@@ -191,7 +189,7 @@
 		success: 'Artifact generated. Use the download link below or share the output path.',
 		error: 'Last build failed. Review errors or adjust settings before retrying.'
 	};
-	const buildStatusBadge = () => BUILD_STATUS_BADGE[buildStatus];
+	 const buildStatusBadge = () => BUILD_STATUS_BADGE[buildStatus];
 
 	let tabComponents = $state<Partial<Record<BuildTab, TabComponent>>>({
 		connection: ConnectionTab
@@ -778,62 +776,47 @@
 
 <div class="mx-auto w-full space-y-6 pb-10">
 	<Card>
-		<CardHeader class="space-y-4">
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<div class="space-y-1">
-					<CardTitle>Build agent</CardTitle>
-					<CardDescription>
-						Configure connection and persistence options, then generate a customized client binary.
-					</CardDescription>
-				</div>
-				<div class="flex flex-wrap gap-2">
-					{#each ANTI_TAMPER_BADGES as badge (badge)}
-						<Badge
-							variant="outline"
-							class="border-emerald-500/40 bg-emerald-500/10 text-[0.65rem] font-medium tracking-wide text-emerald-600 uppercase"
-						>
-							{badge}
-						</Badge>
-					{/each}
-				</div>
-			</div>
-			<p class="text-xs text-muted-foreground">
-				These safeguards are always embedded into generated builds. Customize the remaining options
-				to match your delivery strategy.
-			</p>
-		</CardHeader>
 		<CardContent class="space-y-8">
 			<div class="grid gap-8 xl:grid-cols-[minmax(0,2.35fr)_minmax(0,1fr)]">
 				<div class="space-y-8">
 					<Tabs bind:value={activeTab} class="space-y-6">
 						<div class="space-y-4">
 							<TabsList
-								class="flex w-full flex-wrap gap-2 rounded-lg border border-border/70 bg-muted/40 p-1"
+								class="flex w-full h-9 flex-wrap gap-2 p-1"
 							>
-								<TabsTrigger value="connection" class="flex-1 sm:flex-none">Connection</TabsTrigger>
-								<TabsTrigger value="persistence" class="flex-1 sm:flex-none"
-									>Persistence</TabsTrigger
-								>
-								<TabsTrigger value="execution" class="flex-1 sm:flex-none">Execution</TabsTrigger>
-								<TabsTrigger value="presentation" class="flex-1 sm:flex-none"
-									>Presentation</TabsTrigger
-								>
+								<Tooltip>
+									<TooltipTrigger>
+										<TabsTrigger value="connection">Connection</TabsTrigger>
+									</TooltipTrigger>
+									<TooltipContent side="top">
+										{TAB_METADATA.connection.description}
+									</TooltipContent>
+								</Tooltip>
+								<Tooltip>
+									<TooltipTrigger>
+										<TabsTrigger value="persistence">Persistence</TabsTrigger>
+									</TooltipTrigger>
+									<TooltipContent side="top">
+										{TAB_METADATA.persistence.description}
+									</TooltipContent>
+								</Tooltip>
+								<Tooltip>
+									<TooltipTrigger>
+										<TabsTrigger value="execution">Execution</TabsTrigger>
+									</TooltipTrigger>
+									<TooltipContent side="top">
+										{TAB_METADATA.execution.description}
+									</TooltipContent>
+								</Tooltip>
+								<Tooltip>
+									<TooltipTrigger>
+										<TabsTrigger value="presentation">Presentation</TabsTrigger>
+									</TooltipTrigger>
+									<TooltipContent side="top">
+										{TAB_METADATA.presentation.description}
+									</TooltipContent>
+								</Tooltip>
 							</TabsList>
-							<div
-								class="rounded-lg border border-border/90 bg-background/80 p-4 text-sm text-muted-foreground"
-							>
-								<div class="flex items-center justify-between gap-2">
-									<p class="text-xs font-semibold tracking-wide text-foreground/70 uppercase">
-										{activeTabMeta().title}
-									</p>
-									<span class="text-[0.65rem] text-muted-foreground">
-										{tabLoading[activeTab] ? 'Loading controls…' : 'Ready to configure'}
-									</span>
-								</div>
-								<p class="mt-1 text-[0.85rem] leading-relaxed text-muted-foreground">
-									{activeTabMeta().description}
-								</p>
-							</div>
 						</div>
 
 						<TabsContent value="connection" class="space-y-6">
@@ -947,6 +930,16 @@
 				</div>
 				<aside class="space-y-4 xl:sticky xl:top-24">
 					<div class="space-y-6 rounded-lg border border-border/70 bg-background/60 p-6">
+						<div class="flex flex-wrap gap-2">
+							{#each ANTI_TAMPER_BADGES as badge (badge)}
+								<Badge
+									variant="outline"
+									class="border-emerald-500/40 bg-emerald-500/10 text-[0.65rem] font-medium tracking-wide text-emerald-600 uppercase"
+								>
+									{badge}
+								</Badge>
+							{/each}
+						</div>
 						<div class="flex items-start justify-between gap-3">
 							<div class="space-y-1">
 								<h3 class="text-sm font-semibold">Ready to build?</h3>
@@ -976,7 +969,7 @@
 						</div>
 						{#if downloadUrl}
 							<a
-								href={downloadUrl}
+								href={resolve(downloadUrl as any)}
 								target="_blank"
 								rel="noreferrer"
 								class="flex items-center justify-between rounded border border-border/70 bg-muted/40 px-3 py-2 text-sm font-medium text-foreground transition hover:border-foreground/70"

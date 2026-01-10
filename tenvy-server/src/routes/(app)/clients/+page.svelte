@@ -2,6 +2,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { browser } from '$app/environment';
 	import { goto, invalidate } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Alert, AlertDescription, AlertTitle } from '$lib/components/ui/alert/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -169,9 +170,6 @@
 		toolDialogClient = agent ? mapAgentToClient(agent) : null;
 	});
 
-	let commandErrors = $state<Record<string, string | null>>({});
-	let commandSuccess = $state<Record<string, string | null>>({});
-	let commandPending = $state<Record<string, boolean>>({});
 	let deployDialogOpen = $state(false);
 	let tagsDialogAgentId = $state<string | null>(null);
 	let tagsAgent = $state<AgentSnapshot | null>(null);
@@ -188,10 +186,6 @@
 	let copyFeedback = $state<CopyFeedback>(null);
 	let copyFeedbackTimeout: number | undefined;
 	let connectionAlertTimeout: number | undefined;
-
-	function updateRecord<T>(records: Record<string, T>, key: string, value: T): Record<string, T> {
-		return { ...records, [key]: value };
-	}
 
 	function hasActiveConnection(agent: AgentSnapshot): boolean {
 		return agent.status === 'online';
@@ -277,10 +271,29 @@
 
 			if (response.ok) {
 				const payload = (await response.json()) as Record<string, GeoLookupPayload>;
-				ipLocationStore.update((current) => ({ ...current, ...payload }));
+				const results = { ...payload };
+
+				for (const ip of ips) {
+					if (!(ip in results)) {
+						results[ip] = { countryName: null, countryCode: null, isProxy: false };
+					}
+				}
+
+				ipLocationStore.update((current) => ({ ...current, ...results }));
+			} else {
+				const failurePayload: Record<string, GeoLookupPayload> = {};
+				for (const ip of ips) {
+					failurePayload[ip] = { countryName: null, countryCode: null, isProxy: false };
+				}
+				ipLocationStore.update((current) => ({ ...current, ...failurePayload }));
 			}
 		} catch (err) {
 			console.error('Failed to fetch geo locations', err);
+			const failurePayload: Record<string, GeoLookupPayload> = {};
+			for (const ip of ips) {
+				failurePayload[ip] = { countryName: null, countryCode: null, isProxy: false };
+			}
+			ipLocationStore.update((current) => ({ ...current, ...failurePayload }));
 		} finally {
 			for (const ip of ips) {
 				inFlightLookups.delete(ip);
@@ -295,7 +308,7 @@
 
 		const agents = $clientsTable.agents;
 		const knownLookups = $ipLocationStore;
-		const pending = new Set<string>();
+		const pending = new SvelteSet<string>();
 
 		for (const agent of agents) {
 			const normalized = normalizeIpAddress(agent.metadata.publicIpAddress);
@@ -684,7 +697,7 @@
 				return;
 			}
 			const url = buildClientToolUrl(agent.id, tool);
-			goto(url as any);
+			goto(resolve(url as any));
 			return;
 		}
 
@@ -700,14 +713,14 @@
 		}
 
 		if (target === '_self') {
-			goto(url as any);
+			goto(resolve(url as any));
 			return;
 		}
 
 		const resolvedUrl = resolve(url as any);
 
 		if (target === '_blank') {
-			const newWindow = window.open(resolvedUrl, '_blank', 'noopener');
+			const newWindow = window.open(resolvedUrl as any, '_blank', 'noopener');
 
 			if (!newWindow) {
 				console.warn('Pop-up blocked when attempting to open client tool in a new tab.');
@@ -849,7 +862,7 @@
 					<div class="min-w-0 md:min-w-[clamp(48rem,80vw,64rem)] xl:min-w-280">
 						<Table>
 							<colgroup>
-								{#each clientTableColumnWidths as width}
+								{#each clientTableColumnWidths as width, index (index)}
 									<col style={`width:${width};`} />
 								{/each}
 							</colgroup>

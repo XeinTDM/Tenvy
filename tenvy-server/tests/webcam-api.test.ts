@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RequestEvent } from '@sveltejs/kit';
 
 const mockEnv = { env: {} };
 
@@ -42,16 +43,13 @@ const devicesGET = devicesModule.GET;
 const sessionsPOST = sessionsModule.POST;
 const sessionDELETE = sessionModule.DELETE;
 
-function createEvent<T extends (...args: any) => any>(
-	handler: T,
-	options: Partial<Parameters<T>[0]>
-): Parameters<T>[0] {
+function createEvent(options: Partial<RequestEvent>): any {
 	return {
 		params: {},
 		request: new Request('https://controller.test', { method: 'GET' }),
 		locals: { user: { id: 'operator-test' } },
 		...options
-	} as Parameters<T>[0];
+	};
 }
 
 describe('webcam API routes', () => {
@@ -61,7 +59,7 @@ describe('webcam API routes', () => {
 
 	it('queues an inventory refresh command', async () => {
 		const response = await refreshPOST(
-			createEvent(refreshPOST, {
+			createEvent({
 				params: { clientId: 'agent-refresh' }
 			})
 		);
@@ -81,7 +79,7 @@ describe('webcam API routes', () => {
 	it('persists inventory updates and supports session creation lifecycle', async () => {
 		const now = new Date().toISOString();
 		await devicesPOST(
-			createEvent(devicesPOST, {
+			createEvent({
 				params: { clientId: 'agent-inventory' },
 				request: new Request('https://controller.test', {
 					method: 'POST',
@@ -95,7 +93,7 @@ describe('webcam API routes', () => {
 		);
 
 		const response = await devicesGET(
-			createEvent(devicesGET, {
+			createEvent({
 				params: { clientId: 'agent-inventory' }
 			})
 		);
@@ -109,7 +107,7 @@ describe('webcam API routes', () => {
 
 		queueCommand.mockReset();
 		const sessionResponse = await sessionsPOST(
-			createEvent(sessionsPOST, {
+			createEvent({
 				params: { clientId: 'agent-inventory' },
 				request: new Request('https://controller.test', {
 					method: 'POST',
@@ -128,7 +126,7 @@ describe('webcam API routes', () => {
 
 		queueCommand.mockReset();
 		await sessionDELETE(
-			createEvent(sessionDELETE, {
+			createEvent({
 				params: { clientId: 'agent-inventory', sessionId: sessionBody.sessionId }
 			})
 		);

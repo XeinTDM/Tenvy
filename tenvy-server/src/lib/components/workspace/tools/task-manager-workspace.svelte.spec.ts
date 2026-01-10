@@ -67,7 +67,7 @@ describe('task-manager workspace agent requests', () => {
 			} as unknown as Response)
 		);
 
-		const { component, unmount } = render(TaskManagerWorkspace, {
+		const { unmount } = render(TaskManagerWorkspace, {
 			target: document.body,
 			props: { client: baseClient }
 		});
@@ -103,7 +103,7 @@ describe('task-manager workspace agent requests', () => {
 			} as unknown as Response)
 		);
 
-		const { component, unmount } = render(TaskManagerWorkspace, {
+		const { unmount } = render(TaskManagerWorkspace, {
 			target: document.body,
 			props: { client: baseClient }
 		});

@@ -16,10 +16,10 @@ class PolyfilledWebSocket extends EventTarget {
 	binaryType: BinaryType = 'blob';
 	url: string = '';
 
-	onopen: ((this: WebSocket, ev: Event) => any) | null = null;
-	onmessage: ((this: WebSocket, ev: MessageEvent) => any) | null = null;
-	onerror: ((this: WebSocket, ev: Event) => any) | null = null;
-	onclose: ((this: WebSocket, ev: CloseEvent) => any) | null = null;
+	onopen: ((this: WebSocket, ev: Event) => void) | null = null;
+	onmessage: ((this: WebSocket, ev: MessageEvent) => void) | null = null;
+	onerror: ((this: WebSocket, ev: Event) => void) | null = null;
+	onclose: ((this: WebSocket, ev: CloseEvent) => void) | null = null;
 
 	constructor(private port: MessagePort) {
 		super();
@@ -27,13 +27,13 @@ class PolyfilledWebSocket extends EventTarget {
 			const ev = new MessageEvent('message', {
 				data: event.data
 			});
-			if (this.onmessage) this.onmessage(ev as any);
+			if (this.onmessage) this.onmessage.call(this as unknown as WebSocket, ev);
 			this.dispatchEvent(ev);
 		};
 
 		this.port.onmessageerror = () => {
 			const ev = new Event('error');
-			if (this.onerror) this.onerror(ev as any);
+			if (this.onerror) this.onerror.call(this as unknown as WebSocket, ev);
 			this.dispatchEvent(ev);
 		};
 
@@ -41,7 +41,7 @@ class PolyfilledWebSocket extends EventTarget {
 			if (this.readyState === 0) {
 				this.readyState = 1;
 				const ev = new Event('open');
-				if (this.onopen) this.onopen(ev as any);
+				if (this.onopen) this.onopen.call(this as unknown as WebSocket, ev);
 				this.dispatchEvent(ev);
 			}
 		}, 0);
@@ -60,7 +60,7 @@ class PolyfilledWebSocket extends EventTarget {
 		this.port.close();
 		this.readyState = 3;
 		const ev = new CloseEvent('close', { code, reason, wasClean: true });
-		if (this.onclose) this.onclose(ev as any);
+		if (this.onclose) this.onclose.call(this as unknown as WebSocket, ev);
 		this.dispatchEvent(ev);
 	}
 }
@@ -76,6 +76,8 @@ export class WebSocketPairPolyfill {
 	}
 }
 
-if (!(globalThis as any).WebSocketPair) {
-	(globalThis as any).WebSocketPair = WebSocketPairPolyfill;
+const g = globalThis as unknown as { WebSocketPair: typeof WebSocketPairPolyfill };
+
+if (!g.WebSocketPair) {
+	g.WebSocketPair = WebSocketPairPolyfill;
 }

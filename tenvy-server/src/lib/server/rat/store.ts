@@ -92,12 +92,13 @@ const SOCKET_OPEN_STATE = (() => {
 })();
 
 class RegistryError extends Error {
-	status: number;
-
-	constructor(message: string, status = 400) {
+	public readonly isRegistryError = true;
+	constructor(
+		message: string,
+		public status: number = 400
+	) {
 		super(message);
 		this.name = 'RegistryError';
-		this.status = status;
 	}
 }
 
@@ -2687,7 +2688,8 @@ async function flushRegistryBeforeExit(reason: string): Promise<void> {
 if (!globalWithRegistryShutdownFlag[shutdownHookKey]) {
 	for (const signal of shutdownSignals) {
 		process.once(signal, (received) => {
-			const exitCode = shutdownSignalExitCodes[received] ?? 0;
+			const signalName = received as (typeof shutdownSignals)[number];
+			const exitCode = shutdownSignalExitCodes[signalName] ?? 0;
 			void flushRegistryBeforeExit(`signal ${received}`).finally(() => {
 				process.exit(exitCode);
 			});

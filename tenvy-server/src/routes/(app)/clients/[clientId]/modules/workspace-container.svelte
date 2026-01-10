@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { SvelteMap } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import {
 		Card,
@@ -92,11 +93,11 @@
 	}
 
 	function closeWorkspace() {
-		goto(`/clients/${client.id}/modules`);
+		goto(resolve(`/clients/${client.id}/modules` as any));
 	}
 
 	function returnToClients() {
-		goto('/clients');
+		goto(resolve('/clients' as any));
 	}
 </script>
 
@@ -139,7 +140,7 @@
 										? 'border-primary/60 bg-primary/10 text-primary'
 										: 'text-muted-foreground'
 								)}
-								href={toWorkspaceUrl(item)}
+								href={resolve(toWorkspaceUrl(item) as any)}
 							>
 								<span class="truncate">{item.title}</span>
 								{#if isWorkspaceTool(item.id as ClientToolId)}

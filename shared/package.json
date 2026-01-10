@@ -2,8 +2,14 @@
   "name": "@tenvy/shared",
   "private": true,
   "type": "module",
+  "scripts": {
+    "gen:protocol": "bun scripts/generate-protocol.ts && bun x quicktype -s schema protocol/schema.json -o protocol/protocol.go --lang go --package protocol --top-level TenvyProtocol"
+  },
   "dependencies": {
     "tweetnacl": "^1.0.3",
     "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "^15.0.4"
   }
 }

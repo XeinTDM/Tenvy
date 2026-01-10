@@ -1980,8 +1980,9 @@
 
 <Card>
 	<CardContent>
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div
-			tabindex="0"
+			tabindex={0}
 			bind:this={viewportEl}
 			class="relative overflow-hidden rounded-lg border border-border bg-muted/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 			role="application"
@@ -2004,12 +2005,12 @@
 				playsinline
 				muted
 				controls={false}
-				style="pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges;"
+				style="pointer-events: none; image-rendering: pixelated;"
 			></video>
 			<canvas
 				bind:this={canvasEl}
 				class="block h-full w-full bg-slate-950"
-				style="image-rendering: pixelated; image-rendering: crisp-edges;"
+				style="image-rendering: pixelated;"
 				class:hidden={webrtcVideoActive}
 			></canvas>
 			{#if !sessionActive}

@@ -208,7 +208,7 @@
 								{/if}
 							</SelectTrigger>
 							<SelectContent>
-								{#each devices as device}
+								{#each devices as device (device.id)}
 									<SelectItem value={device.id}>{device.label}</SelectItem>
 								{/each}
 							</SelectContent>

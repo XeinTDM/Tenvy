@@ -30,7 +30,13 @@ export const GET: RequestHandler = ({ request, params }) => {
 	// However, many modern adapters and environments (like Bun, or some Node adapters)
 	// expect a 101 Switching Protocols response with a webSocket property.
 
-	const [client, server] = new (globalThis as any).WebSocketPair();
+	const pairFactory = (
+		globalThis as unknown as {
+			WebSocketPair: new () => { 0: WebSocket; 1: WebSocket };
+		}
+	).WebSocketPair;
+
+	const { 0: client, 1: server } = new pairFactory();
 
 	try {
 		audioBridgeManager.attachBinaryStream(id, sessionId, token, server);
@@ -49,5 +55,5 @@ export const GET: RequestHandler = ({ request, params }) => {
 	return new Response(null, {
 		status: 101,
 		webSocket: client
-	} as any);
+	} as ResponseInit & { webSocket: WebSocket });
 };

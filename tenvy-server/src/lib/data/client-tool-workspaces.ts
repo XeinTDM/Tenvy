@@ -19,25 +19,35 @@ import IpGeolocationWorkspace from '$lib/components/workspace/tools/ip-geolocati
 import EnvironmentVariablesWorkspace from '$lib/components/workspace/tools/environment-variables-workspace.svelte';
 import NotesWorkspace from '$lib/components/workspace/tools/notes-workspace.svelte';
 
-export const workspaceComponentMap: Partial<Record<DialogToolId, Component<any>>> = {
-	'app-vnc': AppVncWorkspace,
-	'remote-desktop': RemoteDesktopWorkspace,
-	'webcam-control': WebcamControlWorkspace,
-	'audio-control': AudioControlWorkspace,
-	cmd: CmdWorkspace,
-	'file-manager': FileManagerWorkspace,
-	'system-info': SystemInfoWorkspace,
-	'system-monitor': SystemMonitorWorkspace,
-	'registry-manager': RegistryManagerWorkspace,
-	'clipboard-manager': ClipboardManagerWorkspace,
-	recovery: RecoveryWorkspace,
-	options: OptionsWorkspace,
-	'open-url': OpenUrlWorkspace,
-	notes: NotesWorkspace,
-	'client-chat': ClientChatWorkspace,
-	'trigger-monitor': TriggerMonitorWorkspace,
-	'ip-geolocation': IpGeolocationWorkspace,
-	'environment-variables': EnvironmentVariablesWorkspace
+import type { Client } from './clients';
+import type { AgentSnapshot } from '../../../../shared/types/agent';
+import type { RemoteDesktopSessionState } from '$lib/types/remote-desktop';
+
+export type WorkspaceProps = {
+	client: Client;
+	agent?: AgentSnapshot | null;
+	initialSession?: RemoteDesktopSessionState | null;
+};
+
+export const workspaceComponentMap: Partial<Record<DialogToolId, Component<WorkspaceProps>>> = {
+	'app-vnc': AppVncWorkspace as Component<WorkspaceProps>,
+	'remote-desktop': RemoteDesktopWorkspace as Component<WorkspaceProps>,
+	'webcam-control': WebcamControlWorkspace as Component<WorkspaceProps>,
+	'audio-control': AudioControlWorkspace as Component<WorkspaceProps>,
+	cmd: CmdWorkspace as Component<WorkspaceProps>,
+	'file-manager': FileManagerWorkspace as Component<WorkspaceProps>,
+	'system-info': SystemInfoWorkspace as Component<WorkspaceProps>,
+	'system-monitor': SystemMonitorWorkspace as Component<WorkspaceProps>,
+	'registry-manager': RegistryManagerWorkspace as Component<WorkspaceProps>,
+	'clipboard-manager': ClipboardManagerWorkspace as Component<WorkspaceProps>,
+	recovery: RecoveryWorkspace as Component<WorkspaceProps>,
+	options: OptionsWorkspace as Component<WorkspaceProps>,
+	'open-url': OpenUrlWorkspace as Component<WorkspaceProps>,
+	notes: NotesWorkspace as Component<WorkspaceProps>,
+	'client-chat': ClientChatWorkspace as Component<WorkspaceProps>,
+	'trigger-monitor': TriggerMonitorWorkspace as Component<WorkspaceProps>,
+	'ip-geolocation': IpGeolocationWorkspace as Component<WorkspaceProps>,
+	'environment-variables': EnvironmentVariablesWorkspace as Component<WorkspaceProps>
 };
 
 const keyloggerModesMap: Partial<Record<DialogToolId, 'standard' | 'offline'>> = {
@@ -76,7 +86,7 @@ export function isWorkspaceTool(id: ClientToolId): id is DialogToolId {
 	return workspaceToolSet.has(id as DialogToolId);
 }
 
-export function getWorkspaceComponent(id: DialogToolId): Component<any> | null {
+export function getWorkspaceComponent(id: DialogToolId): Component<WorkspaceProps> | null {
 	return workspaceComponentMap[id] ?? null;
 }
 

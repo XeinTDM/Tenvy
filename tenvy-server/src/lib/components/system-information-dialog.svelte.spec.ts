@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
+import { describe, it, beforeEach, afterEach, expect, vi, type Mock } from 'vitest';
 import { mount } from 'svelte';
 import SystemInformationDialog from './system-information-dialog.svelte';
 import type { Client } from '$lib/data/clients';
@@ -141,13 +141,13 @@ describe('SystemInformationDialog (Svelte 5)', () => {
 
 	afterEach(() => {
 		if (originalFetch) globalThis.fetch = originalFetch;
-		else delete (globalThis as any).fetch;
+		else delete (globalThis as { fetch?: unknown }).fetch;
 		document.body.innerHTML = '';
 	});
 
 	it('renders host, hardware, and runtime details from the snapshot', async () => {
 		const snapshot = createSnapshot();
-		const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+		const fetchMock = globalThis.fetch as Mock;
 
 		fetchMock.mockResolvedValue({
 			ok: true,

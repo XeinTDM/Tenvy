@@ -11,6 +11,7 @@
 	} from '$lib/components/ui/card/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
+	import { Select, SelectTrigger, SelectContent, SelectItem } from '$lib/components/ui/select/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import { TriangleAlert, Check, Clock, ShieldCheck, UserPlus } from '@lucide/svelte';
@@ -269,18 +270,21 @@
 									</span>
 								</td>
 								<td class="px-4 py-3">
-									<select
-										class="w-full rounded-md border border-border bg-background px-3 py-1 text-sm"
-										value={member.role}
-										onchange={(event) =>
-											setMemberRole(member.id, event.currentTarget.value as UserRole)}
+									<Select
+										type="single"
+										bind:value={member.role}
+										onchange={(e: CustomEvent<UserRole>) => setMemberRole(member.id, e.detail)}
 									>
-										{#each roleOptions as option}
-											<option value={option.value}>
-												{option.label}
-											</option>
-										{/each}
-									</select>
+										<SelectTrigger>
+											<span class="capitalize">{member.role}</span>
+										</SelectTrigger>
+
+										<SelectContent>
+											{#each roleOptions as option (option.value)}
+												<SelectItem value={option.value}>{option.label}</SelectItem>
+											{/each}
+										</SelectContent>
+									</Select>
 								</td>
 								<td class="px-4 py-3 text-muted-foreground">
 									{formatTimestamp(member.voucherRedeemedAt)}

@@ -206,7 +206,7 @@
 	{@const usernameValue = resolveUsernameValue(agent)}
 	{@const usernameDisplay = usernameValue || 'Unknown'}
 	{#if layout === 'card'}
-		<div {...restProps} class={cardClassName} tabindex={0} data-slot="table-row" data-mobile="true">
+		<div {...restProps} class={cardClassName} data-slot="table-row" data-mobile="true">
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div class="flex min-w-0 items-center gap-2">
 					{#if locationDisplay.flagUrl}
@@ -360,13 +360,7 @@
 			</div>
 		</div>
 	{:else}
-		<tr
-			{...restProps}
-			class={tableClassName}
-			tabindex={0}
-			data-slot="table-row"
-			data-mobile="false"
-		>
+		<tr {...restProps} class={tableClassName} data-slot="table-row" data-mobile="false">
 			<TableCell>
 				<div class="flex items-center gap-2">
 					{#if locationDisplay.flagUrl}
