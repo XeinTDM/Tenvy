@@ -6,11 +6,11 @@ package audio
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/gen2brain/malgo"
+	"github.com/vmihailenco/msgpack/v5"
 	"github.com/rootbay/tenvy-client/internal/protocol"
 	"nhooyr.io/websocket"
 )
@@ -47,9 +48,47 @@ type Config struct {
 }
 
 type AudioBridge struct {
-	cfg      atomic.Value // stores Config
-	mu       sync.Mutex
-	sessions map[string]*AudioStreamSession
+	cfg       atomic.Value // stores Config
+	mu        sync.Mutex
+	sessions  map[string]*AudioStreamSession
+	playbacks map[string]*playbackSession
+}
+
+type playbackSession struct {
+	bridge  *AudioBridge
+	id      string
+	trackID string
+	url     string
+	volume  float64
+	loop    bool
+
+	ctx    *malgo.AllocatedContext
+	device *malgo.Device
+
+	pcmData    []byte
+	format     malgo.Format
+	channels   uint32
+	sampleRate uint32
+
+	offset  uint32
+	paused  atomic.Bool
+	stopped  atomic.Bool
+	done    chan struct{}
+}
+
+func (s *playbackSession) stop() {
+	if s == nil {
+		return
+	}
+	s.stopped.Store(true)
+	if s.device != nil {
+		_ = s.device.Stop()
+		s.device.Uninit()
+	}
+	if s.ctx != nil {
+		_ = s.ctx.Context.Uninit()
+		s.ctx.Free()
+	}
 }
 
 type AudioStreamSession struct {
@@ -80,10 +119,10 @@ type AudioStreamSession struct {
 }
 
 type audioBinaryHeader struct {
-	SessionID string            `json:"sessionId"`
-	Sequence  uint64            `json:"sequence"`
-	Timestamp string            `json:"timestamp"`
-	Format    AudioStreamFormat `json:"format"`
+	SessionID string            `json:"sessionId" msgpack:"sessionId"`
+	Sequence  uint64            `json:"sequence" msgpack:"sequence"`
+	Timestamp string            `json:"timestamp" msgpack:"timestamp"`
+	Format    AudioStreamFormat `json:"format" msgpack:"format"`
 }
 
 func (s *AudioStreamSession) logf(format string, args ...interface{}) {
@@ -95,7 +134,8 @@ func (s *AudioStreamSession) logf(format string, args ...interface{}) {
 
 func NewAudioBridge(cfg Config) *AudioBridge {
 	bridge := &AudioBridge{
-		sessions: make(map[string]*AudioStreamSession),
+		sessions:  make(map[string]*AudioStreamSession),
+		playbacks: make(map[string]*playbackSession),
 	}
 	bridge.updateConfig(cfg)
 	return bridge
@@ -142,11 +182,21 @@ func (b *AudioBridge) Shutdown() {
 		sessions = append(sessions, session)
 	}
 	b.sessions = make(map[string]*AudioStreamSession)
+
+	playbacks := make([]*playbackSession, 0, len(b.playbacks))
+	for _, p := range b.playbacks {
+		playbacks = append(playbacks, p)
+	}
+	b.playbacks = make(map[string]*playbackSession)
 	b.mu.Unlock()
 
 	for _, session := range sessions {
 		session.stop()
 		session.wait(2 * time.Second)
+	}
+
+	for _, p := range playbacks {
+		p.stop()
 	}
 }
 
@@ -174,6 +224,14 @@ func (b *AudioBridge) HandleCommand(ctx context.Context, cmd Command) CommandRes
 		err = b.startSession(ctx, payload)
 	case "stop":
 		err = b.stopSession(payload.SessionID)
+	case "playback-start":
+		err = b.startPlayback(ctx, payload)
+	case "playback-pause":
+		err = b.pausePlayback(payload.TrackID)
+	case "playback-resume":
+		err = b.resumePlayback(payload.TrackID)
+	case "playback-stop":
+		err = b.stopPlayback(payload.TrackID)
 	case "":
 		err = errors.New("missing audio control action")
 	default:
@@ -254,9 +312,6 @@ func (b *AudioBridge) startSession(ctx context.Context, payload AudioControlComm
 	if direction == "" {
 		direction = AudioDirectionInput
 	}
-	if direction != AudioDirectionInput {
-		return fmt.Errorf("audio direction %s is not supported", direction)
-	}
 
 	channels := payload.Channels
 	if channels <= 0 {
@@ -310,7 +365,7 @@ func (b *AudioBridge) startSession(ctx context.Context, payload AudioControlComm
 		existing.wait(2 * time.Second)
 	} else if len(b.sessions) > 0 {
 		for _, active := range b.sessions {
-			active.stop()
+			actve.stop()
 			go active.wait(2 * time.Second)
 		}
 		b.sessions = make(map[string]*AudioStreamSession)
@@ -324,7 +379,12 @@ func (b *AudioBridge) startSession(ctx context.Context, payload AudioControlComm
 		return fmt.Errorf("failed to initialize audio context: %w", err)
 	}
 
-	deviceConfig := malgo.DefaultDeviceConfig(malgo.Capture)
+	deviceType := malgo.Capture
+	if direction == AudioDirectionOutput {
+		deviceType = malgo.Loopback
+	}
+
+	deviceConfig := malgo.DefaultDeviceConfig(deviceType)
 	deviceConfig.Capture.Format = malgo.FormatS16
 	deviceConfig.Capture.Channels = uint32(channels)
 	deviceConfig.SampleRate = uint32(sampleRate)
@@ -721,7 +781,7 @@ func (s *AudioStreamSession) run() {
 				Sequence:  sequence,
 				Timestamp: capturedAt.Format(time.RFC3339Nano),
 				Format:    s.format,
-				Data:      base64.StdEncoding.EncodeToString(data),
+				Data:      data,
 			}
 
 			if err := s.sendChunk(cfg, endpoint, chunk); err != nil {
@@ -732,7 +792,7 @@ func (s *AudioStreamSession) run() {
 }
 
 func (s *AudioStreamSession) sendChunk(cfg Config, endpoint string, chunk AudioStreamChunk) error {
-	payload, err := json.Marshal(chunk)
+	payload, err := msgpack.Marshal(chunk)
 	if err != nil {
 		return err
 	}
@@ -744,7 +804,7 @@ func (s *AudioStreamSession) sendChunk(cfg Config, endpoint string, chunk AudioS
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/msgpack")
 	req.Header.Set("Accept", "application/json")
 	if ua := strings.TrimSpace(s.bridge.userAgent()); ua != "" {
 		req.Header.Set("User-Agent", ua)
@@ -803,6 +863,192 @@ func (s *AudioStreamSession) wait(timeout time.Duration) {
 	case <-s.done:
 	case <-time.After(timeout):
 	}
+}
+
+func (b *AudioBridge) startPlayback(ctx context.Context, payload AudioControlCommandPayload) error {
+	trackID := strings.TrimSpace(payload.TrackID)
+	if trackID == "" {
+		return errors.New("track identifier is required for playback")
+	}
+
+	trackURL := strings.TrimSpace(payload.TrackURL)
+	if trackURL == "" {
+		return errors.New("track URL is required for playback")
+	}
+
+	cfg := b.config()
+	if cfg.Client == nil {
+		return errors.New("audio control: missing http client")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, trackURL, nil)
+	if err != nil {
+		return err
+	}
+	if ua := strings.TrimSpace(b.userAgent()); ua != "" {
+		req.Header.Set("User-Agent", ua)
+	}
+	if key := strings.TrimSpace(cfg.AuthKey); key != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+	}
+
+	resp, err := cfg.Client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download audio track: status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	p := &playbackSession{
+		bridge:     b,
+		id:         trackID,
+		trackID:    trackID,
+		url:        trackURL,
+		volume:     payload.Volume,
+		loop:       payload.Loop,
+		pcmData:    data,
+		format:     malgo.FormatS16,
+		channels:   uint32(payload.Channels),
+		sampleRate: uint32(payload.SampleRate),
+		done:       make(chan struct{}),
+	}
+	if p.channels <= 0 {
+		p.channels = 1
+	}
+	if p.sampleRate <= 0 {
+		p.sampleRate = 48000
+	}
+	if p.volume <= 0 {
+		p.volume = 1.0
+	}
+
+	b.mu.Lock()
+	if existing, ok := b.playbacks[trackID]; ok {
+		existing.stop()
+		delete(b.playbacks, trackID)
+	}
+	b.mu.Unlock()
+
+	allocatedCtx, err := malgo.InitContext(nil, malgo.ContextConfig{}, nil)
+	if err != nil {
+		return err
+	}
+
+	deviceConfig := malgo.DefaultDeviceConfig(malgo.Playback)
+	deviceConfig.Playback.Format = p.format
+	deviceConfig.Playback.Channels = p.channels
+	deviceConfig.SampleRate = p.sampleRate
+	deviceConfig.Alsa.NoMMap = 1
+	deviceConfig.Playback.ShareMode = malgo.Shared
+
+	if payload.OutputDeviceID != "" {
+		token, err := parseDeviceID(payload.OutputDeviceID)
+		if err == nil {
+			deviceConfig.Playback.DeviceID = unsafe.Pointer(&token)
+		}
+	}
+
+	callbacks := malgo.DeviceCallbacks{
+		Data: func(output []byte, _ []byte, frameCount uint32) {
+			if p.paused.Load() || p.stopped.Load() {
+				return
+			}
+
+			bytesToCopy := uint32(len(output))
+			remaining := uint32(len(p.pcmData)) - p.offset
+
+			if bytesToCopy > remaining {
+				copy(output[:remaining], p.pcmData[p.offset:])
+				if p.loop {
+					p.offset = bytesToCopy - remaining
+					if p.offset > uint32(len(p.pcmData)) {
+						p.offset = 0
+					}
+					copy(output[remaining:], p.pcmData[:p.offset])
+				} else {
+					p.offset = uint32(len(p.pcmData))
+					p.stopped.Store(true)
+				}
+			} else {
+				copy(output, p.pcmData[p.offset:p.offset+bytesToCopy])
+				p.offset += bytesToCopy
+			}
+
+			if p.volume != 1.0 {
+				samples := *(*[]int16)(unsafe.Pointer(&output))
+				for i := range samples {
+					samples[i] = int16(float64(samples[i]) * p.volume)
+				}
+			}
+		},
+	}
+
+	device, err := malgo.InitDevice(allocatedCtx.Context, deviceConfig, callbacks)
+	if err != nil {
+		allocatedCtx.Context.Uninit()
+		allocatedCtx.Free()
+		return err
+	}
+
+	if err := device.Start(); err != nil {
+		device.Uninit()
+		allocatedCtx.Context.Uninit()
+		allocatedCtx.Free()
+		return err
+	}
+
+	p.ctx = allocatedCtx
+	p.device = device
+
+	b.mu.Lock()
+	b.playbacks[trackID] = p
+	b.mu.Unlock()
+
+	return nil
+}
+
+func (b *AudioBridge) pausePlayback(trackID string) error {
+	b.mu.Lock()
+	p, ok := b.playbacks[trackID]
+	b.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("no playback found for track %s", trackID)
+	}
+	p.paused.Store(true)
+	return nil
+}
+
+func (b *AudioBridge) resumePlayback(trackID string) error {
+	b.mu.Lock()
+	p, ok := b.playbacks[trackID]
+	b.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("no playback found for track %s", trackID)
+	}
+	p.paused.Store(false)
+	return nil
+}
+
+func (b *AudioBridge) stopPlayback(trackID string) error {
+	b.mu.Lock()
+	p, ok := b.playbacks[trackID]
+	if ok {
+		delete(b.playbacks, trackID)
+	}
+	b.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	p.stop()
+	return nil
 }
 
 func captureAudioInventory() (*AudioDeviceInventory, error) {
@@ -880,14 +1126,14 @@ func enumerateAudioDevices(ctx *malgo.AllocatedContext) (*AudioDeviceInventory, 
 				label = fmt.Sprintf("Playback %d", idx+1)
 			}
 			descriptor := AudioDeviceDescriptor{
-				ID:                    info.ID.String(),
-				DeviceID:              info.ID.String(),
-				Label:                 label,
-				Kind:                  AudioDirectionOutput,
-				GroupID:               "",
-				SystemDefault:         info.IsDefault != 0,
-				CommunicationsDefault: false,
-				LastSeen:              now,
+					ID:                    info.ID.String(),
+					DeviceID:              info.ID.String(),
+					Label:                 label,
+					Kind:                  AudioDirectionOutput,
+					GroupID:               "",
+					SystemDefault:         info.IsDefault != 0,
+					CommunicationsDefault: false,
+					LastSeen:              now,
 			}
 			inventory.Outputs = append(inventory.Outputs, descriptor)
 		}
@@ -903,14 +1149,14 @@ func enumerateAudioDevices(ctx *malgo.AllocatedContext) (*AudioDeviceInventory, 
 				label = fmt.Sprintf("Microphone %d", idx+1)
 			}
 			descriptor := AudioDeviceDescriptor{
-				ID:                    info.ID.String(),
-				DeviceID:              info.ID.String(),
-				Label:                 label,
-				Kind:                  AudioDirectionInput,
-				GroupID:               "",
-				SystemDefault:         info.IsDefault != 0,
-				CommunicationsDefault: false,
-				LastSeen:              now,
+					ID:                    info.ID.String(),
+					DeviceID:              info.ID.String(),
+					Label:                 label,
+					Kind:                  AudioDirectionInput,
+					GroupID:               "",
+					SystemDefault:         info.IsDefault != 0,
+					CommunicationsDefault: false,
+					LastSeen:              now,
 			}
 			inventory.Inputs = append(inventory.Inputs, descriptor)
 		}

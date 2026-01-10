@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 const (
@@ -21,25 +23,25 @@ const (
 )
 
 type ipcRequest struct {
-	ID     uint64          `json:"id"`
-	Method string          `json:"method"`
-	Params json.RawMessage `json:"params,omitempty"`
+	ID     uint64             `json:"id" msgpack:"id"`
+	Method string             `json:"method" msgpack:"method"`
+	Params msgpack.RawMessage `json:"params,omitempty" msgpack:"params,omitempty"`
 }
 
 type ipcResponse struct {
-	ID     uint64                 `json:"id"`
-	Result map[string]interface{} `json:"result,omitempty"`
-	Error  *ipcError              `json:"error,omitempty"`
+	ID     uint64                 `json:"id" msgpack:"id"`
+	Result map[string]interface{} `json:"result,omitempty" msgpack:"result,omitempty"`
+	Error  *ipcError              `json:"error,omitempty" msgpack:"error,omitempty"`
 }
 
 type ipcError struct {
-	Message string `json:"message"`
+	Message string `json:"message" msgpack:"message"`
 }
 
 type logEntry struct {
-	Method    string          `json:"method"`
-	Timestamp string          `json:"timestamp"`
-	Params    json.RawMessage `json:"params,omitempty"`
+	Method    string      `json:"method"`
+	Timestamp string      `json:"timestamp"`
+	Params    interface{} `json:"params,omitempty"`
 }
 
 func main() {
@@ -55,9 +57,9 @@ func main() {
 		logEncoder = json.NewEncoder(file)
 	}
 
-	decoder := json.NewDecoder(os.Stdin)
+	decoder := msgpack.NewDecoder(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
-	encoder := json.NewEncoder(writer)
+	encoder := msgpack.NewEncoder(writer)
 
 	for {
 		var req ipcRequest
@@ -70,10 +72,17 @@ func main() {
 		}
 
 		if logEncoder != nil {
+			var params interface{}
+			if len(req.Params) > 0 {
+				if err := msgpack.Unmarshal(req.Params, &params); err != nil {
+					fmt.Fprintf(os.Stderr, "fake plugin: decode params for log: %v\n", err)
+				}
+			}
+
 			entry := logEntry{
 				Method:    req.Method,
 				Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-				Params:    append(json.RawMessage(nil), req.Params...),
+				Params:    params,
 			}
 			_ = logEncoder.Encode(entry)
 		}

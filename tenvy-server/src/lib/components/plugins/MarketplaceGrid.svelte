@@ -10,7 +10,7 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card/index.js';
-	import type { Plugin } from '$lib/data/plugin-view.js';
+	import { resolve } from '$app/paths';
 	import { GitFork, Info, ShieldCheck } from '@lucide/svelte';
 
 	import type {
@@ -104,7 +104,7 @@
 								<div class="flex items-center gap-2">
 									<GitFork class="h-3.5 w-3.5" />
 									<a
-										href={listing.repositoryUrl}
+										href={resolve(listing.repositoryUrl as any)}
 										rel="noreferrer"
 										target="_blank"
 										class="truncate underline decoration-dotted hover:text-foreground"

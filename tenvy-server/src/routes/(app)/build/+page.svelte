@@ -811,15 +811,19 @@
 								class="flex w-full flex-wrap gap-2 rounded-lg border border-border/70 bg-muted/40 p-1"
 							>
 								<TabsTrigger value="connection" class="flex-1 sm:flex-none">Connection</TabsTrigger>
-								<TabsTrigger value="persistence" class="flex-1 sm:flex-none">Persistence</TabsTrigger>
+								<TabsTrigger value="persistence" class="flex-1 sm:flex-none"
+									>Persistence</TabsTrigger
+								>
 								<TabsTrigger value="execution" class="flex-1 sm:flex-none">Execution</TabsTrigger>
 								<TabsTrigger value="presentation" class="flex-1 sm:flex-none"
 									>Presentation</TabsTrigger
 								>
 							</TabsList>
-							<div class="rounded-lg border border-border/90 bg-background/80 p-4 text-sm text-muted-foreground">
+							<div
+								class="rounded-lg border border-border/90 bg-background/80 p-4 text-sm text-muted-foreground"
+							>
 								<div class="flex items-center justify-between gap-2">
-									<p class="text-xs font-semibold uppercase tracking-wide text-foreground/70">
+									<p class="text-xs font-semibold tracking-wide text-foreground/70 uppercase">
 										{activeTabMeta().title}
 									</p>
 									<span class="text-[0.65rem] text-muted-foreground">
@@ -956,7 +960,9 @@
 						</div>
 						<div class="space-y-2 text-sm">
 							<p class="flex items-center justify-between gap-2">
-								<span class="text-[0.65rem] uppercase tracking-wide text-muted-foreground">Output</span>
+								<span class="text-[0.65rem] tracking-wide text-muted-foreground uppercase"
+									>Output</span
+								>
 								<code
 									class="rounded bg-muted/30 px-2 py-0.5 text-[0.75rem] font-semibold text-foreground"
 								>

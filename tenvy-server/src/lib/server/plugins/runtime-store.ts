@@ -10,7 +10,6 @@ import type {
 } from '../../../../../shared/types/plugin-manifest';
 import type { LoadedPluginManifest } from '$lib/data/plugin-manifests.js';
 
-type PluginTable = typeof plugin;
 type PluginInsert = typeof plugin.$inferInsert;
 
 export type PluginRuntimeRow = typeof plugin.$inferSelect;
@@ -39,9 +38,9 @@ export type PluginRuntimePatch = Partial<{
 }>;
 
 export interface PluginRuntimeStore {
-	ensure(record: LoadedPluginManifest): Promise<PluginRuntimeRow>;
-	find(id: string): Promise<PluginRuntimeRow | null>;
-	update(id: string, patch: PluginRuntimePatch): Promise<PluginRuntimeRow>;
+	ensure(record: LoadedPluginManifest): PluginRuntimeRow;
+	find(id: string): PluginRuntimeRow | null;
+	update(id: string, patch: PluginRuntimePatch): PluginRuntimeRow;
 }
 
 const ensureDefaults = (record: LoadedPluginManifest): PluginInsert => {
@@ -112,18 +111,18 @@ const normalizePatch = (patch: PluginRuntimePatch): Partial<PluginInsert> => {
 };
 
 export function createPluginRuntimeStore(database: DatabaseClient = db): PluginRuntimeStore {
-	const find = async (id: string): Promise<PluginRuntimeRow | null> => {
-		const [row] = await database.select().from(plugin).where(eq(plugin.id, id));
+	const find = (id: string): PluginRuntimeRow | null => {
+		const [row] = database.select().from(plugin).where(eq(plugin.id, id)).all();
 		return row ?? null;
 	};
 
-	const ensure = async (record: LoadedPluginManifest): Promise<PluginRuntimeRow> => {
+	const ensure = (record: LoadedPluginManifest): PluginRuntimeRow => {
 		const manifest = record.manifest;
 		const defaults = ensureDefaults(record);
 
-		await database.insert(plugin).values(defaults).onConflictDoNothing();
+		database.insert(plugin).values(defaults).onConflictDoNothing().run();
 
-		await database
+		database
 			.update(plugin)
 			.set({
 				signatureStatus: defaults.signatureStatus,
@@ -139,9 +138,10 @@ export function createPluginRuntimeStore(database: DatabaseClient = db): PluginR
 				signatureChain: defaults.signatureChain,
 				updatedAt: new Date()
 			})
-			.where(eq(plugin.id, manifest.id));
+			.where(eq(plugin.id, manifest.id))
+			.run();
 
-		const inserted = await find(manifest.id);
+		const inserted = find(manifest.id);
 		if (!inserted) {
 			throw new Error(`Failed to persist runtime state for plugin ${manifest.id}`);
 		}
@@ -149,20 +149,20 @@ export function createPluginRuntimeStore(database: DatabaseClient = db): PluginR
 		return inserted;
 	};
 
-	const update = async (id: string, patch: PluginRuntimePatch): Promise<PluginRuntimeRow> => {
+	const update = (id: string, patch: PluginRuntimePatch): PluginRuntimeRow => {
 		const updateValues = normalizePatch(patch);
 
 		if (Object.keys(updateValues).length === 0) {
-			const current = await find(id);
+			const current = find(id);
 			if (!current) throw new Error(`Plugin runtime state ${id} not found`);
 			return current;
 		}
 
 		updateValues.updatedAt = new Date();
 
-		await database.update(plugin).set(updateValues).where(eq(plugin.id, id));
+		database.update(plugin).set(updateValues).where(eq(plugin.id, id)).run();
 
-		const updated = await find(id);
+		const updated = find(id);
 		if (!updated) {
 			throw new Error(`Plugin runtime state ${id} not found after update`);
 		}

@@ -1,7 +1,7 @@
 # Remote Desktop Engine IPC Contract
 
 The remote desktop engine plugin is now hosted out-of-process and communicates
-with the agent over a newline-delimited JSON protocol carried across the
+with the agent over a **MessagePack** protocol carried across the
 plugin's stdin/stdout streams. Each message is an object containing an `id`
 field, a `method` string, and an optional `params` payload. Responses reuse the
 identifier and either provide a `result` object or an `error` payload with a
@@ -21,7 +21,7 @@ human-readable message.
 
 The plugin must respond to each request with a success result (`{"status":"ok"}`)
 or an error object (`{"error":{"message":"..."}}`). Any log output should be
-written to stderr to avoid interfering with the JSON channel.
+written to stderr to avoid interfering with the IPC channel.
 
 ## Error Handling
 
@@ -34,6 +34,6 @@ agent can propagate the failure to the controller.
 ## Testing
 
 Integration coverage lives under `internal/agent/remote_desktop_ipc_test.go` and
-uses a fake plugin binary that exercises the full JSON pipeline. Any change to
+uses a fake plugin binary that exercises the full MessagePack pipeline. Any change to
 this protocol should update the test fixtures and documentation to avoid
 regressions.

@@ -15,7 +15,7 @@ type ClientPluginRequestOptions = {
 	forceSnapshot?: boolean;
 };
 
-export async function resolveClientPluginRequest(
+export async function _resolveClientPluginRequest(
 	params: { id?: string },
 	request: Request,
 	url: URL,
@@ -88,7 +88,7 @@ export async function resolveClientPluginRequest(
 }
 
 export const GET: RequestHandler = async ({ params, request, url }) => {
-	return resolveClientPluginRequest(params, request, url);
+	return _resolveClientPluginRequest(params, request, url);
 };
 
 async function loadManifests() {

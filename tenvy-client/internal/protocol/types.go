@@ -19,89 +19,41 @@ const (
 var ErrUnauthorized = errors.New("unauthorized")
 
 type PluginSignaturePolicy struct {
-	SHA256AllowList   []string          `json:"sha256AllowList,omitempty"`
-	Ed25519PublicKeys map[string]string `json:"ed25519PublicKeys,omitempty"`
-	MaxSignatureAgeMs int64             `json:"maxSignatureAgeMs,omitempty"`
+	SHA256AllowList   []string          `json:"sha256AllowList,omitempty" msgpack:"sha256AllowList,omitempty"`
+	Ed25519PublicKeys map[string]string `json:"ed25519PublicKeys,omitempty" msgpack:"ed25519PublicKeys,omitempty"`
+	MaxSignatureAgeMs int64             `json:"maxSignatureAgeMs,omitempty" msgpack:"maxSignatureAgeMs,omitempty"`
 }
 
 type PluginConfig struct {
-	SignaturePolicy *PluginSignaturePolicy `json:"signaturePolicy,omitempty"`
+	SignaturePolicy *PluginSignaturePolicy `json:"signaturePolicy,omitempty" msgpack:"signaturePolicy,omitempty"`
 }
 
 type AgentConfig struct {
-	PollIntervalMs int           `json:"pollIntervalMs"`
-	MaxBackoffMs   int           `json:"maxBackoffMs"`
-	JitterRatio    float64       `json:"jitterRatio"`
-	Plugins        *PluginConfig `json:"plugins,omitempty"`
+	PollIntervalMs int           `json:"pollIntervalMs" msgpack:"pollIntervalMs"`
+	MaxBackoffMs   int           `json:"maxBackoffMs" msgpack:"maxBackoffMs"`
+	JitterRatio    float64       `json:"jitterRatio" msgpack:"jitterRatio"`
+	Plugins        *PluginConfig `json:"plugins,omitempty" msgpack:"plugins,omitempty"`
 }
 
 type AgentMetrics struct {
-	MemoryBytes   uint64 `json:"memoryBytes,omitempty"`
-	Goroutines    int    `json:"goroutines,omitempty"`
-	UptimeSeconds uint64 `json:"uptimeSeconds,omitempty"`
+	MemoryBytes   uint64 `json:"memoryBytes,omitempty" msgpack:"memoryBytes,omitempty"`
+	Goroutines    int    `json:"goroutines,omitempty" msgpack:"goroutines,omitempty"`
+	UptimeSeconds uint64 `json:"uptimeSeconds,omitempty" msgpack:"uptimeSeconds,omitempty"`
 }
 
 type Command struct {
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
-	Payload   json.RawMessage `json:"payload"`
-	CreatedAt string          `json:"createdAt"`
+	ID        string          `json:"id" msgpack:"id"`
+	Name      string          `json:"name" msgpack:"name"`
+	Payload   json.RawMessage `json:"payload" msgpack:"payload"`
+	CreatedAt string          `json:"createdAt" msgpack:"createdAt"`
+	Signature string          `json:"signature,omitempty" msgpack:"signature,omitempty"`
 }
 
 type CommandEnvelope struct {
 	Type        string                   `json:"type"`
 	Command     *Command                 `json:"command,omitempty"`
-	Input       *RemoteDesktopInputBurst `json:"-"`
-	AppVncInput *AppVncInputBurst        `json:"-"`
-}
-
-type commandEnvelopeAlias struct {
-	Type    string          `json:"type"`
-	Command *Command        `json:"command,omitempty"`
-	Input   json.RawMessage `json:"input,omitempty"`
-}
-
-func (e CommandEnvelope) MarshalJSON() ([]byte, error) {
-	alias := commandEnvelopeAlias{
-		Type:    e.Type,
-		Command: e.Command,
-	}
-
-	switch strings.ToLower(strings.TrimSpace(e.Type)) {
-	case "remote-desktop-input":
-		if e.Input != nil {
-			data, err := json.Marshal(e.Input)
-			if err != nil {
-				return nil, err
-			}
-			alias.Input = data
-		}
-	case "app-vnc-input":
-		if e.AppVncInput != nil {
-			data, err := json.Marshal(e.AppVncInput)
-			if err != nil {
-				return nil, err
-			}
-			alias.Input = data
-		}
-	default:
-		switch {
-		case e.Input != nil:
-			data, err := json.Marshal(e.Input)
-			if err != nil {
-				return nil, err
-			}
-			alias.Input = data
-		case e.AppVncInput != nil:
-			data, err := json.Marshal(e.AppVncInput)
-			if err != nil {
-				return nil, err
-			}
-			alias.Input = data
-		}
-	}
-
-	return json.Marshal(alias)
+	Input       *RemoteDesktopInputBurst `json:"input,omitempty"`
+	AppVncInput *AppVncInputBurst        `json:"appVncInput,omitempty"`
 }
 
 func (e *CommandEnvelope) UnmarshalJSON(data []byte) error {
@@ -109,57 +61,41 @@ func (e *CommandEnvelope) UnmarshalJSON(data []byte) error {
 		return errors.New("command envelope not initialized")
 	}
 
-	var alias commandEnvelopeAlias
-	if err := json.Unmarshal(data, &alias); err != nil {
+	type alias CommandEnvelope
+	var aux alias
+	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
 
-	e.Type = alias.Type
-	e.Command = alias.Command
-	e.Input = nil
-	e.AppVncInput = nil
+	e.Type = aux.Type
+	e.Command = aux.Command
+	e.Input = aux.Input
+	e.AppVncInput = aux.AppVncInput
 
-	if len(alias.Input) == 0 {
-		return nil
-	}
-
-	switch strings.ToLower(strings.TrimSpace(alias.Type)) {
-	case "remote-desktop-input":
-		var burst RemoteDesktopInputBurst
-		if err := json.Unmarshal(alias.Input, &burst); err != nil {
-			return err
+	// Handle legacy 'input' field that might be shared
+	if e.Input == nil && e.AppVncInput == nil {
+		var raw struct {
+			Input json.RawMessage `json:"input,omitempty"`
 		}
-		e.Input = &burst
-	case "app-vnc-input":
-		var burst AppVncInputBurst
-		if err := json.Unmarshal(alias.Input, &burst); err != nil {
-			return err
+		if err := json.Unmarshal(data, &raw); err == nil && len(raw.Input) > 0 {
+			switch strings.ToLower(strings.TrimSpace(e.Type)) {
+			case "remote-desktop-input":
+				_ = json.Unmarshal(raw.Input, &e.Input)
+			case "app-vnc-input":
+				_ = json.Unmarshal(raw.Input, &e.AppVncInput)
+			}
 		}
-		e.AppVncInput = &burst
-	default:
-		// Attempt remote desktop decoding first for backwards compatibility.
-		var remote RemoteDesktopInputBurst
-		if err := json.Unmarshal(alias.Input, &remote); err == nil {
-			e.Input = &remote
-			return nil
-		}
-		var appBurst AppVncInputBurst
-		if err := json.Unmarshal(alias.Input, &appBurst); err == nil {
-			e.AppVncInput = &appBurst
-			return nil
-		}
-		return errors.New("unrecognized command envelope input payload")
 	}
 
 	return nil
 }
 
 type CommandResult struct {
-	CommandID   string `json:"commandId"`
-	Success     bool   `json:"success"`
-	Output      string `json:"output,omitempty"`
-	Error       string `json:"error,omitempty"`
-	CompletedAt string `json:"completedAt"`
+	CommandID   string `json:"commandId" msgpack:"commandId"`
+	Success     bool   `json:"success" msgpack:"success"`
+	Output      string `json:"output,omitempty" msgpack:"output,omitempty"`
+	Error       string `json:"error,omitempty" msgpack:"error,omitempty"`
+	CompletedAt string `json:"completedAt" msgpack:"completedAt"`
 }
 
 type CommandOutputEvent struct {
@@ -434,6 +370,7 @@ type AgentMetadata struct {
 	PublicIPAddress string   `json:"publicIpAddress,omitempty"`
 	Tags            []string `json:"tags,omitempty"`
 	Version         string   `json:"version,omitempty"`
+	HardwareID      string   `json:"hardwareId,omitempty"`
 }
 
 type AgentRegistrationRequest struct {
@@ -450,21 +387,21 @@ type AgentRegistrationResponse struct {
 }
 
 type AgentSyncRequest struct {
-	Status    string                `json:"status"`
-	Timestamp string                `json:"timestamp"`
-	Metrics   *AgentMetrics         `json:"metrics,omitempty"`
-	Results   []CommandResult       `json:"results,omitempty"`
-	Plugins   *manifest.SyncPayload `json:"plugins,omitempty"`
-	Options   *options.State        `json:"options,omitempty"`
+	Status    string                `json:"status" msgpack:"status"`
+	Timestamp string                `json:"timestamp" msgpack:"timestamp"`
+	Metrics   *AgentMetrics         `json:"metrics,omitempty" msgpack:"metrics,omitempty"`
+	Results   []CommandResult       `json:"results,omitempty" msgpack:"results,omitempty"`
+	Plugins   *manifest.SyncPayload `json:"plugins,omitempty" msgpack:"plugins,omitempty"`
+	Options   *options.State        `json:"options,omitempty" msgpack:"options,omitempty"`
 }
 
 type AgentSyncResponse struct {
-	AgentID         string                  `json:"agentId"`
-	Commands        []Command               `json:"commands"`
-	Config          AgentConfig             `json:"config"`
-	ServerTime      string                  `json:"serverTime"`
-	PluginManifests *manifest.ManifestDelta `json:"pluginManifests,omitempty"`
-	Options         *options.State          `json:"options,omitempty"`
+	AgentID         string                  `json:"agentId" msgpack:"agentId"`
+	Commands        []Command               `json:"commands" msgpack:"commands"`
+	Config          AgentConfig             `json:"config" msgpack:"config"`
+	ServerTime      string                  `json:"serverTime" msgpack:"serverTime"`
+	PluginManifests *manifest.ManifestDelta `json:"pluginManifests,omitempty" msgpack:"pluginManifests,omitempty"`
+	Options         *options.State          `json:"options,omitempty" msgpack:"options,omitempty"`
 }
 
 type PingCommandPayload struct {

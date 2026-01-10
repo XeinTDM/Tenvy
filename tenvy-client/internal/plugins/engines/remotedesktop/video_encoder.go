@@ -218,10 +218,18 @@ func newFFmpegHEVCVideoEncoder(provider ffmpegEnvProvider) (clipVideoEncoder, er
 	caps := env.caps
 	candidates := make([]ffmpegEncoderCandidate, 0, 5)
 	if caps.supports("hevc_nvenc") {
-		candidates = append(candidates, ffmpegEncoderCandidate{name: "NVENC", encoder: "hevc_nvenc", filter: "format=yuv420p"})
+		candidates = append(candidates, ffmpegEncoderCandidate{
+			name:    "NVENC",
+			encoder: "hevc_nvenc",
+			filter:  "format=bgra,hwupload,scale_npp=format=yuv420p",
+		})
 	}
 	if caps.supports("hevc_qsv") {
-		candidates = append(candidates, ffmpegEncoderCandidate{name: "QuickSync", encoder: "hevc_qsv", filter: "format=yuv420p"})
+		candidates = append(candidates, ffmpegEncoderCandidate{
+			name:    "QuickSync",
+			encoder: "hevc_qsv",
+			filter:  "format=bgra,hwupload,scale_qsv=format=nv12",
+		})
 	}
 	if caps.supports("hevc_amf") {
 		candidates = append(candidates, ffmpegEncoderCandidate{name: "AMF", encoder: "hevc_amf", filter: "format=yuv420p"})
@@ -257,10 +265,18 @@ func newFFmpegAVCVideoEncoder(provider ffmpegEnvProvider) (clipVideoEncoder, err
 	caps := env.caps
 	candidates := make([]ffmpegEncoderCandidate, 0, 6)
 	if caps.supports("h264_nvenc") {
-		candidates = append(candidates, ffmpegEncoderCandidate{name: "NVENC", encoder: "h264_nvenc", filter: "format=yuv420p"})
+		candidates = append(candidates, ffmpegEncoderCandidate{
+			name:    "NVENC",
+			encoder: "h264_nvenc",
+			filter:  "format=bgra,hwupload,scale_npp=format=yuv420p",
+		})
 	}
 	if caps.supports("h264_qsv") {
-		candidates = append(candidates, ffmpegEncoderCandidate{name: "QuickSync", encoder: "h264_qsv", filter: "format=yuv420p"})
+		candidates = append(candidates, ffmpegEncoderCandidate{
+			name:    "QuickSync",
+			encoder: "h264_qsv",
+			filter:  "format=bgra,hwupload,scale_qsv=format=nv12",
+		})
 	}
 	if caps.supports("h264_amf") {
 		candidates = append(candidates, ffmpegEncoderCandidate{name: "AMF", encoder: "h264_amf", filter: "format=yuv420p"})

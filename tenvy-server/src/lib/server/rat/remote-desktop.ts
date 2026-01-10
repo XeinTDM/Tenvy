@@ -31,6 +31,7 @@ import {
 	type RemoteDesktopQuicDeliveryResult
 } from './remote-desktop-input';
 import { Buffer } from 'node:buffer';
+import { encode as encodeMsgpack } from '@msgpack/msgpack';
 
 const remoteDesktopPluginManifest = remoteDesktopEngineManifestJson as PluginManifest;
 export const remoteDesktopEnginePluginId =
@@ -176,29 +177,6 @@ function resolveIceServers(
 	return cloneIceServers(configuredIceServers);
 }
 
-function toRtcIceServers(servers: RemoteDesktopWebRTCICEServer[]): RTCIceServer[] {
-	return servers.map((server) => {
-		const entry: RTCIceServer & {
-			credentialType?: 'oauth' | 'password';
-		} = { urls: [...server.urls] };
-		if (server.username) {
-			entry.username = server.username;
-		}
-		if (server.credential) {
-			entry.credential = server.credential;
-		}
-		const type = server.credentialType?.toLowerCase();
-		if (type === 'oauth') {
-			entry.credentialType = 'oauth';
-		} else if (type === 'password' || (!type && server.credential)) {
-			if (entry.credential) {
-				entry.credentialType = 'password';
-			}
-		}
-		return entry;
-	});
-}
-
 class RemoteDesktopError extends Error {
 	status: number;
 
@@ -239,6 +217,7 @@ interface RemoteDesktopSubscriber {
 	controller: ReadableStreamDefaultController<Uint8Array>;
 	heartbeat?: ReturnType<typeof setInterval>;
 	closed: boolean;
+	pipeline?: WebRTCPipeline | null;
 }
 
 interface RemoteDesktopTransportHandle {
@@ -314,13 +293,20 @@ function isFiniteNumber(value: unknown): value is number {
 	return typeof value === 'number' && Number.isFinite(value);
 }
 
-function validateBase64Payload(data: unknown, label: string) {
-	if (typeof data !== 'string' || data.length === 0) {
-		throw new RemoteDesktopError(`${label} payload must be base64 encoded`, 400);
+function validatePayloadSize(data: unknown, label: string) {
+	if (typeof data === 'string') {
+		if (data.length > MAX_BASE64_PAYLOAD) {
+			throw new RemoteDesktopError(`${label} payload too large`, 413);
+		}
+		return;
 	}
-	if (data.length > MAX_BASE64_PAYLOAD) {
-		throw new RemoteDesktopError(`${label} payload too large`, 413);
+	if (data instanceof Uint8Array) {
+		if (data.length > MAX_BASE64_PAYLOAD) {
+			throw new RemoteDesktopError(`${label} payload too large`, 413);
+		}
+		return;
 	}
+	throw new RemoteDesktopError(`${label} payload must be string or binary`, 400);
 }
 
 function validateFramePacket(frame: RemoteDesktopFramePacket) {
@@ -347,7 +333,7 @@ function validateFramePacket(frame: RemoteDesktopFramePacket) {
 	}
 
 	if (frame.image) {
-		validateBase64Payload(frame.image, 'Frame');
+		validatePayloadSize(frame.image, 'Frame');
 	}
 
 	if (frame.deltas) {
@@ -374,7 +360,7 @@ function validateFramePacket(frame: RemoteDesktopFramePacket) {
 			if (typeof rect.encoding !== 'string' || rect.encoding.length === 0) {
 				throw new RemoteDesktopError('Delta rectangle encoding is required', 400);
 			}
-			validateBase64Payload(rect.data, 'Delta rectangle');
+			validatePayloadSize(rect.data, 'Delta rectangle');
 		}
 	}
 
@@ -406,7 +392,7 @@ function validateFramePacket(frame: RemoteDesktopFramePacket) {
 			if (typeof clipFrame.encoding !== 'string' || clipFrame.encoding.length === 0) {
 				throw new RemoteDesktopError('Clip frame encoding is required', 400);
 			}
-			validateBase64Payload(clipFrame.data, 'Clip frame');
+			validatePayloadSize(clipFrame.data, 'Clip frame');
 		}
 	}
 
@@ -467,7 +453,7 @@ function validateMediaSamples(samples: RemoteDesktopMediaSample[]) {
 		if (sample.format && typeof sample.format !== 'string') {
 			throw new RemoteDesktopError('Media sample format invalid', 400);
 		}
-		validateBase64Payload(sample.data, 'Media sample');
+		validatePayloadSize(sample.data, 'Media sample');
 	}
 }
 
@@ -489,7 +475,7 @@ function coerceFramePacket(payload: unknown): RemoteDesktopFramePacket | null {
 
 	const frame: RemoteDesktopFramePacket = { ...candidate };
 
-	const image = ensureBase64Data((payload as { image?: unknown }).image, true);
+	const image = ensureBinaryOrBase64((payload as { image?: unknown }).image, true);
 	if (image === null) {
 		return null;
 	}
@@ -504,7 +490,7 @@ function coerceFramePacket(payload: unknown): RemoteDesktopFramePacket | null {
 				return null;
 			}
 			const rect = { ...(entry as RemoteDesktopDeltaRect) };
-			const data = ensureBase64Data((entry as { data?: unknown }).data);
+			const data = ensureBinaryOrBase64((entry as { data?: unknown }).data);
 			if (data === null || data === undefined) {
 				return null;
 			}
@@ -526,7 +512,7 @@ function coerceFramePacket(payload: unknown): RemoteDesktopFramePacket | null {
 					return null;
 				}
 				const clipFrame = { ...(entry as RemoteDesktopVideoFrame) };
-				const data = ensureBase64Data((entry as { data?: unknown }).data);
+				const data = ensureBinaryOrBase64((entry as { data?: unknown }).data);
 				if (data === null || data === undefined) {
 					return null;
 				}
@@ -550,7 +536,7 @@ function coerceFramePacket(payload: unknown): RemoteDesktopFramePacket | null {
 				return null;
 			}
 			const sample = { ...(entry as RemoteDesktopMediaSample) };
-			const data = ensureBase64Data((entry as { data?: unknown }).data);
+			const data = ensureBinaryOrBase64((entry as { data?: unknown }).data);
 			if (data === null || data === undefined) {
 				return null;
 			}
@@ -563,7 +549,10 @@ function coerceFramePacket(payload: unknown): RemoteDesktopFramePacket | null {
 	return frame;
 }
 
-function ensureBase64Data(value: unknown, allowUndefined = false): string | undefined | null {
+function ensureBinaryOrBase64(
+	value: unknown,
+	allowUndefined = false
+): string | Uint8Array | undefined | null {
 	if (value === undefined) {
 		return allowUndefined ? undefined : null;
 	}
@@ -574,16 +563,37 @@ function ensureBase64Data(value: unknown, allowUndefined = false): string | unde
 		return '';
 	}
 	if (value instanceof Uint8Array) {
-		return Buffer.from(value).toString('base64');
+		return value;
 	}
 	if (value instanceof ArrayBuffer) {
-		return Buffer.from(value).toString('base64');
+		return new Uint8Array(value);
 	}
 	if (ArrayBuffer.isView(value)) {
 		const view = value as ArrayBufferView;
-		return Buffer.from(view.buffer, view.byteOffset, view.byteLength).toString('base64');
+		return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
 	}
 	return null;
+}
+
+function convertBuffersToBase64(value: unknown): unknown {
+	if (value instanceof Uint8Array) {
+		return Buffer.from(value).toString('base64');
+	}
+	if (Array.isArray(value)) {
+		return value.map(convertBuffersToBase64);
+	}
+	if (value && typeof value === 'object') {
+		const result: Record<string, unknown> = {};
+		for (const [key, val] of Object.entries(value)) {
+			result[key] = convertBuffersToBase64(val);
+		}
+		return result;
+	}
+	return value;
+}
+
+function preparePayloadForJson(payload: unknown): unknown {
+	return convertBuffersToBase64(payload);
 }
 
 function appendFrameHistory(record: RemoteDesktopSessionRecord, frame: RemoteDesktopFramePacket) {
@@ -815,37 +825,6 @@ function supportsIntraRefresh(
 	return Boolean(capability.features?.intraRefresh);
 }
 
-async function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 15_000) {
-	if (pc.iceGatheringState === 'complete') {
-		return;
-	}
-
-	await new Promise<void>((resolve, reject) => {
-		const timer = setTimeout(() => {
-			cleanup();
-			reject(new RemoteDesktopError('WebRTC ICE gathering timeout', 504));
-		}, timeoutMs);
-
-		const checkState = () => {
-			if (pc.iceGatheringState === 'complete') {
-				cleanup();
-				resolve();
-			}
-		};
-
-		const cleanup = () => {
-			clearTimeout(timer);
-			pc.onicegatheringstatechange = null;
-		};
-
-		pc.onicegatheringstatechange = () => {
-			checkState();
-		};
-
-		checkState();
-	});
-}
-
 function toSessionState(record: RemoteDesktopSessionRecord): RemoteDesktopSessionState {
 	return {
 		sessionId: record.id,
@@ -924,6 +903,17 @@ export class RemoteDesktopManager {
 			);
 		}
 		this.broadcastSession(agentId);
+	}
+
+	private attachPipelineToSubscriber(agentId: string, sessionId: string, pipeline: WebRTCPipeline) {
+		const subscribers = this.subscribers.get(agentId);
+		if (!subscribers) return;
+		for (const subscriber of subscribers) {
+			if (subscriber.sessionId === sessionId) {
+				subscriber.pipeline = pipeline;
+				break;
+			}
+		}
 	}
 
 	dispatchInput(
@@ -1102,7 +1092,14 @@ export class RemoteDesktopManager {
 		record.intraRefresh = intraRefresh;
 		record.lastUpdatedAt = new Date();
 
-		this.replaceTransportHandle(record, handle, pipeline);
+		// Differentiate between Agent and Operator
+		const isAgent = Boolean(request.pluginVersion);
+		if (isAgent) {
+			this.replaceTransportHandle(record, handle, pipeline);
+		} else if (pipeline) {
+			this.attachPipelineToSubscriber(agentId, request.sessionId, pipeline);
+		}
+
 		this.broadcastSession(agentId);
 
 		const response: RemoteDesktopSessionNegotiationResponse = {
@@ -1247,7 +1244,7 @@ export class RemoteDesktopManager {
 				const session = this.sessions.get(agentId);
 				if (session && subscriber) {
 					const sessionChunk = encoder.encode(
-						formatEvent('session', { session: toSessionState(session) })
+						formatEvent('session', { session: preparePayloadForJson(toSessionState(session)) })
 					);
 					if (!this.enqueueSubscriber(agentId, subscriber, sessionChunk)) {
 						subscriber = null;
@@ -1263,7 +1260,9 @@ export class RemoteDesktopManager {
 							if (sessionId && sessionId !== frame.sessionId) {
 								continue;
 							}
-							const frameChunk = encoder.encode(formatEvent('frame', { frame }));
+							const frameChunk = encoder.encode(
+								formatEvent('frame', { frame: preparePayloadForJson(frame) })
+							);
 							if (!this.enqueueSubscriber(agentId, subscriber, frameChunk)) {
 								subscriber = null;
 								return;
@@ -1273,10 +1272,13 @@ export class RemoteDesktopManager {
 								continue;
 							}
 							const mediaChunk = encoder.encode(
-								formatEvent('media', {
-									sessionId: entry.sessionId,
-									media: entry.media
-								})
+								formatEvent(
+									'media',
+									preparePayloadForJson({
+										sessionId: entry.sessionId,
+										media: entry.media
+									})
+								)
 							);
 							if (!this.enqueueSubscriber(agentId, subscriber, mediaChunk)) {
 								subscriber = null;
@@ -1347,13 +1349,24 @@ export class RemoteDesktopManager {
 		if (event === 'frame') {
 			const frame = (payload as { frame: RemoteDesktopFramePacket }).frame;
 			let encoded: Uint8Array | null = null;
+			let binaryMsgpack: Uint8Array | null = null;
 			for (const subscriber of subscribers) {
 				if (subscriber.closed) continue;
 				if (subscriber.sessionId && subscriber.sessionId !== frame.sessionId) {
 					continue;
 				}
+
+				if (subscriber.pipeline) {
+					if (!binaryMsgpack) {
+						binaryMsgpack = encodeMsgpack(frame);
+					}
+					if (subscriber.pipeline.sendBinary(binaryMsgpack)) {
+						continue;
+					}
+				}
+
 				if (!encoded) {
-					encoded = encoder.encode(formatEvent(event, { frame }));
+					encoded = encoder.encode(formatEvent(event, { frame: preparePayloadForJson(frame) }));
 				}
 				this.enqueueSubscriber(agentId, subscriber, encoded);
 			}
@@ -1366,22 +1379,36 @@ export class RemoteDesktopManager {
 				return;
 			}
 			let encoded: Uint8Array | null = null;
+			let binaryMsgpack: Uint8Array | null = null;
 			for (const subscriber of subscribers) {
 				if (subscriber.closed) continue;
 				if (subscriber.sessionId && subscriber.sessionId !== mediaPayload.sessionId) {
 					continue;
 				}
+
+				if (subscriber.pipeline) {
+					if (!binaryMsgpack) {
+						binaryMsgpack = encodeMsgpack(mediaPayload);
+					}
+					if (subscriber.pipeline.sendBinary(binaryMsgpack)) {
+						continue;
+					}
+				}
+
 				if (!encoded) {
-					encoded = encoder.encode(formatEvent(event, mediaPayload));
+					encoded = encoder.encode(formatEvent(event, preparePayloadForJson(mediaPayload)));
 				}
 				this.enqueueSubscriber(agentId, subscriber, encoded);
 			}
 			return;
 		}
 
-		const data = encoder.encode(formatEvent(event, payload));
+		const data = encoder.encode(formatEvent(event, preparePayloadForJson(payload)));
 		for (const subscriber of subscribers) {
 			if (subscriber.closed) continue;
+			if (subscriber.pipeline) {
+				subscriber.pipeline.send(JSON.stringify(preparePayloadForJson(payload)));
+			}
 			this.enqueueSubscriber(agentId, subscriber, data);
 		}
 	}

@@ -42,7 +42,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		throw error(400, 'Missing agent identifier');
 	}
 
-	const operator = requireOperator(locals.user);
+	requireOperator(locals.user);
 
 	try {
 		const note = registry.getOperatorNote(id);

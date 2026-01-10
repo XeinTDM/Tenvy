@@ -27,9 +27,6 @@ func main() {
 
 	streamer := engine.NewRemoteDesktopStreamer(engine.Config{Logger: logger})
 
-	// The plugin hosts the remote desktop engine and exposes it over a JSON
-	// message channel transported through stdio. An HTTP client is
-	// constructed on demand when configuration payloads are received.
 	httpFactory := func(timeout time.Duration) *http.Client {
 		client := &http.Client{}
 		if timeout > 0 {

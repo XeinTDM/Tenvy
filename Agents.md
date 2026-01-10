@@ -2,6 +2,9 @@
 context_for: tenvy-server / tenvy-client / shared
 ---
 
+Start: say hi + 1 motivating line.
+Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
+
 # Agents Specification
 
 ## Overview
@@ -26,8 +29,12 @@ context_for: tenvy-server / tenvy-client / shared
 
 ---
 
-### Roadmap
-Planned evolution includes multi-admin synchronization — enabling shared agent state between multiple controllers.
+## Critical Thinking
+- Fix root cause (not band-aid).
+- Unsure: read more code; if still stuck, ask w/ short options.
+- Conflicts: call out; pick safer path.
+- Unrecognized changes: assume other agent; keep going; focus your changes. If it causes issues, stop + ask user.
+- Leave breadcrumb notes in thread.
 
 ---
 

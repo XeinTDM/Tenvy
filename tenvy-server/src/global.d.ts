@@ -22,7 +22,7 @@ declare module '$lib/paraglide/runtime' {
 }
 
 declare module 'systeminformation' {
-	const value: any;
+	const value: unknown;
 	export default value;
 }
 

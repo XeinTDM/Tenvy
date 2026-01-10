@@ -2,6 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import { remoteDesktopManager } from '$lib/server/rat/remote-desktop';
 import type { RequestHandler } from './$types';
 import { sanitizeInputEvents, type RawInputEvent } from '$lib/server/rat/remote-desktop-input';
+import { decode } from '@msgpack/msgpack';
 
 export const POST: RequestHandler = async ({ params, request }) => {
 	const id = params.id;
@@ -11,9 +12,15 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	let payload: Record<string, unknown>;
 	try {
-		payload = await request.json();
+		const contentType = request.headers.get('content-type') || '';
+		if (contentType.includes('application/msgpack')) {
+			const buffer = await request.arrayBuffer();
+			payload = decode(buffer) as Record<string, unknown>;
+		} else {
+			payload = (await request.json()) as Record<string, unknown>;
+		}
 	} catch {
-		throw error(400, 'Invalid JSON payload');
+		throw error(400, 'Invalid input payload');
 	}
 
 	const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId.trim() : '';

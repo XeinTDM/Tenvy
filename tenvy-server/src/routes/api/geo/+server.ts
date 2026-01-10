@@ -17,7 +17,7 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 	let payload: unknown;
 	try {
 		payload = await request.json();
-	} catch (err) {
+	} catch {
 		throw error(400, 'Invalid request body');
 	}
 

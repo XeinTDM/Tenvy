@@ -436,7 +436,7 @@
 							</div>
 							{#if report.hardware.cpus && report.hardware.cpus.length > 0}
 								<div class="space-y-3">
-									{#each report.hardware.cpus as cpu}
+									{#each report.hardware.cpus as cpu (cpu.id)}
 										<div class="rounded-lg border border-border/60 bg-muted/30 p-3">
 											<p class="text-sm font-semibold text-foreground">{cpuLabel(cpu)}</p>
 											<p class="text-xs text-muted-foreground">
@@ -530,7 +530,7 @@
 										</tr>
 									</thead>
 									<tbody class="divide-y divide-border/60">
-										{#each report.storage as storage}
+										{#each report.storage as storage (storage.device)}
 											<tr>
 												<td class="py-2 pr-4 font-medium text-foreground">{storage.device}</td>
 												<td class="py-2 pr-4 text-foreground">{storage.mountpoint}</td>
@@ -551,7 +551,7 @@
 								<CardDescription>Address assignments for detected interfaces.</CardDescription>
 							</CardHeader>
 							<CardContent class="grid gap-3 sm:grid-cols-2">
-								{#each report.network as iface}
+								{#each report.network as iface (iface.name)}
 									<div class="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm">
 										<p class="font-semibold text-foreground">{iface.name}</p>
 										<p class="text-xs text-muted-foreground">
@@ -565,7 +565,7 @@
 										</p>
 										{#if iface.flags && iface.flags.length > 0}
 											<div class="mt-2 flex flex-wrap gap-1">
-												{#each iface.flags as flag}
+												{#each iface.flags as flag (flag)}
 													<Badge variant="secondary">{flag}</Badge>
 												{/each}
 											</div>
@@ -723,7 +723,7 @@
 								</p>
 								<div class="mt-2 flex flex-wrap gap-1">
 									{#if report.environment.pathEntries && report.environment.pathEntries.length > 0}
-										{#each report.environment.pathEntries as entry}
+										{#each report.environment.pathEntries as entry (entry)}
 											<Badge variant="outline">{entry}</Badge>
 										{/each}
 									{:else}
@@ -786,7 +786,7 @@
 								</p>
 								<div class="mt-2 flex flex-wrap gap-1">
 									{#if report.agent.tags && report.agent.tags.length > 0}
-										{#each report.agent.tags as tag}
+										{#each report.agent.tags as tag (tag)}
 											<Badge>{tag}</Badge>
 										{/each}
 									{:else}
@@ -804,7 +804,7 @@
 						<AlertTitle>Agent warnings</AlertTitle>
 						<AlertDescription>
 							<ul class="list-disc space-y-1 pl-4">
-								{#each report.warnings as warning}
+								{#each report.warnings as warning (warning)}
 									<li>{warning}</li>
 								{/each}
 							</ul>

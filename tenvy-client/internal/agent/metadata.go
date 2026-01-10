@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rootbay/tenvy-client/internal/protocol"
+	"github.com/shirou/gopsutil/v3/host"
 )
 
 const (
@@ -44,11 +46,51 @@ func CollectMetadataWithClient(buildVersion string, client *http.Client) protoco
 		PublicIPAddress: detectPublicIP(client),
 		Tags:            tags,
 		Version:         buildVersion,
+		HardwareID:      detectHardwareID(),
 	}
 }
 
+func detectHardwareID() string {
+	if id := getMachineID(); id != "" {
+		return id
+	}
+
+	if mac := getFirstMACAddress(); mac != "" {
+		return fmt.Sprintf("mac-%s", mac)
+	}
+
+	hostname, _ := os.Hostname()
+	return fmt.Sprintf("fallback-%s-%s-%s", runtime.GOOS, runtime.GOARCH, hostname)
+}
+
+func getMachineID() string {
+	if info, err := host.Info(); err == nil && info.HostID != "" {
+		return info.HostID
+	}
+	return ""
+}
+
+func getFirstMACAddress() string {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+
+	for _, iface := range interfaces {
+		if (iface.Flags&net.FlagUp) != 0 && (iface.Flags&net.FlagLoopback) == 0 {
+			addrs, _ := iface.Addrs()
+			if len(addrs) > 0 {
+				mac := iface.HardwareAddr.String()
+				if mac != "" {
+					return strings.ReplaceAll(mac, ":", "")
+				}
+			}
+		}
+	}
+	return ""
+}
+
 func resolveUsername(currentUser *user.User, err error) string {
-	// Prefer environment variables to match typical Windows %USERNAME% value.
 	if val := os.Getenv("USERNAME"); val != "" {
 		return normalizeUsername(val)
 	}

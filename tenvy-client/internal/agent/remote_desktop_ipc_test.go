@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -16,13 +17,16 @@ import (
 )
 
 func TestRemoteDesktopIPCClientIntegration(t *testing.T) {
-        workDir, err := os.Getwd()
-        if err != nil {
-                t.Fatalf("get working directory: %v", err)
+	workDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
 	}
 
 	outputDir := t.TempDir()
 	pluginPath := filepath.Join(outputDir, "fake-plugin")
+	if runtime.GOOS == "windows" {
+		pluginPath += ".exe"
+	}
 
 	build := exec.Command("go", "build", "-o", pluginPath, "./testdata/fakeplugin")
 	build.Dir = workDir

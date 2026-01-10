@@ -237,12 +237,11 @@ const assembleSignatureState = (row: MarketplaceListingRow): MarketplaceSignatur
 });
 
 const assembleListing = (row: MarketplaceListingRow): MarketplaceListing => {
-	const { signature: _signature, ...rest } = row;
 	return {
-		...rest,
+		...row,
 		manifestObject: parseManifest(row.manifest),
 		signature: assembleSignatureState(row)
-	};
+	} as MarketplaceListing;
 };
 
 export async function submitListing(input: SubmitListingInput): Promise<MarketplaceListing> {

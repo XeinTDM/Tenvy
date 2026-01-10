@@ -91,11 +91,13 @@ describe('environment variables API', () => {
 
 		dispatchEnvironmentCommand.mockResolvedValueOnce(mutation);
 
+		const timestamp = new Date().toISOString();
 		const body = {
 			action: 'set',
 			key: 'PATH',
 			value: 'C:/bin',
-			scope: 'machine'
+			scope: 'machine',
+			timestamp
 		};
 
 		const response = await POST(

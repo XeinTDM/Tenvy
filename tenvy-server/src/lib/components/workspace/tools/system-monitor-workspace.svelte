@@ -148,7 +148,7 @@
 				</div>
 			</div>
 			<div class="grid w-full gap-3 sm:grid-cols-3 lg:w-auto">
-				{#each heroMetrics as metric}
+				{#each heroMetrics as metric (metric.label)}
 					<Card
 						class="rounded-2xl border border-white/40 bg-white/80 shadow-inner backdrop-blur dark:border-slate-700/60 dark:bg-slate-900/70"
 					>
@@ -183,7 +183,7 @@
 				<TabsList
 					class="flex h-auto flex-col gap-2 rounded-2xl border border-border/50 bg-background/60 p-2 shadow-inner"
 				>
-					{#each viewOptions as option}
+					{#each viewOptions as option (option.value)}
 						{@const Icon = option.icon}
 						{@const isActive = activeView === option.value}
 						<TabsTrigger

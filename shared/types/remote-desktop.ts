@@ -14,7 +14,7 @@ export interface RemoteDesktopMediaSample {
   timestamp: number;
   keyFrame?: boolean;
   format?: "annexb" | "opus" | "pcm" | "aac" | "jpeg";
-  data: string;
+  data: string | Uint8Array;
 }
 
 export interface RemoteDesktopTransportDiagnostics {
@@ -196,7 +196,7 @@ export interface RemoteDesktopDeltaRect {
   width: number;
   height: number;
   encoding: "png" | "jpeg";
-  data: string;
+  data: string | Uint8Array;
 }
 
 export interface RemoteDesktopVideoFrame {
@@ -204,7 +204,7 @@ export interface RemoteDesktopVideoFrame {
   width: number;
   height: number;
   encoding: "jpeg";
-  data: string;
+  data: string | Uint8Array;
 }
 
 export interface RemoteDesktopVideoClip {
@@ -221,7 +221,7 @@ export interface RemoteDesktopFramePacket {
   keyFrame: boolean;
   encoding: "png" | "jpeg" | "clip";
   transport?: RemoteDesktopTransport;
-  image?: string;
+  image?: string | Uint8Array;
   deltas?: RemoteDesktopDeltaRect[];
   clip?: RemoteDesktopVideoClip;
   encoder?: RemoteDesktopEncoder;

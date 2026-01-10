@@ -27,11 +27,7 @@ class MockEventSource {
 		this.readyState = 2;
 	}
 
-	addEventListener(
-		type: string,
-		listener: EventListenerOrEventListenerObject | null,
-		_options?: boolean | AddEventListenerOptions
-	): void {
+	addEventListener(type: string, listener: EventListenerOrEventListenerObject | null): void {
 		if (!listener) {
 			return;
 		}
@@ -44,11 +40,7 @@ class MockEventSource {
 		bucket.add(handler as (event: MessageEvent) => void);
 	}
 
-	removeEventListener(
-		type: string,
-		listener: EventListenerOrEventListenerObject | null,
-		_options?: boolean | EventListenerOptions
-	): void {
+	removeEventListener(type: string, listener: EventListenerOrEventListenerObject | null): void {
 		if (!listener) {
 			return;
 		}
@@ -56,7 +48,7 @@ class MockEventSource {
 		this.listeners.get(type)?.delete(handler as (event: MessageEvent) => void);
 	}
 
-	dispatchEvent(_event: Event): boolean {
+	dispatchEvent(): boolean {
 		return true;
 	}
 

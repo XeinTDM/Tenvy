@@ -17,7 +17,6 @@ import {
 	type Plugin,
 	type PluginCategory,
 	type PluginDeliveryMode,
-	type PluginDistributionView,
 	type PluginStatus,
 	type PluginUpdatePayload,
 	type PluginApprovalStatus

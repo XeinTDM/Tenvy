@@ -12,10 +12,28 @@ import (
 	"syscall"
 	"time"
 	"unicode/utf16"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 	winregistry "golang.org/x/sys/windows/registry"
 )
+
+var (
+	modAdvapi32 = windows.NewLazySystemDLL("advapi32.dll")
+	procRegRenameKey = modAdvapi32.NewProc("RegRenameKey")
+)
+
+func regRenameKey(key windows.Handle, oldName *uint16, newName *uint16) error {
+	r1, _, _ := procRegRenameKey.Call(
+		uintptr(key),
+		uintptr(unsafe.Pointer(oldName)),
+		uintptr(unsafe.Pointer(newName)),
+	)
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+	return nil
+}
 
 const registryAccess = winregistry.ENUMERATE_SUB_KEYS | winregistry.QUERY_VALUE | winregistry.SET_VALUE
 
@@ -162,7 +180,7 @@ func (p *nativeProvider) UpdateKey(ctx context.Context, req UpdateKeyRequest) (R
 	if err != nil {
 		return RegistryMutationResult{}, err
 	}
-	if err := windows.RegRenameKey(windows.Handle(parentKey), oldPtr, newPtr); err != nil {
+	if err := regRenameKey(windows.Handle(parentKey), oldPtr, newPtr); err != nil {
 		return RegistryMutationResult{}, fmt.Errorf("rename registry key: %w", err)
 	}
 
@@ -369,7 +387,7 @@ func (p *nativeProvider) collectKey(ctx context.Context, key winregistry.Key, hi
 		ParentPath:    parentPtr,
 		Values:        []RegistryValue{},
 		SubKeys:       []string{},
-		LastModified:  info.ModTime.UTC().Format(time.RFC3339Nano),
+		LastModified:  info.ModTime().UTC().Format(time.RFC3339Nano),
 		Wow64Mirrored: false,
 		Owner:         "SYSTEM",
 	}
@@ -378,7 +396,7 @@ func (p *nativeProvider) collectKey(ctx context.Context, key winregistry.Key, hi
 	}
 	if depth != 0 {
 		subNames, err := key.ReadSubKeyNames(-1)
-		if err != nil && !errors.Is(err, syscall.ERROR_NO_MORE_ITEMS) {
+		if err != nil && !errors.Is(err, windows.ERROR_NO_MORE_ITEMS) {
 			return err
 		}
 		nextDepth := depth - 1
@@ -432,7 +450,7 @@ func readRegistryValue(key winregistry.Key, name string, lastModified string) (R
 		displayName = defaultValueName()
 	}
 
-	switch winregistry.ValueType(valueType) {
+	switch uint32(valueType) {
 	case winregistry.SZ:
 		data, _, err := key.GetStringValue(name)
 		if err != nil {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SvelteSet, SvelteMap } from 'svelte/reactivity';
 	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -94,7 +95,7 @@
 
 	const recentEvents = $derived(() => events.slice(0, 12)) as unknown as TriggerMonitorEvent[];
 
-	const seenEventIds = new Set<string>();
+	const seenEventIds = new SvelteSet<string>();
 
 	function applyEventFeed(incoming: TriggerMonitorEvent[]) {
 		const snapshots = incoming.map((entry) => ({ ...entry }));
@@ -386,7 +387,7 @@
 			]);
 
 			const combined = [...downloads, ...processes];
-			const dedupedMap = new Map<string, WatchlistSuggestion>();
+			const dedupedMap = new SvelteMap<string, WatchlistSuggestion>();
 			for (const suggestion of combined) {
 				const key = `${suggestion.source}:${suggestion.id.toLowerCase()}`;
 				if (!dedupedMap.has(key)) {
@@ -798,7 +799,7 @@
 								</p>
 							{:else}
 								<ul class="divide-y divide-border/60">
-									{#each filteredSuggestions as suggestion}
+									{#each filteredSuggestions as suggestion (suggestion.source + ':' + suggestion.id)}
 										{@const normalizedId = suggestion.id.trim().toLowerCase()}
 										{@const existing = watchlistDraft.some(
 											(entry) =>

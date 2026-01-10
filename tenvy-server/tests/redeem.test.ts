@@ -24,19 +24,19 @@ interface TestCookies extends Cookies {
 function createCookieJar(): TestCookies {
 	const store = new Map<string, string>();
 	return {
-		get(name: string, _opts?: unknown) {
+		get(name: string) {
 			return store.get(name);
 		},
-		getAll(_opts?: unknown) {
+		getAll() {
 			return Array.from(store.entries()).map(([name, value]) => ({ name, value }));
 		},
-		set(name: string, value: string, _opts?: unknown) {
+		set(name: string, value: string) {
 			store.set(name, value);
 		},
-		delete(name: string, _opts?: unknown) {
+		delete(name: string) {
 			store.delete(name);
 		},
-		serialize(name: string, value: string, _opts?: unknown) {
+		serialize(name: string, value: string) {
 			return `${name}=${value}`;
 		},
 		store
@@ -104,7 +104,7 @@ describe('redeem page actions', () => {
 	it('redeems a voucher and provisions a session', async () => {
 		const action = await loadRedeemAction();
 
-		const voucherCode = 'TEN-REDEEM-0001';
+		const voucherCode = 'TEN-REDEEM-SUCCESS-0001';
 		const voucherId = 'voucher-success';
 		await db
 			.insert(voucherTable)
@@ -155,7 +155,7 @@ describe('redeem page actions', () => {
 	it('rejects an expired voucher', async () => {
 		const action = await loadRedeemAction();
 
-		const voucherCode = 'TEN-REDEEM-EXPIRED';
+		const voucherCode = 'TEN-REDEEM-EXPIRED-0001';
 		const voucherId = 'voucher-expired';
 		db.insert(voucherTable)
 			.values({
@@ -186,7 +186,7 @@ describe('redeem page actions', () => {
 	it('rejects a revoked voucher', async () => {
 		const action = await loadRedeemAction();
 
-		const voucherCode = 'TEN-REDEEM-REVOKED';
+		const voucherCode = 'TEN-REDEEM-REVOKED-0001';
 		const voucherId = 'voucher-revoked';
 		await db
 			.insert(voucherTable)
@@ -211,7 +211,7 @@ describe('redeem page actions', () => {
 	it('enforces rate limiting per client address', async () => {
 		const action = await loadRedeemAction();
 		const address = '10.0.0.4';
-		const voucherCode = 'TEN-REDEEM-RATELIMIT';
+		const voucherCode = 'TEN-REDEEM-RATELIMIT-0001';
 
 		for (let attempt = 0; attempt < 6; attempt++) {
 			const event = createRedeemEvent(voucherCode, address);

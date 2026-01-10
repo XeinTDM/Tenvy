@@ -41,9 +41,8 @@ function cloneDirectory(listing: DirectoryListing): DirectoryListing {
 }
 
 function cloneFile(resource: FileContent): FileContent {
-	const { stream, ...rest } = resource;
 	return {
-		...rest,
+		...resource,
 		stream: undefined,
 		root: normalizePath(resource.root),
 		path: normalizePath(resource.path)

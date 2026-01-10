@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -105,6 +106,9 @@ func TestRemoteDesktopModuleNegotiationWithManagedEngine(t *testing.T) {
 				t.Fatalf("write negotiation response: %v", err)
 			}
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/remote-desktop/frames"):
+			if ct := r.Header.Get("Content-Type"); ct != "application/msgpack" {
+				t.Fatalf("expected frame content-type application/msgpack, got %q", ct)
+			}
 			io.Copy(io.Discard, r.Body)
 			w.WriteHeader(http.StatusOK)
 		default:
@@ -281,6 +285,9 @@ func buildEngineArtifact(t *testing.T) []byte {
 
 	tempDir := t.TempDir()
 	binaryPath := filepath.Join(tempDir, "engine")
+	if runtime.GOOS == "windows" {
+		binaryPath += ".exe"
+	}
 
 	build := exec.Command("go", "build", "-o", binaryPath, "./cmd/remote-desktop-engine")
 	build.Dir = projectRoot

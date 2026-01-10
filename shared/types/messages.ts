@@ -122,6 +122,7 @@ export interface CommandInput {
 export interface Command extends CommandInput {
   id: string;
   createdAt: string;
+  signature?: string;
 }
 
 export interface CommandResult {

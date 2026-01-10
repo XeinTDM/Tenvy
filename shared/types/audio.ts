@@ -49,7 +49,7 @@ export interface AudioStreamChunk {
   sequence: number;
   timestamp: string;
   format: AudioStreamFormat;
-  data: string;
+  data: string | Uint8Array;
 }
 
 export interface AudioSessionState {

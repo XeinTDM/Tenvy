@@ -133,7 +133,7 @@ func (p *nativeProvider) enumerateRegistryKey(root registry.Key, path string, sc
 		command, valType, err := key.GetStringValue(valueName)
 		if err != nil {
 			if valType == registry.EXPAND_SZ {
-				command, _, err = key.GetExpandStringValue(valueName)
+				command, _, err = key.GetStringValue(valueName)
 			}
 		}
 		if err != nil {
@@ -191,7 +191,7 @@ func (p *nativeProvider) enableRegistryValue(root registry.Key, scope StartupSco
 		return Entry{}, err
 	}
 	var command string
-	if disabledKey != nil {
+	if disabledKey != 0 {
 		defer disabledKey.Close()
 		command, _, err = disabledKey.GetStringValue(valueName)
 		if err != nil {
@@ -212,7 +212,7 @@ func (p *nativeProvider) enableRegistryValue(root registry.Key, scope StartupSco
 		if err := enabledKey.SetStringValue(valueName, command); err != nil {
 			return Entry{}, err
 		}
-		if disabledKey != nil {
+		if disabledKey != 0 {
 			_ = disabledKey.DeleteValue(valueName)
 		}
 	}

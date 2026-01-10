@@ -49,6 +49,7 @@ type RuntimeOptions struct {
 	CustomCookies     []CustomCookie
 	EnabledModules    []string
 	Geolocation       geolocationmgr.Config
+	CommandSecret     string
 }
 
 // TimingOverride allows build-time or environment overrides for default

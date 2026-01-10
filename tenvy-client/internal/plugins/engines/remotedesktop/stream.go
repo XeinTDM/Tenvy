@@ -3,7 +3,6 @@ package remotedesktopengine
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/kbinani/screenshot"
+	"github.com/vmihailenco/msgpack/v5"
 	xdraw "golang.org/x/image/draw"
 
 	"github.com/rootbay/tenvy-client/internal/modules/control/screen"
@@ -510,9 +510,9 @@ const (
 	remoteClipEncodingJPEG = "jpeg"
 	remoteClipEncodingHEVC = "hevc"
 	remoteClipEncodingH264 = "h264"
-	minClipDuration        = 120 * time.Millisecond
-	maxClipDuration        = 350 * time.Millisecond
-	defaultClipDuration    = 220 * time.Millisecond
+	minClipDuration        = 30 * time.Millisecond
+	maxClipDuration        = 150 * time.Millisecond
+	defaultClipDuration    = 60 * time.Millisecond
 	maxClipFrames          = 12
 	minClipQuality         = 45
 	maxClipQuality         = 92
@@ -833,6 +833,9 @@ func (c *remoteDesktopSessionController) handleVideoFrame(
 	}
 
 	shouldFlush := clipElapsed >= clipDuration || len(state.clipFrames) >= frameCap
+	if session.Transport == RemoteTransportWebRTC || session.IntraRefresh {
+		shouldFlush = true
+	}
 	if state.clipKeyPending && len(state.clipFrames) > 0 {
 		shouldFlush = true
 	}
@@ -1479,17 +1482,9 @@ func (c *remoteDesktopSessionController) sendFrameHTTP(ctx context.Context, fram
 	body := acquireJSONBody()
 	defer releaseJSONBody(body)
 
-	encoder := json.NewEncoder(body)
-	encoder.SetEscapeHTML(false)
+	encoder := msgpack.NewEncoder(body)
 	if err := encoder.Encode(frame); err != nil {
 		return err
-	}
-
-	if body.Len() > 0 {
-		raw := body.Bytes()
-		if raw[len(raw)-1] == '\n' {
-			body.Truncate(body.Len() - 1)
-		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
@@ -1497,7 +1492,7 @@ func (c *remoteDesktopSessionController) sendFrameHTTP(ctx context.Context, fram
 		return err
 	}
 	req.ContentLength = int64(body.Len())
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/msgpack")
 	req.Header.Set("Accept", "application/json")
 	if ua := strings.TrimSpace(c.userAgent()); ua != "" {
 		req.Header.Set("User-Agent", ua)

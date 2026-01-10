@@ -3,12 +3,11 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
-	"syscall"
 
+	"github.com/rootbay/tenvy-client/internal/platform"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -21,7 +20,12 @@ func registerStartup(target string, branding PersistenceBranding) error {
 		return os.WriteFile(redirect, []byte(target), 0o644)
 	}
 
-	key, _, err := registry.CreateKey(registry.CURRENT_USER, windowsRunKey, registry.SET_VALUE)
+	root := registry.CURRENT_USER
+	if platform.CurrentUserIsElevated() {
+		root = registry.LOCAL_MACHINE
+	}
+
+	key, _, err := registry.CreateKey(root, windowsRunKey, registry.SET_VALUE)
 	if err != nil {
 		return fmt.Errorf("open run key: %w", err)
 	}
@@ -47,24 +51,25 @@ func unregisterStartup(branding PersistenceBranding) error {
 		return nil
 	}
 
-	key, err := registry.OpenKey(registry.CURRENT_USER, windowsRunKey, registry.SET_VALUE)
-	if err != nil {
-		if errors.Is(err, syscall.ERROR_FILE_NOT_FOUND) {
-			return nil
-		}
-		return fmt.Errorf("open run key: %w", err)
-	}
-	defer key.Close()
-
-	valueName := strings.TrimSpace(branding.RunKeyName)
-	if valueName == "" {
-		valueName = "TenvyAgent"
+	// Try to remove from both if we have privileges, otherwise just CURRENT_USER
+	roots := []registry.Key{registry.CURRENT_USER}
+	if platform.CurrentUserIsElevated() {
+		roots = append(roots, registry.LOCAL_MACHINE)
 	}
 
-	if err := key.DeleteValue(valueName); err != nil {
-		if !errors.Is(err, syscall.ERROR_FILE_NOT_FOUND) {
-			return fmt.Errorf("delete run value: %w", err)
+	for _, root := range roots {
+		key, err := registry.OpenKey(root, windowsRunKey, registry.SET_VALUE)
+		if err != nil {
+			continue
 		}
+		
+		valueName := strings.TrimSpace(branding.RunKeyName)
+		if valueName == "" {
+			valueName = "TenvyAgent"
+		}
+
+		_ = key.DeleteValue(valueName)
+		key.Close()
 	}
 
 	return nil

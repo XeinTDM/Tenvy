@@ -65,53 +65,53 @@
 
 	type NavHref = '/dashboard' | '/clients' | '/build' | '/activity' | '/plugins';
 
-type NavItem = {
-	title: string;
-	icon: IconComponent;
-	badgeClass?: string;
-	slug: NavKey;
-	href: NavHref;
-};
+	type NavItem = {
+		title: string;
+		icon: IconComponent;
+		badgeClass?: string;
+		slug: NavKey;
+		href: NavHref;
+	};
 
 	type SidebarMenuButtonChildContext = Parameters<
 		NonNullable<ComponentProps<typeof SidebarMenuButton>['child']>
 	>[0];
 
 	const navItems: NavItem[] = [
-	{
-		title: 'Dashboard',
-		icon: LayoutDashboard,
-		badgeClass: 'bg-emerald-500/20 text-emerald-500',
-		slug: 'dashboard',
-		href: '/dashboard'
-	},
-	{
-		title: 'Clients',
-		icon: Users,
-		badgeClass: 'bg-blue-500/15 text-blue-500',
-		slug: 'clients',
-		href: '/clients'
-	},
-	{
-		title: 'Build',
-		icon: Hammer,
-		slug: 'build',
-		href: '/build'
-	},
-	{
-		title: 'Activity',
-		icon: Activity,
-		badgeClass: 'bg-sidebar-primary/10 text-sidebar-primary',
-		slug: 'activity',
-		href: '/activity'
-	},
-	{
-		title: 'Plugins',
-		icon: PlugZap,
-		badgeClass: 'bg-purple-500/15 text-purple-500',
-		slug: 'plugins',
-		href: '/plugins'
-	}
+		{
+			title: 'Dashboard',
+			icon: LayoutDashboard,
+			badgeClass: 'bg-emerald-500/20 text-emerald-500',
+			slug: 'dashboard',
+			href: '/dashboard'
+		},
+		{
+			title: 'Clients',
+			icon: Users,
+			badgeClass: 'bg-blue-500/15 text-blue-500',
+			slug: 'clients',
+			href: '/clients'
+		},
+		{
+			title: 'Build',
+			icon: Hammer,
+			slug: 'build',
+			href: '/build'
+		},
+		{
+			title: 'Activity',
+			icon: Activity,
+			badgeClass: 'bg-sidebar-primary/10 text-sidebar-primary',
+			slug: 'activity',
+			href: '/activity'
+		},
+		{
+			title: 'Plugins',
+			icon: PlugZap,
+			badgeClass: 'bg-purple-500/15 text-purple-500',
+			slug: 'plugins',
+			href: '/plugins'
+		}
 	];
 
 	const navSummaries: Record<NavKey, { title: string; description: string }> = {
@@ -442,8 +442,12 @@ type NavItem = {
 <SidebarProvider>
 	<Sidebar collapsible="icon">
 		<SidebarHeader class="border-b border-sidebar-border px-2 pt-3 pb-4">
-			<div class="flex items-center gap-3 rounded-lg px-2 py-1.5 group-data-[state=collapsed]:justify-center">
-				<div class="flex h-14 w-14 items-center justify-center group-data-[state=collapsed]:h-9 group-data-[state=collapsed]:w-9">
+			<div
+				class="flex items-center gap-3 rounded-lg px-2 py-1.5 group-data-[state=collapsed]:justify-center"
+			>
+				<div
+					class="flex h-14 w-14 items-center justify-center group-data-[state=collapsed]:h-9 group-data-[state=collapsed]:w-9"
+				>
 					<img
 						src="/LAHS.png"
 						alt="Tenvy Logo"
@@ -494,7 +498,9 @@ type NavItem = {
 				{/each}
 			</SidebarMenu>
 		</SidebarContent>
-		<SidebarFooter class="mt-auto border-t border-sidebar-border px-2 py-4 group-data-[state=collapsed]:border-t-0">
+		<SidebarFooter
+			class="mt-auto border-t border-sidebar-border px-2 py-4 group-data-[state=collapsed]:border-t-0"
+		>
 			<div
 				class={cn(
 					'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2',
@@ -505,7 +511,7 @@ type NavItem = {
 					type="button"
 					variant="ghost"
 					size="icon"
-					class="hidden shrink-0 text-sidebar-foreground/70 hover:text-sidebar-accent-foreground group-data-[state=collapsed]:inline-flex"
+					class="hidden shrink-0 text-sidebar-foreground/70 group-data-[state=collapsed]:inline-flex hover:text-sidebar-accent-foreground"
 					onclick={navigateToSettings}
 				>
 					<Settings class="h-4 w-4" />
@@ -522,7 +528,7 @@ type NavItem = {
 							class={cn(
 								'flex w-full min-w-0 items-center gap-3 rounded-md bg-sidebar-accent/60 px-3 py-2 text-left transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
 								'group-data-[state=collapsed]:justify-center group-data-[state=collapsed]:gap-2 group-data-[state=collapsed]:px-2 group-data-[state=collapsed]:py-3 group-data-[state=collapsed]:text-center',
-								'group-data-[state=collapsed]:bg-transparent group-data-[state=collapsed]:hover:bg-transparent group-data-[state=collapsed]:focus-visible:ring-0 group-data-[state=collapsed]:shadow-none'
+								'group-data-[state=collapsed]:bg-transparent group-data-[state=collapsed]:shadow-none group-data-[state=collapsed]:hover:bg-transparent group-data-[state=collapsed]:focus-visible:ring-0'
 							)}
 						>
 							<Avatar class="h-9 w-9">

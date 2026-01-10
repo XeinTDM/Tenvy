@@ -841,6 +841,13 @@ export class PluginTelemetryStore {
 		this.manifestSnapshot = null;
 	}
 
+	reset(): void {
+		this.manifestCache.clear();
+		this.manifestConflicts.clear();
+		this.manifestLoadedAt = 0;
+		this.manifestSnapshot = null;
+	}
+
 	private async ensureManifestSnapshot(): Promise<{
 		version: string;
 		entries: PluginManifestDescriptor[];

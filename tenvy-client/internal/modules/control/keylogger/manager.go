@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rootbay/tenvy-client/internal/protocol"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 type (
@@ -453,7 +454,7 @@ func (m *Manager) flushSession(sess *session, final bool) {
 }
 
 func (m *Manager) dispatchEvents(envelope EventEnvelope) error {
-	data, err := json.Marshal(envelope)
+	data, err := msgpack.Marshal(envelope)
 	if err != nil {
 		return err
 	}
@@ -479,7 +480,7 @@ func (m *Manager) dispatchEvents(envelope EventEnvelope) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/msgpack")
 	req.Header.Set("Accept", "application/json")
 	if ua := strings.TrimSpace(m.userAgent()); ua != "" {
 		req.Header.Set("User-Agent", ua)

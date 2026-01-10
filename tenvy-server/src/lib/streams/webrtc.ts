@@ -130,6 +130,32 @@ export class WebRTCPipeline {
 		};
 	}
 
+	send(data: string | ArrayBuffer | ArrayBufferView): boolean {
+		if (this.closed || !this.channel || this.channel.readyState !== 'open') {
+			return false;
+		}
+		try {
+			this.channel.send(data as string); // types are tricky with wrtc
+			return true;
+		} catch (err) {
+			console.warn('Failed to send data over WebRTC data channel', err);
+			return false;
+		}
+	}
+
+	sendBinary(data: Uint8Array): boolean {
+		if (this.closed || !this.channel || this.channel.readyState !== 'open') {
+			return false;
+		}
+		try {
+			this.channel.send(data);
+			return true;
+		} catch (err) {
+			console.warn('Failed to send binary data over WebRTC data channel', err);
+			return false;
+		}
+	}
+
 	private decodePayload(
 		data: unknown
 	): RemoteDesktopMediaSample[] | RemoteDesktopFramePacket | string | null {
@@ -286,7 +312,7 @@ function normalizeFramePacket(value: Record<string, unknown>): RemoteDesktopFram
 	const candidate = value as unknown as RemoteDesktopFramePacket;
 	const frame: RemoteDesktopFramePacket = { ...candidate };
 
-	const image = toBase64String(value.image);
+	const image = ensureBinaryOrBase64(value.image);
 	if (image === null) {
 		return null;
 	}
@@ -301,7 +327,7 @@ function normalizeFramePacket(value: Record<string, unknown>): RemoteDesktopFram
 				return null;
 			}
 			const rect = { ...(entry as RemoteDesktopDeltaRect) };
-			const data = toBase64String((entry as { data?: unknown }).data);
+			const data = ensureBinaryOrBase64((entry as { data?: unknown }).data);
 			if (data === null || data === undefined) {
 				return null;
 			}
@@ -320,7 +346,7 @@ function normalizeFramePacket(value: Record<string, unknown>): RemoteDesktopFram
 				return null;
 			}
 			const clipFrame = { ...(entry as RemoteDesktopVideoFrame) };
-			const data = toBase64String((entry as { data?: unknown }).data);
+			const data = ensureBinaryOrBase64((entry as { data?: unknown }).data);
 			if (data === null || data === undefined) {
 				return null;
 			}
@@ -359,7 +385,7 @@ function normalizeMediaSamples(value: unknown): RemoteDesktopMediaSample[] | nul
 		const sample = {
 			...(entry as RemoteDesktopMediaSample)
 		};
-		const data = toBase64String((entry as { data?: unknown }).data);
+		const data = ensureBinaryOrBase64((entry as { data?: unknown }).data);
 		if (data === null || data === undefined) {
 			return null;
 		}
@@ -369,7 +395,7 @@ function normalizeMediaSamples(value: unknown): RemoteDesktopMediaSample[] | nul
 	return normalized;
 }
 
-function toBase64String(value: unknown): string | undefined | null {
+function ensureBinaryOrBase64(value: unknown): string | Uint8Array | undefined | null {
 	if (value === undefined) {
 		return undefined;
 	}
@@ -380,14 +406,14 @@ function toBase64String(value: unknown): string | undefined | null {
 		return '';
 	}
 	if (value instanceof Uint8Array) {
-		return Buffer.from(value).toString('base64');
+		return value;
 	}
 	if (value instanceof ArrayBuffer) {
-		return Buffer.from(value).toString('base64');
+		return new Uint8Array(value);
 	}
 	if (ArrayBuffer.isView(value)) {
 		const view = value as ArrayBufferView;
-		return Buffer.from(view.buffer, view.byteOffset, view.byteLength).toString('base64');
+		return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
 	}
 	return null;
 }

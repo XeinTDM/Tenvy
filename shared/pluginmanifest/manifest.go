@@ -219,50 +219,50 @@ func LookupTelemetry(id string) (TelemetryMetadata, bool) {
 }
 
 type InstallationTelemetry struct {
-	PluginID  string              `json:"pluginId"`
-	Version   string              `json:"version"`
-	Status    PluginInstallStatus `json:"status"`
-	Hash      string              `json:"hash,omitempty"`
-	Timestamp *int64              `json:"timestamp,omitempty"`
-	Error     string              `json:"error,omitempty"`
+	PluginID  string              `json:"pluginId" msgpack:"pluginId"`
+	Version   string              `json:"version" msgpack:"version"`
+	Status    PluginInstallStatus `json:"status" msgpack:"status"`
+	Hash      string              `json:"hash,omitempty" msgpack:"hash,omitempty"`
+	Timestamp *int64              `json:"timestamp,omitempty" msgpack:"timestamp,omitempty"`
+	Error     string              `json:"error,omitempty" msgpack:"error,omitempty"`
 }
 
 type SyncPayload struct {
-	Installations []InstallationTelemetry `json:"installations"`
-	Manifests     *ManifestState          `json:"manifests,omitempty"`
+	Installations []InstallationTelemetry `json:"installations" msgpack:"installations"`
+	Manifests     *ManifestState          `json:"manifests,omitempty" msgpack:"manifests,omitempty"`
 }
 
 type ManifestDescriptor struct {
-	PluginID       string           `json:"pluginId"`
-	Version        string           `json:"version"`
-	ManifestDigest string           `json:"manifestDigest"`
-	ArtifactHash   string           `json:"artifactHash,omitempty"`
-	ArtifactSize   int64            `json:"artifactSizeBytes,omitempty"`
-	ApprovedAt     string           `json:"approvedAt,omitempty"`
-	ManualPushAt   string           `json:"manualPushAt,omitempty"`
-	Dependencies   []string         `json:"dependencies,omitempty"`
-	Distribution   ManifestBriefing `json:"distribution"`
+	PluginID       string           `json:"pluginId" msgpack:"pluginId"`
+	Version        string           `json:"version" msgpack:"version"`
+	ManifestDigest string           `json:"manifestDigest" msgpack:"manifestDigest"`
+	ArtifactHash   string           `json:"artifactHash,omitempty" msgpack:"artifactHash,omitempty"`
+	ArtifactSize   int64            `json:"artifactSizeBytes,omitempty" msgpack:"artifactSizeBytes,omitempty"`
+	ApprovedAt     string           `json:"approvedAt,omitempty" msgpack:"approvedAt,omitempty"`
+	ManualPushAt   string           `json:"manualPushAt,omitempty" msgpack:"manualPushAt,omitempty"`
+	Dependencies   []string         `json:"dependencies,omitempty" msgpack:"dependencies,omitempty"`
+	Distribution   ManifestBriefing `json:"distribution" msgpack:"distribution"`
 }
 
 type ManifestBriefing struct {
-	DefaultMode DeliveryMode `json:"defaultMode"`
-	AutoUpdate  bool         `json:"autoUpdate"`
+	DefaultMode DeliveryMode `json:"defaultMode" msgpack:"defaultMode"`
+	AutoUpdate  bool         `json:"autoUpdate" msgpack:"autoUpdate"`
 }
 
 type ManifestList struct {
-	Version   string               `json:"version"`
-	Manifests []ManifestDescriptor `json:"manifests"`
+	Version   string               `json:"version" msgpack:"version"`
+	Manifests []ManifestDescriptor `json:"manifests" msgpack:"manifests"`
 }
 
 type ManifestState struct {
-	Version string            `json:"version,omitempty"`
-	Digests map[string]string `json:"digests,omitempty"`
+	Version string            `json:"version,omitempty" msgpack:"version,omitempty"`
+	Digests map[string]string `json:"digests,omitempty" msgpack:"digests,omitempty"`
 }
 
 type ManifestDelta struct {
-	Version string               `json:"version"`
-	Updated []ManifestDescriptor `json:"updated"`
-	Removed []string             `json:"removed"`
+	Version string               `json:"version" msgpack:"version"`
+	Updated []ManifestDescriptor `json:"updated" msgpack:"updated"`
+	Removed []string             `json:"removed" msgpack:"removed"`
 }
 
 func (m Manifest) Validate() error {

@@ -118,9 +118,9 @@ describe('RemoteDesktopQuicInputService.send', () => {
 		const sessionId = 'session-quic-fail';
 		const write = vi
 			.fn<(chunk: string) => boolean>()
-			.mockImplementationOnce((_chunk) => true)
-			.mockImplementationOnce((_chunk) => false)
-			.mockImplementation((_chunk) => true);
+			.mockImplementationOnce(() => true)
+			.mockImplementationOnce(() => false)
+			.mockImplementation(() => true);
 		registerConnection(service, agentId, sessionId, { write });
 
 		const events = createEvents(300);

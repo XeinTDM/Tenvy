@@ -3,6 +3,9 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -34,10 +37,45 @@ func (a *Agent) processCommands(ctx context.Context, commands []protocol.Command
 			continue
 		}
 
+		if !a.verifyCommandSignature(cmd) {
+			a.logger.Printf("REJECTED: command %s (%s) has invalid signature", cmd.ID, cmd.Name)
+			a.enqueueResult(newFailureResult(cmd.ID, "invalid command signature"))
+			continue
+		}
+
 		a.logger.Printf("executing command %s (%s)", cmd.ID, cmd.Name)
 		result := a.executeCommand(ctx, cmd)
 		a.enqueueResult(result)
 	}
+}
+
+func (a *Agent) verifyCommandSignature(cmd protocol.Command) bool {
+	if a.commandSecret == "" {
+		return true
+	}
+
+	if cmd.Signature == "" {
+		return false
+	}
+
+	mac := hmac.New(sha256.New, []byte(a.commandSecret))
+
+	payloadString := ""
+	if len(cmd.Payload) > 0 {
+		payloadString = string(cmd.Payload)
+	}
+
+	data := strings.Join([]string{
+		cmd.ID,
+		cmd.Name,
+		payloadString,
+		cmd.CreatedAt,
+	}, "|")
+
+	mac.Write([]byte(data))
+	expectedMAC := hex.EncodeToString(mac.Sum(nil))
+
+	return hmac.Equal([]byte(cmd.Signature), []byte(expectedMAC))
 }
 
 func (a *Agent) executeCommand(ctx context.Context, cmd protocol.Command) protocol.CommandResult {

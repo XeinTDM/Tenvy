@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { remoteDesktopManager, RemoteDesktopError } from '$lib/server/rat/remote-desktop';
 import type { RemoteDesktopFramePacket } from '$lib/types/remote-desktop';
+import { decode } from '@msgpack/msgpack';
 
 export const POST: RequestHandler = async ({ params, request }) => {
 	const id = params.id;
@@ -11,7 +12,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	let payload: RemoteDesktopFramePacket;
 	try {
-		payload = (await request.json()) as RemoteDesktopFramePacket;
+		const contentType = request.headers.get('content-type') || '';
+		if (contentType.includes('application/msgpack')) {
+			const buffer = await request.arrayBuffer();
+			payload = decode(buffer) as RemoteDesktopFramePacket;
+		} else {
+			payload = (await request.json()) as RemoteDesktopFramePacket;
+		}
 	} catch {
 		throw error(400, 'Invalid frame payload');
 	}

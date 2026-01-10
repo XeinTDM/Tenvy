@@ -1,0 +1,12 @@
+{
+  "controller": {
+    "baseUrl": "http://localhost:2332"
+  },
+  "loader": {
+    "version": "1.0.0",
+    "executable": "tenvy-loader.exe",
+    "artifactUrl": "http://localhost:2332/static/builds/tenvy-loader.exe",
+    "artifactType": "binary",
+    "mode": "0755"
+  }
+}

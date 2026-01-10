@@ -74,7 +74,11 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		if (!track) {
 			throw error(404, 'Audio track not found');
 		}
+
+		const pcm = await audioBridgeManager.getUploadPCM(id, track.id);
 		const absoluteUrl = new URL(`/api/agents/${id}/audio/uploads/${track.id}`, request.url);
+		absoluteUrl.searchParams.set('format', 'pcm');
+
 		command = {
 			action: 'playback-start',
 			trackId: track.id,
@@ -84,7 +88,9 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 			volume: playback.volume,
 			loop: playback.loop,
 			chaosMode: playback.chaosMode,
-			rickroll: playback.rickroll
+			rickroll: playback.rickroll,
+			sampleRate: pcm?.format.sampleRate ?? 48000,
+			channels: pcm?.format.channels ?? 1
 		} satisfies AudioControlCommandPayload;
 	} else if (playback.intent === 'pause') {
 		if (!playback.trackId) {

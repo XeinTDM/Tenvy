@@ -377,6 +377,48 @@ export const agentResult = sqliteTable(
 	})
 );
 
+export const keyloggerSession = sqliteTable(
+	'keylogger_session',
+	{
+		id: text('id').primaryKey(),
+		agentId: text('agent_id')
+			.notNull()
+			.references(() => agent.id, { onDelete: 'cascade' }),
+		mode: text('mode').notNull(),
+		startedAt: timestamp('started_at', { defaultNow: true }),
+		active: integer('active', { mode: 'boolean' }).notNull().default(true),
+		config: text('config').notNull(),
+		totalEvents: integer('total_events').notNull().default(0),
+		lastCapturedAt: timestamp('last_captured_at', { optional: true }),
+		createdAt: timestamp('created_at', { defaultNow: true }),
+		updatedAt: timestamp('updated_at', { defaultNow: true })
+	},
+	(table) => ({
+		agentIdx: index('keylogger_session_agent_idx').on(table.agentId)
+	})
+);
+
+export const keyloggerBatch = sqliteTable(
+	'keylogger_batch',
+	{
+		id: text('id').primaryKey(),
+		sessionId: text('session_id')
+			.notNull()
+			.references(() => keyloggerSession.id, { onDelete: 'cascade' }),
+		agentId: text('agent_id')
+			.notNull()
+			.references(() => agent.id, { onDelete: 'cascade' }),
+		capturedAt: timestamp('captured_at').notNull(),
+		events: text('events').notNull(),
+		totalEvents: integer('total_events').notNull(),
+		createdAt: timestamp('created_at', { defaultNow: true })
+	},
+	(table) => ({
+		sessionIdx: index('keylogger_batch_session_idx').on(table.sessionId),
+		agentIdx: index('keylogger_batch_agent_idx').on(table.agentId)
+	})
+);
+
 export type Session = typeof session.$inferSelect;
 
 export type User = typeof user.$inferSelect;
@@ -393,3 +435,5 @@ export type AgentNote = typeof agentNote.$inferSelect;
 export type AgentCommand = typeof agentCommand.$inferSelect;
 export type AgentResult = typeof agentResult.$inferSelect;
 export type AuditEvent = typeof auditEvent.$inferSelect;
+export type KeyloggerSession = typeof keyloggerSession.$inferSelect;
+export type KeyloggerBatch = typeof keyloggerBatch.$inferSelect;

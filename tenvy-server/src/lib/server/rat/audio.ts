@@ -10,7 +10,7 @@ import type {
 	AudioUploadTrack
 } from '$lib/types/audio';
 import { join } from 'node:path';
-import { mkdir, stat, unlink } from 'node:fs/promises';
+import { mkdir, stat, unlink, readFile } from 'node:fs/promises';
 import {
 	AUDIO_STREAM_SUBPROTOCOL,
 	AUDIO_STREAM_TOKEN_HEADER
@@ -116,6 +116,62 @@ function encodeEvent(event: string, payload: unknown): Uint8Array {
 	return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
 }
 
+export interface WavInfo {
+	channels: number;
+	sampleRate: number;
+	bitsPerSample: number;
+	dataOffset: number;
+	dataSize: number;
+}
+
+export function parseWavHeader(buffer: Buffer): WavInfo | null {
+	if (buffer.length < 44) return null;
+	if (buffer.toString('ascii', 0, 4) !== 'RIFF') return null;
+	if (buffer.toString('ascii', 8, 12) !== 'WAVE') return null;
+	if (buffer.toString('ascii', 12, 16) !== 'fmt ') return null;
+
+	const formatSize = buffer.readUInt32LE(16);
+	const channels = buffer.readUInt16LE(22);
+	const sampleRate = buffer.readUInt32LE(24);
+	const bitsPerSample = buffer.readUInt16LE(34);
+
+	let dataOffset = 20 + formatSize;
+	while (dataOffset < buffer.length - 8) {
+		if (buffer.toString('ascii', dataOffset, dataOffset + 4) === 'data') {
+			const dataSize = buffer.readUInt32LE(dataOffset + 4);
+			return {
+				channels,
+				sampleRate,
+				bitsPerSample,
+				dataOffset: dataOffset + 8,
+				dataSize
+			};
+		}
+		const chunkSize = buffer.readUInt32LE(dataOffset + 4);
+		dataOffset += 8 + chunkSize;
+	}
+
+	return null;
+}
+
+export function createWavHeader(info: WavInfo): Buffer {
+	const header = Buffer.alloc(44);
+	header.write('RIFF', 0);
+	header.writeUInt32LE(36 + info.dataSize, 4);
+	header.write('WAVE', 8);
+	header.write('fmt ', 12);
+	header.writeUInt32LE(16, 16); // fmt chunk size
+	header.writeUInt16LE(1, 20); // PCM format
+	header.writeUInt16LE(info.channels, 22);
+	header.writeUInt32LE(info.sampleRate, 24);
+	header.writeUInt32LE((info.sampleRate * info.channels * info.bitsPerSample) / 8, 28);
+	header.writeUInt16LE((info.channels * info.bitsPerSample) / 8, 32);
+	header.writeUInt16LE(info.bitsPerSample, 34);
+	header.write('data', 36);
+	header.writeUInt32LE(info.dataSize, 40);
+	return header;
+}
+
 function toSessionState(record: AudioSessionRecord): AudioSessionState {
 	return {
 		sessionId: record.id,
@@ -143,6 +199,40 @@ export class AudioBridgeManager {
 		const directory = join(this.uploadDirectory, agentId);
 		await mkdir(directory, { recursive: true });
 		return directory;
+	}
+
+	async getUploadPCM(
+		agentId: string,
+		uploadId: string
+	): Promise<{ data: Buffer; format: AudioStreamFormat } | null> {
+		const record = this.getUpload(agentId, uploadId);
+		if (!record) return null;
+
+		const path = join(this.uploadDirectory, agentId, record.storedName);
+		try {
+			const buffer = await readFile(path);
+			const info = parseWavHeader(buffer);
+			if (info) {
+				return {
+					data: buffer.subarray(info.dataOffset, info.dataOffset + info.dataSize),
+					format: {
+						encoding: 'pcm16',
+						sampleRate: info.sampleRate,
+						channels: info.channels
+					}
+				};
+			}
+			return {
+				data: buffer,
+				format: {
+					encoding: 'pcm16',
+					sampleRate: 48000,
+					channels: 1
+				}
+			};
+		} catch {
+			return null;
+		}
 	}
 
 	markInventoryRequest(agentId: string, requestId: string) {
@@ -274,18 +364,11 @@ export class AudioBridgeManager {
 		if (!uploads) {
 			return [];
 		}
-		return Array.from(uploads.values()).map(
-			(upload) =>
-				({
-					id: upload.id,
-					filename: upload.storedName,
-					originalName: upload.originalName,
-					size: upload.size,
-					contentType: upload.contentType,
-					uploadedAt: upload.uploadedAt.toISOString(),
-					downloadUrl: `/api/agents/${agentId}/audio/uploads/${upload.id}`
-				}) satisfies AudioUploadTrack
-		);
+		return Array.from(uploads.values()).map((upload) => ({
+			...upload,
+			filename: upload.originalName,
+			downloadUrl: `/api/agents/${agentId}/audio/uploads/${upload.id}`
+		}));
 	}
 
 	registerUpload(agentId: string, upload: AudioUploadRecord) {
@@ -402,15 +485,18 @@ export class AudioBridgeManager {
 			throw new AudioBridgeError('Invalid audio channel count', 400);
 		}
 
-		if (typeof chunk.data !== 'string') {
-			throw new AudioBridgeError('Audio chunk data must be a base64 string', 400);
+		if (typeof chunk.data !== 'string' && !((chunk.data as unknown) instanceof Uint8Array)) {
+			throw new AudioBridgeError('Audio chunk data must be a base64 string or binary buffer', 400);
 		}
 
-		if (chunk.data.length > MAX_AUDIO_STREAM_BASE64_LENGTH) {
+		const base64Data =
+			typeof chunk.data === 'string' ? chunk.data : Buffer.from(chunk.data).toString('base64');
+
+		if (base64Data.length > MAX_AUDIO_STREAM_BASE64_LENGTH) {
 			throw new AudioBridgeError('Audio chunk payload exceeds maximum size', 400);
 		}
 
-		if (chunk.data.length > 0 && !BASE64_REGEX.test(chunk.data)) {
+		if (typeof chunk.data === 'string' && chunk.data.length > 0 && !BASE64_REGEX.test(chunk.data)) {
 			throw new AudioBridgeError('Audio chunk data must be a base64 string', 400);
 		}
 
@@ -421,7 +507,7 @@ export class AudioBridgeManager {
 			sequence: chunk.sequence,
 			timestamp,
 			format: { ...chunk.format },
-			data: chunk.data
+			data: base64Data
 		});
 	}
 
@@ -602,11 +688,11 @@ export class AudioBridgeManager {
 			}
 		};
 
-		const handleCloseEvent = (_event: CloseEvent) => {
+		const handleCloseEvent = () => {
 			handleClose();
 		};
 
-		const handleErrorEvent = (_event: Event) => {
+		const handleErrorEvent = () => {
 			handleClose();
 		};
 

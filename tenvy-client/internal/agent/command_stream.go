@@ -54,7 +54,7 @@ func (a *Agent) sessionTokenURL() (string, error) {
 		return "", err
 	}
 
-	if strings.ToLower(parsed.Scheme) != "https" {
+	if strings.ToLower(parsed.Scheme) != "https" && strings.ToLower(parsed.Scheme) != "http" {
 		return "", fmt.Errorf("unsupported session token scheme: %s", parsed.Scheme)
 	}
 
@@ -86,8 +86,10 @@ func (a *Agent) commandStreamURL() (string, error) {
 	switch strings.ToLower(parsed.Scheme) {
 	case "https":
 		parsed.Scheme = "wss"
-	case "wss":
-		// already secure websocket
+	case "http":
+		parsed.Scheme = "ws"
+	case "wss", "ws":
+		// Ignore
 	default:
 		return "", fmt.Errorf("unsupported command stream scheme: %s", parsed.Scheme)
 	}
@@ -215,7 +217,7 @@ func (a *Agent) runCommandStream(ctx context.Context) {
 		dialOptions := &websocket.DialOptions{
 			HTTPHeader:      headers,
 			Subprotocols:    []string{protocol.CommandStreamSubprotocol},
-			CompressionMode: websocket.CompressionDisabled,
+			CompressionMode: websocket.CompressionContextTakeover,
 		}
 		if a.client != nil {
 			dialOptions.HTTPClient = a.client

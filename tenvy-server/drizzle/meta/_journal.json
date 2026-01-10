@@ -1,27 +1,27 @@
 {
-        "version": "5",
-        "dialect": "sqlite",
-        "entries": [
-                {
-                        "idx": 0,
-                        "version": "5",
-                        "when": 1760897870,
-                        "tag": "0000_add_roles_and_audit",
-                        "breakpoints": true
-                },
-                {
-                        "idx": 1,
-                        "version": "5",
-                        "when": 1761155275,
-                        "tag": "0001_add_plugin_signature_fields",
-                        "breakpoints": true
-                },
-                {
-                        "idx": 2,
-                        "version": "5",
-                        "when": 1761300000,
-                        "tag": "0002_add_plugin_registry",
-                        "breakpoints": true
-                }
-        ]
+  "version": "5",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1760897870,
+      "tag": "0000_add_roles_and_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1761155275,
+      "tag": "0001_add_plugin_signature_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1761300000,
+      "tag": "0002_add_plugin_registry",
+      "breakpoints": true
+    }
+  ]
 }

@@ -21,6 +21,17 @@ import { remoteDesktopEnginePluginId, requiredRemoteDesktopPluginVersion } from 
 
 vi.mock('$env/dynamic/private', () => import('../../../../tests/mocks/env-dynamic-private'));
 
+vi.mock('$lib/data/plugin-manifests.js', () => ({
+	loadPluginManifests: vi.fn(async () => [
+		{
+			source: 'test',
+			manifest: remoteDesktopEngineManifestJson,
+			verification: { status: 'trusted', trusted: true },
+			raw: JSON.stringify(remoteDesktopEngineManifestJson)
+		}
+	])
+}));
+
 const baseMetadata = {
 	hostname: 'persisted-host',
 	username: 'persisted-user',

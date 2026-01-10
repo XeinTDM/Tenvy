@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { SvelteSet } from 'svelte/reactivity';
 	import { browser } from '$app/environment';
 	import { goto, invalidate } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Alert, AlertDescription, AlertTitle } from '$lib/components/ui/alert/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -115,7 +115,7 @@
 
 	const clientsTable = createClientsTableStore(data.agents ?? []);
 	const ipLocationStore = writable<Record<string, GeoLookupPayload>>({});
-	const inFlightLookups = new Set<string>();
+	const inFlightLookups = new SvelteSet<string>();
 
 	$effect(() => {
 		clientsTable.setAgents(data.agents ?? []);
@@ -406,67 +406,6 @@
 			tagsDialogError = err instanceof Error && err.message ? err.message : 'Failed to update tags';
 		} finally {
 			tagsDialogPending = false;
-		}
-	}
-
-	function findAgentById(agentId: string | null): AgentSnapshot | null {
-		if (!agentId) {
-			return null;
-		}
-		const { agents } = get(clientsTable);
-		return agents.find((agent) => agent.id === agentId) ?? null;
-	}
-
-	function getError(key: string): string | null {
-		return commandErrors[key] ?? null;
-	}
-
-	function getSuccess(key: string): string | null {
-		return commandSuccess[key] ?? null;
-	}
-
-	function isPending(key: string): boolean {
-		return commandPending[key] ?? false;
-	}
-
-	async function queueCommand(
-		agentId: string,
-		body: unknown,
-		key: string,
-		messages: { session: string; queued: string }
-	): Promise<boolean> {
-		commandPending = updateRecord(commandPending, key, true);
-		commandErrors = updateRecord(commandErrors, key, null);
-		commandSuccess = updateRecord(commandSuccess, key, null);
-
-		try {
-			const response = await fetch(`/api/agents/${agentId}/commands`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(body)
-			});
-			if (!response.ok) {
-				const message = (await response.text()) || 'Failed to queue command';
-				commandErrors = updateRecord(commandErrors, key, message.trim());
-				return false;
-			}
-
-			const payload = (await response.json().catch(() => null)) as CommandQueueResponse | null;
-			const delivery: CommandDeliveryMode = payload?.delivery ?? 'queued';
-			const successMessage = delivery === 'session' ? messages.session : messages.queued;
-
-			commandSuccess = updateRecord(commandSuccess, key, successMessage);
-			await invalidate('/api/agents');
-			return true;
-		} catch (err) {
-			commandErrors = updateRecord(
-				commandErrors,
-				key,
-				err instanceof Error ? err.message : 'Unknown error'
-			);
-			return false;
-		} finally {
-			commandPending = updateRecord(commandPending, key, false);
 		}
 	}
 
@@ -905,18 +844,18 @@
 
 	<div class="space-y-4">
 		<TooltipProvider delayDuration={100}>
-					{#if isDesktop}
-						<ScrollArea class="rounded-lg border border-border/60">
-							<div class="min-w-0 md:min-w-[clamp(48rem,80vw,64rem)] xl:min-w-280">
-								<Table>
-									<colgroup>
-										{#each clientTableColumnWidths as width}
-											<col style={`width:${width};`} />
-										{/each}
-									</colgroup>
-									<TableHeader>
-										<TableRow>
-											<TableHead class="w-[16rem]">
+			{#if isDesktop}
+				<ScrollArea class="rounded-lg border border-border/60">
+					<div class="min-w-0 md:min-w-[clamp(48rem,80vw,64rem)] xl:min-w-280">
+						<Table>
+							<colgroup>
+								{#each clientTableColumnWidths as width}
+									<col style={`width:${width};`} />
+								{/each}
+							</colgroup>
+							<TableHeader>
+								<TableRow>
+									<TableHead class="w-[16rem]">
 										<Tooltip>
 											<TooltipTrigger>
 												{#snippet child({ props })}

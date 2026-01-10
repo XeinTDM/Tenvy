@@ -21,6 +21,7 @@ export interface AgentMetadata {
   version?: string;
   group?: string;
   location?: AgentLocation;
+  hardwareId?: string;
 }
 
 export interface AgentMetrics {

@@ -52,7 +52,7 @@ export const GET: RequestHandler = async ({ params, request }) => {
 	let info: Awaited<ReturnType<typeof stat>>;
 	try {
 		info = await stat(artifactPath);
-	} catch (err) {
+	} catch {
 		throw error(404, 'Plugin artifact not found');
 	}
 

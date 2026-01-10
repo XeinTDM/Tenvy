@@ -5,7 +5,9 @@ import { db } from '$lib/server/db';
 import { plugin as pluginTable } from '$lib/server/db/schema';
 import type { NavKey } from '$lib/types/navigation';
 
-const buildNavBadges = (snapshot: ReturnType<typeof buildDashboardSnapshot>): Partial<Record<NavKey, string>> => {
+const buildNavBadges = (
+	snapshot: ReturnType<typeof buildDashboardSnapshot>
+): Partial<Record<NavKey, string>> => {
 	const { totals, logs } = snapshot;
 	const dashboardBadge =
 		totals.total > 0 ? `${totals.connected}/${totals.total}` : totals.connected.toString();

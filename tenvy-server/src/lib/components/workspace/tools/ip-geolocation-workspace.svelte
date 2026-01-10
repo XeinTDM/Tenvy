@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
@@ -165,7 +166,7 @@
 							<span class="uppercase">{provider}</span>
 						</SelectTrigger>
 						<SelectContent>
-							{#each providers as option}
+							{#each providers as option (option)}
 								<SelectItem value={option}>{option.toUpperCase()}</SelectItem>
 							{/each}
 						</SelectContent>
@@ -269,7 +270,7 @@
 				{#if includeMap && result.mapUrl}
 					<a
 						class="block rounded-lg border border-border/60 bg-muted/30 p-4 text-sm text-foreground hover:bg-muted/50"
-						href={result.mapUrl}
+						href={resolve(result.mapUrl as any)}
 						target="_blank"
 						rel="noreferrer"
 					>

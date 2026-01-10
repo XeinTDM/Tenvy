@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SvelteSet } from 'svelte/reactivity';
 	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -67,8 +68,8 @@
 	let loadError = $state<string | null>(null);
 	let creating = $state(false);
 	let createError = $state<string | null>(null);
-	let toggling = $state(new Set<string>());
-	let removing = $state(new Set<string>());
+	let toggling = $state(new SvelteSet<string>());
+	let removing = $state(new SvelteSet<string>());
 	let newName = $state('');
 	let newPath = $state('');
 	let newPublisher = $state('');

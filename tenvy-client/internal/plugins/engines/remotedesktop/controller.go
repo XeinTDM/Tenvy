@@ -1066,7 +1066,7 @@ func (c *remoteDesktopSessionController) maybeAdaptQualityLocked(
 	}
 
 	now := time.Now()
-	if !session.LastAdaptation.IsZero() && now.Sub(session.LastAdaptation) < 1200*time.Millisecond {
+	if !session.LastAdaptation.IsZero() && now.Sub(session.LastAdaptation) < 400*time.Millisecond {
 		return
 	}
 

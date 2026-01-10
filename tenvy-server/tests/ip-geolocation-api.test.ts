@@ -175,7 +175,7 @@ describe('geolocation API', () => {
 					request: new Request('https://controller.test/api', {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ action: 'lookup', ip: '', provider: 'ipinfo' })
+						body: JSON.stringify({ action: 'lookup', ip: '0.0.0.0', provider: 'ipinfo' })
 					}),
 					locals: resolveLocals({
 						user: { ...defaultUser, role: 'operator' }

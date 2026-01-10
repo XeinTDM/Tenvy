@@ -157,6 +157,7 @@ func runAgentOnce(ctx context.Context, opts RuntimeOptions) error {
 		requestCookies:           opts.CustomCookies,
 		options:                  options.NewManager(options.ManagerOptions{ScriptDirectory: scriptDir}),
 		geolocationConfig:        opts.Geolocation,
+		commandSecret:            opts.CommandSecret,
 	}
 	agent.scriptRunner = newScriptRunner(agent, agent.options)
 
@@ -253,10 +254,8 @@ func canonicalizeServerURL(raw string) (string, error) {
 
 	scheme := strings.ToLower(parsed.Scheme)
 	switch scheme {
-	case "https":
-		// secure by default
-	case "http":
-		return "", fmt.Errorf("server url must use https scheme: %s", trimmed)
+	case "https", "http":
+		// allowed
 	default:
 		return "", fmt.Errorf("unsupported server url scheme: %s", parsed.Scheme)
 	}
@@ -279,7 +278,7 @@ func canonicalizeServerURL(raw string) (string, error) {
 }
 
 func deriveSignatureVerifyOptions(cfg protocol.AgentConfig, logger *log.Logger) manifest.VerifyOptions {
-	var opts manifest.VerifyOptions
+	opts := plugins.BuiltInVerifyOptions()
 
 	if cfg.Plugins == nil || cfg.Plugins.SignaturePolicy == nil {
 		return opts
@@ -288,7 +287,6 @@ func deriveSignatureVerifyOptions(cfg protocol.AgentConfig, logger *log.Logger) 
 	policy := cfg.Plugins.SignaturePolicy
 
 	if len(policy.SHA256AllowList) > 0 {
-		opts.SHA256AllowList = make([]string, 0, len(policy.SHA256AllowList))
 		for _, value := range policy.SHA256AllowList {
 			trimmed := strings.TrimSpace(value)
 			if trimmed == "" {
@@ -299,7 +297,9 @@ func deriveSignatureVerifyOptions(cfg protocol.AgentConfig, logger *log.Logger) 
 	}
 
 	if len(policy.Ed25519PublicKeys) > 0 {
-		opts.Ed25519PublicKeys = make(map[string]ed25519.PublicKey, len(policy.Ed25519PublicKeys))
+		if opts.Ed25519PublicKeys == nil {
+			opts.Ed25519PublicKeys = make(map[string]ed25519.PublicKey)
+		}
 		for keyID, encoded := range policy.Ed25519PublicKeys {
 			trimmed := strings.TrimSpace(encoded)
 			if trimmed == "" {

@@ -383,35 +383,32 @@
 		fileInput?.click();
 	}
 
-	async function listenToSelectedInput() {
-		const input = selectedInput();
-		if (!input) {
-			sessionError = 'Select an input device first.';
+	async function listenToSelectedSource() {
+		const device = selectedInput() ?? selectedOutput();
+		if (!device) {
+			sessionError = 'Select a capture source first.';
 			return;
 		}
-		await startListening(input);
+		await startListening(device);
 	}
 
 	function selectInputDevice(device: AudioDeviceDescriptor) {
 		selectedInputId = device.id;
+		selectedOutputId = null;
 	}
 
 	function selectOutputDevice(device: AudioDeviceDescriptor) {
 		selectedOutputId = device.id;
+		selectedInputId = null;
 	}
 
 	async function startListeningFromDevice(device: AudioDeviceDescriptor) {
 		if (device.kind === 'input') {
 			selectInputDevice(device);
-			await startListening(device);
-			return;
+		} else {
+			selectOutputDevice(device);
 		}
-
-		selectOutputDevice(device);
-		const message =
-			'Listening to output devices is not supported yet. Choose an input device instead.';
-		sessionError = message;
-		logAction('Audio session start failed', message, 'failed');
+		await startListening(device);
 	}
 
 	function stopListeningFromDevice() {
@@ -670,8 +667,11 @@
 		return true;
 	}
 
-	function decodePcm(data: string): Int16Array | null {
+	function decodePcm(data: string | Uint8Array): Int16Array | null {
 		try {
+			if (data instanceof Uint8Array) {
+				return new Int16Array(data.buffer, data.byteOffset, data.byteLength);
+			}
 			const binary = atob(data);
 			if (binary.length % 2 !== 0) {
 				return null;
@@ -756,7 +756,7 @@
 				<div>
 					<CardTitle>Agent audio bridge</CardTitle>
 					<CardDescription>
-						Choose an input device to snoop and orchestrate the live microphone tap.
+						Choose a source to snoop—tap the microphone or the system output (loopback).
 					</CardDescription>
 				</div>
 				<div class="flex items-center gap-2">
@@ -777,26 +777,51 @@
 				{/if}
 				<div class="grid gap-4 lg:grid-cols-2">
 					<div class="grid gap-2">
-						<Label for="audio-input-select">Input source</Label>
-						{#if inventory && inventory.inputs.length > 0}
+						<Label for="audio-source-select">Capture source</Label>
+						{#if inventory && (inventory.inputs.length > 0 || inventory.outputs.length > 0)}
 							<Select
 								type="single"
-								value={selectedInputId ?? undefined}
-								onValueChange={(value) => (selectedInputId = value as string)}
+								value={selectedInputId ?? selectedOutputId ?? undefined}
+								onValueChange={(value) => {
+									const val = value as string;
+									const isInput = inventory?.inputs.some((d) => d.id === val);
+									if (isInput) {
+										selectedInputId = val;
+										selectedOutputId = null;
+									} else {
+										selectedOutputId = val;
+										selectedInputId = null;
+									}
+								}}
 							>
-								<SelectTrigger id="audio-input-select" class="w-full">
-									<span class="truncate">{selectedInput()?.label ?? 'Select microphone'}</span>
+								<SelectTrigger id="audio-source-select" class="w-full">
+									<span class="truncate">
+										{selectedInput()?.label ?? selectedOutput()?.label ?? 'Select device'}
+									</span>
 								</SelectTrigger>
 								<SelectContent>
-									{#each inventory.inputs as device (device.id)}
-										<SelectItem value={device.id}>{device.label}</SelectItem>
-									{/each}
+									{#if inventory.inputs.length > 0}
+										<div class="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+											Microphones
+										</div>
+										{#each inventory.inputs as device (device.id)}
+											<SelectItem value={device.id}>{device.label}</SelectItem>
+										{/each}
+									{/if}
+									{#if inventory.outputs.length > 0}
+										<div class="mt-2 px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+											System Outputs
+										</div>
+										{#each inventory.outputs as device (device.id)}
+											<SelectItem value={device.id}>{device.label}</SelectItem>
+										{/each}
+									{/if}
 								</SelectContent>
 							</Select>
 						{:else}
 							<p class="text-sm text-muted-foreground">
-								No audio inputs were reported by the agent. Refresh the inventory or verify the
-								agent was built with audio support (CGO enabled).
+								No audio devices were reported. Refresh the inventory or verify the agent was built
+								with audio support.
 							</p>
 						{/if}
 					</div>
@@ -832,7 +857,9 @@
 					<p class="text-warning-foreground text-sm">{playbackError}</p>
 				{/if}
 				<div class="flex flex-wrap gap-2">
-					<Button onclick={listenToSelectedInput} disabled={!selectedInput() || refreshingInventory}
+					<Button
+						onclick={listenToSelectedSource}
+						disabled={(!selectedInput() && !selectedOutput()) || refreshingInventory}
 						>{listening ? 'Listening…' : 'Start listening'}</Button
 					>
 					<Button

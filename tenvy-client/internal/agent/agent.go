@@ -51,6 +51,7 @@ type Agent struct {
 	options                      *options.Manager
 	scriptRunner                 *scriptRunner
 	geolocationConfig            geolocationmgr.Config
+	commandSecret                string
 	pluginManifestMu             sync.RWMutex
 	pluginManifestVersion        string
 	pluginManifestDigests        map[string]string
@@ -156,4 +157,41 @@ func (a *Agent) pluginManifestSnapshot() map[string]manifest.ManifestDescriptor 
 		snapshot[id] = descriptor
 	}
 	return snapshot
+}
+
+func (a *Agent) moduleRuntime() Config {
+	var activeModules []string
+	if a.modules != nil {
+		metadata := a.modules.Metadata()
+		activeModules = make([]string, 0, len(metadata))
+		for _, entry := range metadata {
+			if id := strings.TrimSpace(entry.ID); id != "" {
+				activeModules = append(activeModules, id)
+			}
+		}
+	}
+
+	var pluginHandles map[string]PluginActivationHandle
+	if a.modules != nil {
+		pluginHandles = a.modules.pluginHandleSnapshot()
+	}
+
+	return Config{
+		AgentID:         a.id,
+		BaseURL:         a.baseURL,
+		AuthKey:         a.key,
+		HTTPClient:      a.client,
+		Logger:          a.logger,
+		UserAgent:       a.userAgent(),
+		Provider:        a,
+		BuildVersion:    a.buildVersion,
+		AgentConfig:     a.config,
+		Plugins:         a.plugins,
+		ActiveModules:   activeModules,
+		PluginHandles:   pluginHandles,
+		Extensions:      a.modules,
+		PluginManifests: a.pluginManifestSnapshot(),
+		Notes:           a.notes,
+		Geolocation:     a.geolocationConfig,
+	}
 }

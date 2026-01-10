@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vmihailenco/msgpack/v5"
 	"github.com/rootbay/tenvy-client/internal/protocol"
 )
 
@@ -174,7 +175,7 @@ func (a *Agent) performSync(ctx context.Context, status string, results []protoc
 		request.Results = results
 	}
 
-	data, err := json.Marshal(request)
+	data, err := msgpack.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
@@ -185,8 +186,8 @@ func (a *Agent) performSync(ctx context.Context, status string, results []protoc
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/msgpack")
+	req.Header.Set("Accept", "application/msgpack")
 	req.Header.Set("User-Agent", a.userAgent())
 	if strings.TrimSpace(a.key) != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", a.key))
@@ -217,9 +218,21 @@ func (a *Agent) performSync(ctx context.Context, status string, results []protoc
 		}
 	}
 
-	var payload protocol.AgentSyncResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return nil, err
+	}
+
+	var payload protocol.AgentSyncResponse
+	contentType := resp.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/msgpack") {
+		if err := msgpack.Unmarshal(body, &payload); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return nil, err
+		}
 	}
 
 	return &payload, nil

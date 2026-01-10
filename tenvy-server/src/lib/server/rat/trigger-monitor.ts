@@ -31,7 +31,7 @@ interface DispatchOptions {
 	timeoutMs?: number;
 }
 
-type TriggerMonitorRequestResult<T extends TriggerMonitorCommandRequest> = TriggerMonitorStatus;
+type TriggerMonitorRequestResult = TriggerMonitorStatus;
 
 type CommandResultSnapshot = {
 	commandId: string;
@@ -86,7 +86,7 @@ async function waitForCommandResult(agentId: string, commandId: string, timeoutM
 function extractResult<T extends TriggerMonitorCommandRequest>(
 	request: T,
 	decoded: TriggerMonitorCommandResponse
-): TriggerMonitorRequestResult<T> {
+): TriggerMonitorRequestResult {
 	if (decoded.action !== request.action) {
 		throw new TriggerMonitorAgentError('Agent returned mismatched trigger monitor action', 502);
 	}
@@ -114,7 +114,7 @@ export async function dispatchTriggerMonitorCommand<T extends TriggerMonitorComm
 	agentId: string,
 	request: T,
 	options: DispatchOptions = {}
-): Promise<TriggerMonitorRequestResult<T>> {
+): Promise<TriggerMonitorRequestResult> {
 	const payload = triggerMonitorCommandRequestSchema.parse(request);
 
 	let queuedCommandId: string;

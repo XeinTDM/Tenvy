@@ -14,10 +14,6 @@ export const GET: RequestHandler = ({ request, params }) => {
 	}
 
 	const url = new URL(request.url);
-	if (url.protocol !== 'https:') {
-		throw error(400, 'Secure transport required');
-	}
-
 	const sessionId = url.searchParams.get('sessionId');
 	if (!sessionId) {
 		throw error(400, 'Missing session identifier');
@@ -28,23 +24,19 @@ export const GET: RequestHandler = ({ request, params }) => {
 		throw error(401, 'Missing audio stream token');
 	}
 
-	const pairFactory = (
-		globalThis as {
-			WebSocketPair?: new () => { 0: WebSocket; 1: WebSocket };
-		}
-	).WebSocketPair;
+	// For Node.js/SvelteKit environments that support the 'upgrade' property in the Response.
+	// If this is running under a SvelteKit adapter that doesn't support this directly,
+	// it might need an adapter-specific hook (like in hooks.server.ts for handleHotUpdate or similar).
+	// However, many modern adapters and environments (like Bun, or some Node adapters)
+	// expect a 101 Switching Protocols response with a webSocket property.
 
-	if (!pairFactory) {
-		throw error(503, 'WebSocket upgrade not supported');
-	}
-
-	const { 0: client, 1: serverSocket } = new pairFactory();
+	const [client, server] = new (globalThis as any).WebSocketPair();
 
 	try {
-		audioBridgeManager.attachBinaryStream(id, sessionId, token, serverSocket);
+		audioBridgeManager.attachBinaryStream(id, sessionId, token, server);
 	} catch (err) {
 		try {
-			serverSocket.close(1011, 'Audio stream rejected');
+			server.close(1011, 'Audio stream rejected');
 		} catch {
 			// ignore close errors
 		}
@@ -54,5 +46,8 @@ export const GET: RequestHandler = ({ request, params }) => {
 		throw error(500, 'Failed to attach audio stream');
 	}
 
-	return new Response(null, { status: 101, webSocket: client } as unknown as ResponseInit);
+	return new Response(null, {
+		status: 101,
+		webSocket: client
+	} as any);
 };

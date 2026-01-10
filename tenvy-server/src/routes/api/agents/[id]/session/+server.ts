@@ -22,8 +22,7 @@ export const GET: RequestHandler = ({ request, params, getClientAddress }) => {
 	}
 
 	const url = new URL(request.url);
-	if (url.protocol !== 'https:') {
-		throw error(400, 'Secure transport required');
+	if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
 	}
 
 	const id = params.id;
@@ -48,7 +47,14 @@ export const GET: RequestHandler = ({ request, params, getClientAddress }) => {
 	).WebSocketPair;
 
 	if (!pairFactory) {
-		throw error(503, 'WebSocket upgrade not supported');
+		// Fallback for non-Cloudflare environments like Bun/Node.
+		// If we are running in an environment that handles WebSocket upgrades via the 101 Response
+		// with a 'webSocket' property (like Bun), we can't easily create a pair here without a polyfill.
+		// For now, we'll keep the check but provide a clearer error or a path for polyfilling.
+		console.warn(
+			'WebSocketPair not found in globalThis. This environment might not support native SvelteKit WebSocket upgrades.'
+		);
+		throw error(503, 'WebSocket upgrade not supported on this platform');
 	}
 
 	const { 0: client, 1: serverSocket } = new pairFactory();

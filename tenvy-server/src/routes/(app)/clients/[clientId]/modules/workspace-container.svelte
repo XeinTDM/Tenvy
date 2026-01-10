@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SvelteMap } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import {
@@ -59,7 +60,7 @@
 
 	const groupedTools = $derived(() => {
 		const order: Group[] = [];
-		const index = new Map<string, Group>();
+		const index = new SvelteMap<string, Group>();
 
 		for (const tool of tools) {
 			const key = tool.segments[0] ?? 'misc';

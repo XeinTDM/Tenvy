@@ -35,6 +35,7 @@
 	} from '$lib/types/remote-desktop';
 	import SessionMetricsGrid from './remote-desktop/SessionMetricsGrid.svelte';
 	import { createInputChannel } from './remote-desktop/input-channel';
+	import { encode as encodeMsgpack, decode as decodeMsgpack } from '@msgpack/msgpack';
 
 	const fallbackMonitors = [
 		{ id: 0, label: 'Primary', width: 1280, height: 720 }
@@ -217,34 +218,35 @@
 					if (!client || !sessionActive || !sessionId) {
 						return false;
 					}
+					const payload = encodeMsgpack({ sessionId, events });
 					const response = await fetch(`/api/agents/${client.id}/remote-desktop/input`, {
 						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ sessionId, events }),
+						headers: { 'Content-Type': 'application/msgpack' },
+						body: payload as BodyInit,
 						keepalive: true
 					});
 					const raw = await response.text();
-					const payload = parseInputDispatchResponse(raw);
+					const payloadParsed = parseInputDispatchResponse(raw);
 					if (!response.ok) {
-						const reason = extractInputDispatchReason(payload);
-						const fallback = reason ?? formatInputDispatchFallback(response, raw, payload);
+						const reason = extractInputDispatchReason(payloadParsed);
+						const fallback = reason ?? formatInputDispatchFallback(response, raw, payloadParsed);
 						setInputDispatchError(reason, fallback);
 						console.warn('Remote desktop input dispatch failed', reason ?? raw);
 						return false;
 					}
-					if (!payload) {
+					if (!payloadParsed) {
 						setInputDispatchError(null, formatInputDispatchFallback(response, raw, null));
 						console.warn('Remote desktop input dispatch returned an empty payload');
 						return false;
 					}
-					if (payload.accepted === false) {
-						const reason = extractInputDispatchReason(payload);
+					if (payloadParsed.accepted === false) {
+						const reason = extractInputDispatchReason(payloadParsed);
 						setInputDispatchError(reason, 'Remote desktop input request was rejected.');
 						console.warn('Remote desktop input dispatch rejected events', reason ?? 'rejected');
 						return false;
 					}
-					if (payload.delivered === false) {
-						const reason = extractInputDispatchReason(payload);
+					if (payloadParsed.delivered === false) {
+						const reason = extractInputDispatchReason(payloadParsed);
 						setInputDispatchError(reason, 'Remote desktop input was not delivered to the agent.');
 						console.warn('Remote desktop input events were not delivered', reason ?? 'unknown');
 						return false;
@@ -762,6 +764,36 @@
 				}
 			};
 
+			const channel = pc.createDataChannel(WEBRTC_DATA_CHANNEL_LABEL);
+			channel.binaryType = 'arraybuffer';
+			channel.onmessage = (event) => {
+				if (webrtcVideoActive) return;
+				try {
+					const payload = decodeMsgpack(new Uint8Array(event.data));
+					if (
+						payload &&
+						typeof payload === 'object' &&
+						'sessionId' in payload &&
+						typeof (payload as { sessionId: unknown }).sessionId === 'string'
+					) {
+						// Check if it's a media message
+						if ('media' in payload && Array.isArray((payload as { media: unknown }).media)) {
+							const mediaMsg = payload as RemoteDesktopStreamMediaMessage;
+							void handleMediaSamples(mediaMsg.sessionId, mediaMsg.media);
+							return;
+						}
+						// Assume frame packet
+						const frame = payload as RemoteDesktopFramePacket;
+						enqueueFrame(frame);
+						if (frame.media && frame.media.length > 0) {
+							void handleMediaSamples(frame.sessionId, frame.media);
+						}
+					}
+				} catch (err) {
+					console.warn('Failed to decode WebRTC binary frame', err);
+				}
+			};
+
 			const offer = await pc.createOffer();
 			await pc.setLocalDescription(offer);
 			await waitForPeerIceGathering(pc);
@@ -1011,8 +1043,11 @@
 		return true;
 	}
 
-	function decodePcmSample(data: string): Int16Array | null {
+	function decodePcmSample(data: string | Uint8Array): Int16Array | null {
 		try {
+			if (data instanceof Uint8Array) {
+				return new Int16Array(data.buffer, data.byteOffset, data.byteLength);
+			}
 			const binary = atob(data);
 			if (binary.length % 2 !== 0) {
 				return null;
@@ -1310,22 +1345,27 @@
 	}
 
 	async function decodeBitmap(
-		data: string,
+		data: string | Uint8Array,
 		mimeType: 'image/png' | 'image/jpeg'
 	): Promise<ImageBitmap> {
-		const binary = atob(data);
-		const length = binary.length;
-		const bytes = new Uint8Array(length);
-		for (let i = 0; i < length; i += 1) {
-			bytes[i] = binary.charCodeAt(i);
+		let blob: Blob;
+		if (data instanceof Uint8Array) {
+			blob = new Blob([data as unknown as BlobPart], { type: mimeType });
+		} else {
+			const binary = atob(data);
+			const length = binary.length;
+			const bytes = new Uint8Array(length);
+			for (let i = 0; i < length; i += 1) {
+				bytes[i] = binary.charCodeAt(i);
+			}
+			blob = new Blob([bytes], { type: mimeType });
 		}
-		const blob = new Blob([bytes], { type: mimeType });
 		return await createImageBitmap(blob);
 	}
 
 	function drawWithImageElement(
 		context: CanvasRenderingContext2D,
-		data: string,
+		data: string | Uint8Array,
 		x: number,
 		y: number,
 		width: number,
@@ -1335,17 +1375,36 @@
 		return new Promise((resolve, reject) => {
 			const image = new Image();
 			image.decoding = 'async';
+			let objectUrl: string | null = null;
+
 			image.onload = () => {
 				try {
 					context.drawImage(image, x, y, width, height);
 					resolve();
 				} catch (err) {
 					reject(err);
+				} finally {
+					if (objectUrl) {
+						URL.revokeObjectURL(objectUrl);
+					}
 				}
 			};
-			image.onerror = () => reject(new Error('Failed to decode frame image segment'));
-			const prefix = encoding === 'jpeg' ? IMAGE_BASE64_PREFIX.jpeg : IMAGE_BASE64_PREFIX.png;
-			image.src = `${prefix}${data}`;
+			image.onerror = () => {
+				if (objectUrl) {
+					URL.revokeObjectURL(objectUrl);
+				}
+				reject(new Error('Failed to decode frame image segment'));
+			};
+
+			if (data instanceof Uint8Array) {
+				const mime = encoding === 'jpeg' ? 'image/jpeg' : 'image/png';
+				const blob = new Blob([data as unknown as BlobPart], { type: mime });
+				objectUrl = URL.createObjectURL(blob);
+				image.src = objectUrl;
+			} else {
+				const prefix = encoding === 'jpeg' ? IMAGE_BASE64_PREFIX.jpeg : IMAGE_BASE64_PREFIX.png;
+				image.src = `${prefix}${data}`;
+			}
 		});
 	}
 

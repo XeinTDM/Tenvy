@@ -64,7 +64,7 @@ export async function fetchGeoData(fetchFn: typeof fetch, ip: string): Promise<G
 		response = await fetchFn(endpoint.toString(), {
 			headers: { Accept: 'application/json' }
 		});
-	} catch (err) {
+	} catch {
 		throw error(502, 'Failed to contact geo provider');
 	}
 
@@ -82,7 +82,7 @@ export async function fetchGeoData(fetchFn: typeof fetch, ip: string): Promise<G
 
 	try {
 		payload = (await response.json()) as typeof payload;
-	} catch (err) {
+	} catch {
 		throw error(502, 'Geo provider returned malformed data');
 	}
 

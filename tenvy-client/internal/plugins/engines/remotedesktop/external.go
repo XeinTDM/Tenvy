@@ -3,7 +3,6 @@ package remotedesktopengine
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/rootbay/tenvy-client/internal/plugins"
 	manifest "github.com/rootbay/tenvy-client/shared/pluginmanifest"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 const (
@@ -28,34 +28,34 @@ const (
 )
 
 type ipcRequest struct {
-	ID     uint64          `json:"id"`
-	Method string          `json:"method"`
-	Params json.RawMessage `json:"params,omitempty"`
+	ID     uint64             `json:"id" msgpack:"id"`
+	Method string             `json:"method" msgpack:"method"`
+	Params msgpack.RawMessage `json:"params,omitempty" msgpack:"params,omitempty"`
 }
 
 type ipcResponse struct {
-	ID     uint64          `json:"id"`
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  *ipcError       `json:"error,omitempty"`
+	ID     uint64             `json:"id" msgpack:"id"`
+	Result msgpack.RawMessage `json:"result,omitempty" msgpack:"result,omitempty"`
+	Error  *ipcError          `json:"error,omitempty" msgpack:"error,omitempty"`
 }
 
 type ipcError struct {
-	Message string `json:"message"`
+	Message string `json:"message" msgpack:"message"`
 }
 
 type stopSessionRequest struct {
-	SessionID string `json:"sessionId"`
+	SessionID string `json:"sessionId" msgpack:"sessionId"`
 }
 
 type configEnvelope struct {
-	AgentID          string                         `json:"agentId"`
-	BaseURL          string                         `json:"baseUrl"`
-	AuthKey          string                         `json:"authKey"`
-	PluginVersion    string                         `json:"pluginVersion,omitempty"`
-	UserAgent        string                         `json:"userAgent,omitempty"`
-	RequestTimeout   time.Duration                  `json:"requestTimeout,omitempty"`
-	WebRTCICEServers []RemoteDesktopWebRTCICEServer `json:"webrtcIceServers,omitempty"`
-	QUICInput        QUICInputConfig                `json:"quicInput"`
+	AgentID          string                         `json:"agentId" msgpack:"agentId"`
+	BaseURL          string                         `json:"baseUrl" msgpack:"baseUrl"`
+	AuthKey          string                         `json:"authKey" msgpack:"authKey"`
+	PluginVersion    string                         `json:"pluginVersion,omitempty" msgpack:"pluginVersion,omitempty"`
+	UserAgent        string                         `json:"userAgent,omitempty" msgpack:"userAgent,omitempty"`
+	RequestTimeout   time.Duration                  `json:"requestTimeout,omitempty" msgpack:"requestTimeout,omitempty"`
+	WebRTCICEServers []RemoteDesktopWebRTCICEServer `json:"webrtcIceServers,omitempty" msgpack:"webrtcIceServers,omitempty"`
+	QUICInput        QUICInputConfig                `json:"quicInput" msgpack:"quicInput"`
 }
 
 func newConfigEnvelope(cfg Config) configEnvelope {
@@ -93,10 +93,6 @@ type remoteDesktopIPCClient struct {
 	process *engineProcess
 }
 
-// NewManagedRemoteDesktopEngine returns an Engine implementation backed by the
-// external remote desktop plugin. The returned engine communicates with the
-// plugin over the IPC channel exposed by the plugin binary. If the entry path is
-// empty, the returned engine will emit initialization errors when invoked.
 func NewManagedRemoteDesktopEngine(entryPath, version string, manager *plugins.Manager, logger Logger) Engine {
 	process := newEngineProcess(entryPath, version, manager, logger)
 	return &remoteDesktopIPCClient{process: process}
@@ -169,8 +165,8 @@ type engineProcess struct {
 	stdin   io.WriteCloser
 	stdout  io.ReadCloser
 	writer  *bufio.Writer
-	encoder *json.Encoder
-	decoder *json.Decoder
+	encoder *msgpack.Encoder
+	decoder *msgpack.Decoder
 	nextID  uint64
 }
 
@@ -213,7 +209,7 @@ func (p *engineProcess) call(ctx context.Context, method string, payload interfa
 	p.nextID++
 	req := ipcRequest{ID: p.nextID, Method: method}
 	if payload != nil {
-		data, err := json.Marshal(payload)
+		data, err := msgpack.Marshal(payload)
 		if err != nil {
 			return fmt.Errorf("encode %s payload: %w", method, err)
 		}
@@ -248,7 +244,7 @@ func (p *engineProcess) call(ctx context.Context, method string, payload interfa
 		return errors.New(resp.Error.Message)
 	}
 	if result != nil && len(resp.Result) > 0 {
-		if err := json.Unmarshal(resp.Result, result); err != nil {
+		if err := msgpack.Unmarshal(resp.Result, result); err != nil {
 			return fmt.Errorf("decode %s result: %w", method, err)
 		}
 	}
@@ -342,8 +338,8 @@ func (p *engineProcess) ensureStartedLocked() error {
 	p.stdin = stdin
 	p.stdout = stdout
 	p.writer = bufio.NewWriter(stdin)
-	p.encoder = json.NewEncoder(p.writer)
-	p.decoder = json.NewDecoder(stdout)
+	p.encoder = msgpack.NewEncoder(p.writer)
+	p.decoder = msgpack.NewDecoder(stdout)
 	p.nextID = 0
 
 	go p.captureStream("stderr", stderr)
