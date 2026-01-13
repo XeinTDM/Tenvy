@@ -108,7 +108,6 @@ type sessionState struct {
 	startedAt     time.Time
 	lastBeat      time.Time
 	lastSequence  int64
-	inputQueue    []protocol.AppVncInputBurst
 	capture       surfaceCapturer
 	captureCancel context.CancelFunc
 	captureDone   chan struct{}
@@ -869,15 +868,13 @@ func (c *Controller) HandleInputBurst(ctx context.Context, burst protocol.AppVnc
 	}
 
 	events := append([]protocol.AppVncInputEvent(nil), burst.Events...)
-	queued := protocol.AppVncInputBurst{
-		SessionID: c.session.id,
-		Events:    events,
-		Sequence:  burst.Sequence,
+	c.session.lastSequence = burst.Sequence
+
+	if err := processAppVncInput(ctx, c.session, events); err != nil {
+		c.logf("app-vnc: input injection failed: %v", err)
 	}
 
-	c.session.lastSequence = burst.Sequence
-	c.session.inputQueue = append(c.session.inputQueue, queued)
-	c.logf("app-vnc: queued %d input events", len(events))
+	c.logf("app-vnc: injected %d input events", len(events))
 	return nil
 }
 

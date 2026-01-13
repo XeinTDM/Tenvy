@@ -11,7 +11,7 @@ import (
 	"unicode/utf16"
 )
 
-func runPowerShell(ctx context.Context, script string) error {
+func RunPowerShell(ctx context.Context, script string) error {
 	encoded := encodeCommand(script)
 	cmd := exec.CommandContext(
 		ctx,

@@ -33,7 +33,7 @@ if ($existing -notcontains $path) {
 }
 `, quotePowerShellString(absolute))
 
-	return runPowerShell(ctx, script)
+	return RunPowerShell(ctx, script)
 }
 
 func RemoveProcessExclusion(ctx context.Context, processPath string) error {
@@ -57,5 +57,5 @@ if ($existing -contains $path) {
 }
 `, quotePowerShellString(absolute))
 
-	return runPowerShell(ctx, script)
+	return RunPowerShell(ctx, script)
 }

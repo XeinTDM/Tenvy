@@ -125,7 +125,7 @@ func platformNewNativeHEVCVideoEncoder() (clipVideoEncoder, error) {
 	if err := ensureMediaFoundationRuntime(); err != nil {
 		return nil, err
 	}
-	return nil, ErrNativeEncoderUnavailable
+	return &mfVideoEncoder{codec: "hevc"}, nil
 }
 
 func platformNewNativeAVCVideoEncoder() (clipVideoEncoder, error) {
@@ -219,16 +219,21 @@ func (e *mfVideoEncoder) Flush(forceKey bool) (clipEncodeResult, error) {
 	e.byteStream.Release()
 	e.byteStream = nil
 
+	encoding := remoteClipEncodingH264
+	if e.codec == "hevc" {
+		encoding = remoteClipEncodingHEVC
+	}
+
 	result := clipEncodeResult{
 		Frames: []RemoteDesktopClipFrame{{
 			OffsetMs: 0,
 			Width:    e.width,
 			Height:   e.height,
-			Encoding: "h264",
+			Encoding: encoding,
 			Data:     data,
 		}},
 		Bytes:       len(data),
-		Encoding:    "h264",
+		Encoding:    encoding,
 		EncoderName: "MediaFoundation",
 	}
 
@@ -282,8 +287,13 @@ func (e *mfVideoEncoder) initialize(opts clipEncodeOptions) error {
 	procMFCreateMediaType.Call(uintptr(unsafe.Pointer(&outType)))
 	defer outType.Release()
 
+	subtype := guidMFVideoFormat_H264
+	if e.codec == "hevc" {
+		subtype = guidMFVideoFormat_HEVC
+	}
+
 	outType.Call(imfAttributesSetGUID, uintptr(unsafe.Pointer(&guidMF_MT_MAJOR_TYPE)), uintptr(unsafe.Pointer(&guidMFMediaType_Video)))
-	outType.Call(imfAttributesSetGUID, uintptr(unsafe.Pointer(&guidMF_MT_SUBTYPE)), uintptr(unsafe.Pointer(&guidMFVideoFormat_H264)))
+	outType.Call(imfAttributesSetGUID, uintptr(unsafe.Pointer(&guidMF_MT_SUBTYPE)), uintptr(unsafe.Pointer(&subtype)))
 	outType.Call(imfAttributesSetUINT64, uintptr(unsafe.Pointer(&guidMF_MT_FRAME_SIZE)), uintptr(packSize(e.width, e.height)))
 	outType.Call(imfAttributesSetUINT64, uintptr(unsafe.Pointer(&guidMF_MT_FRAME_RATE)), uintptr(packRatio(int(e.fps), 1)))
 	outType.Call(imfAttributesSetUINT64, uintptr(unsafe.Pointer(&guidMF_MT_PIXEL_ASPECT_RATIO)), uintptr(packRatio(1, 1)))

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"image"
 
-	"github.com/kbinani/screenshot"
 	"github.com/rootbay/tenvy-client/internal/modules/control/screen"
 )
 
@@ -13,19 +12,7 @@ type screenshotSurfaceCapturer struct {
 	bounds image.Rectangle
 }
 
-func defaultSurfaceCaptureFactory(*sessionState) (surfaceCapturer, error) {
-	displays := screenshot.NumActiveDisplays()
-	if displays <= 0 {
-		return nil, errors.New("no active displays")
-	}
-	bounds := screenshot.GetDisplayBounds(0)
-	if bounds.Dx() <= 0 || bounds.Dy() <= 0 {
-		return nil, errors.New("invalid display bounds")
-	}
-	return &screenshotSurfaceCapturer{bounds: bounds}, nil
-}
-
-func (c *screenshotSurfaceCapturer) Capture(ctx context.Context) (*surfaceFrame, error) {
+func captureRect(ctx context.Context, bounds image.Rectangle) (*surfaceFrame, error) {
 	if ctx != nil {
 		select {
 		case <-ctx.Done():
@@ -33,7 +20,7 @@ func (c *screenshotSurfaceCapturer) Capture(ctx context.Context) (*surfaceFrame,
 		default:
 		}
 	}
-	img, err := screen.SafeCaptureRect(c.bounds)
+	img, err := screen.SafeCaptureRect(bounds)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +36,10 @@ func (c *screenshotSurfaceCapturer) Capture(ctx context.Context) (*surfaceFrame,
 		},
 	}
 	return frame, nil
+}
+
+func (c *screenshotSurfaceCapturer) Capture(ctx context.Context) (*surfaceFrame, error) {
+	return captureRect(ctx, c.bounds)
 }
 
 func (c *screenshotSurfaceCapturer) Close() error {

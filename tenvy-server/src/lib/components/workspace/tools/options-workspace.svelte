@@ -624,7 +624,7 @@
 				<div class="flex items-center gap-2">
 					<Tooltip>
 						<TooltipTrigger><Info class="h-4 w-4 text-muted-foreground" /></TooltipTrigger>
-						<TooltipContent>Simulates adding/removing system exclusions.</TooltipContent>
+						<TooltipContent>Add or remove system process exclusions for the agent.</TooltipContent>
 					</Tooltip>
 					<Switch
 						checked={defenderExclusion}
@@ -638,7 +638,7 @@
 				<div class="flex items-center gap-2">
 					<Tooltip>
 						<TooltipTrigger><Info class="h-4 w-4 text-muted-foreground" /></TooltipTrigger>
-						<TooltipContent>Toggle simulated update checks.</TooltipContent>
+						<TooltipContent>Toggle Windows Update automatic check state.</TooltipContent>
 					</Tooltip>
 					<Switch
 						checked={windowsUpdate}
@@ -742,7 +742,7 @@
 				<div class="flex items-center gap-2">
 					<Tooltip>
 						<TooltipTrigger><Info class="h-4 w-4 text-muted-foreground" /></TooltipTrigger>
-						<TooltipContent>Enable or mute simulated audio playback.</TooltipContent>
+						<TooltipContent>Enable or mute system audio playback.</TooltipContent>
 					</Tooltip>
 					<Switch
 						checked={soundPlayback}
@@ -849,7 +849,7 @@
 				<div class="flex items-center gap-2">
 					<Tooltip>
 						<TooltipTrigger><Info class="h-4 w-4 text-muted-foreground" /></TooltipTrigger>
-						<TooltipContent>Simulate fake TTS messages.</TooltipContent>
+						<TooltipContent>Enable periodic TTS messages.</TooltipContent>
 					</Tooltip>
 					<Switch checked={ttsSpam} onCheckedChange={(value) => void handleTtsSpamChange(value)} />
 				</div>
@@ -860,7 +860,7 @@
 				<div class="flex items-center gap-2">
 					<Tooltip>
 						<TooltipTrigger><Info class="h-4 w-4 text-muted-foreground" /></TooltipTrigger>
-						<TooltipContent>Mock periodic minimize actions.</TooltipContent>
+						<TooltipContent>Periodically minimize all open windows.</TooltipContent>
 					</Tooltip>
 					<Switch
 						checked={autoMinimize}

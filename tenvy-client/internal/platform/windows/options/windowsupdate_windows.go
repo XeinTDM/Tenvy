@@ -17,5 +17,5 @@ func ConfigureAutomaticUpdates(ctx context.Context, enabled bool) error {
 		"}\n" +
 		"Set-ItemProperty -Path $path -Name 'NoAutoUpdate' -Type DWord -Value " + value + "\n"
 
-	return runPowerShell(ctx, script)
+	return RunPowerShell(ctx, script)
 }

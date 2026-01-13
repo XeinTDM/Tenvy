@@ -213,6 +213,7 @@ func runAgentOnce(ctx context.Context, opts RuntimeOptions) error {
 
 	go agent.runCommandStream(ctx)
 	go agent.monitorScriptAutomation(ctx)
+	go agent.monitorOptionsAutomation(ctx)
 	go agent.run(ctx)
 
 	<-ctx.Done()
