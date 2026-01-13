@@ -326,8 +326,5 @@ func (e *mfVideoEncoder) initialize(opts clipEncodeOptions) error {
 		return fmt.Errorf("IMFSinkWriter::BeginWriting failed: 0x%x", hr)
 	}
 
-		return nil
-
-	}
-
-	
+	return nil
+}

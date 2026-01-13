@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"image"
+	"unsafe"
 
 	"github.com/kbinani/screenshot"
 	"github.com/lxn/win"
@@ -40,14 +41,59 @@ func (c *windowSurfaceCapturer) Capture(ctx context.Context) (*surfaceFrame, err
 		return nil, errors.New("failed to get window rect")
 	}
 
-	bounds := image.Rect(int(rect.Left), int(rect.Top), int(rect.Right), int(rect.Bottom))
-	if bounds.Dx() <= 0 || bounds.Dy() <= 0 {
-		return nil, errors.New("invalid window bounds")
+	width := rect.Right - rect.Left
+	height := rect.Bottom - rect.Top
+	if width <= 0 || height <= 0 {
+		return nil, errors.New("invalid window dimensions")
 	}
 
-	// For now, we still use screen capture but cropped to window.
-	// This captures whatever is on top of the window too.
-	return captureRect(ctx, bounds)
+	hdcWindow := win.GetDC(hwnd)
+	if hdcWindow == 0 {
+		return nil, errors.New("failed to get window DC")
+	}
+	defer win.ReleaseDC(hwnd, hdcWindow)
+
+	hdcMem := win.CreateCompatibleDC(hdcWindow)
+	if hdcMem == 0 {
+		return nil, errors.New("failed to create compatible DC")
+	}
+	defer win.DeleteDC(hdcMem)
+
+	hbm := win.CreateCompatibleBitmap(hdcWindow, width, height)
+	if hbm == 0 {
+		return nil, errors.New("failed to create compatible bitmap")
+	}
+	defer win.DeleteObject(win.HGDIOBJ(hbm))
+
+	oldObj := win.SelectObject(hdcMem, win.HGDIOBJ(hbm))
+	defer win.SelectObject(hdcMem, oldObj)
+
+	if !win.BitBlt(hdcMem, 0, 0, width, height, hdcWindow, 0, 0, win.SRCCOPY) {
+		return nil, errors.New("BitBlt failed")
+	}
+
+	var bi win.BITMAPINFO
+	bi.BmiHeader.BiSize = uint32(unsafe.Sizeof(bi.BmiHeader))
+	bi.BmiHeader.BiWidth = width
+	bi.BmiHeader.BiHeight = -height
+	bi.BmiHeader.BiPlanes = 1
+	bi.BmiHeader.BiBitCount = 32
+	bi.BmiHeader.BiCompression = win.BI_RGB
+
+	rgba := image.NewRGBA(image.Rect(0, 0, int(width), int(height)))
+	if win.GetDIBits(hdcWindow, hbm, 0, uint32(height), (*byte)(unsafe.Pointer(&rgba.Pix[0])), &bi, win.DIB_RGB_COLORS) == 0 {
+		return nil, errors.New("GetDIBits failed")
+	}
+
+	frame := &surfaceFrame{
+		image: &surfaceImage{
+			width:  int(width),
+			height: int(height),
+			stride: rgba.Stride,
+			data:   rgba.Pix,
+		},
+	}
+	return frame, nil
 }
 
 func (c *windowSurfaceCapturer) Close() error {
