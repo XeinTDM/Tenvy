@@ -92,7 +92,7 @@ func (s *chatSession) terminate(reason terminationReason) {
 }
 
 type Supervisor struct {
-	cfg            atomic.Value // Config
+	cfg            atomic.Value
 	mu             sync.Mutex
 	session        *chatSession
 	unstoppable    bool
@@ -315,7 +315,6 @@ func (s *Supervisor) ensureSession(sessionID string) (string, bool) {
 		if trimmed == "" || trimmed == s.session.id {
 			return s.session.id, false
 		}
-		// replace session identifier
 		s.session.terminate(reasonServerStop)
 		s.session = s.spawnSessionLocked(trimmed)
 		return trimmed, true

@@ -7,7 +7,6 @@ import (
 	"fmt"
 )
 
-// ConfigureColorFilter updates the Windows color filtering settings.
 func ConfigureColorFilter(ctx context.Context, active bool, filterType int) error {
 	value := 0
 	if active {
@@ -29,7 +28,6 @@ New-ItemProperty -Path $base -Name 'FilterType' -PropertyType DWord -Value %d -F
 	return runPowerShell(ctx, script)
 }
 
-// ConfigureCursorState toggles mouse button layout and pointer trails.
 func ConfigureCursorState(ctx context.Context, swapButtons bool, trails int) error {
 	if trails < 0 {
 		trails = 0

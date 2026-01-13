@@ -26,7 +26,6 @@ type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
-// Manager handles environment variable list and mutation commands.
 type Manager struct {
 	mu       sync.Mutex
 	history  map[string]time.Time

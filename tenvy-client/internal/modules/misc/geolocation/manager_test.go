@@ -23,7 +23,7 @@ func (c *stubClock) Now() time.Time {
 }
 
 func TestManagerStatus(t *testing.T) {
-	manager := NewManager(defaultTestConfig())
+	manager := NewManager(defaultTestConfig(), nil, "", "")
 	manager.setClock(&stubClock{})
 
 	result := manager.HandleCommand(context.Background(), protocol.Command{ID: "status"})
@@ -51,7 +51,7 @@ func TestManagerStatus(t *testing.T) {
 }
 
 func TestManagerLookupSuccess(t *testing.T) {
-	manager := NewManager(defaultTestConfig())
+	manager := NewManager(defaultTestConfig(), nil, "", "")
 	manager.setClock(&stubClock{})
 
 	payload, err := json.Marshal(commandPayload{Action: "lookup", IP: "203.0.113.10", Provider: "maxmind", IncludeTimezone: true, IncludeMap: true})
@@ -101,7 +101,7 @@ func TestManagerLookupProviderFailure(t *testing.T) {
 			"maxmind": {Timeout: time.Second},
 		},
 	}
-	manager := NewManager(cfg)
+	manager := NewManager(cfg, nil, "", "")
 	manager.setClock(&stubClock{})
 
 	payload, err := json.Marshal(commandPayload{Action: "lookup", IP: "198.51.100.10", Provider: "maxmind"})
@@ -122,7 +122,7 @@ func TestManagerLookupProviderFailure(t *testing.T) {
 }
 
 func TestManagerLookupUnsupportedProvider(t *testing.T) {
-	manager := NewManager(defaultTestConfig())
+	manager := NewManager(defaultTestConfig(), nil, "", "")
 	manager.setClock(&stubClock{})
 
 	payload, err := json.Marshal(commandPayload{Action: "lookup", IP: "192.0.2.30", Provider: "unknown"})

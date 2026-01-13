@@ -51,7 +51,7 @@ type Config struct {
 }
 
 type Manager struct {
-	cfg atomic.Value // Config
+	cfg atomic.Value
 }
 
 const (

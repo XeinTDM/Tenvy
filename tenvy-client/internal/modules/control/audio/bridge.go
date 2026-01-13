@@ -20,8 +20,8 @@ import (
 	"unsafe"
 
 	"github.com/gen2brain/malgo"
-	"github.com/vmihailenco/msgpack/v5"
 	"github.com/rootbay/tenvy-client/internal/protocol"
+	"github.com/vmihailenco/msgpack/v5"
 	"nhooyr.io/websocket"
 )
 
@@ -48,7 +48,7 @@ type Config struct {
 }
 
 type AudioBridge struct {
-	cfg       atomic.Value // stores Config
+	cfg       atomic.Value
 	mu        sync.Mutex
 	sessions  map[string]*AudioStreamSession
 	playbacks map[string]*playbackSession
@@ -72,7 +72,7 @@ type playbackSession struct {
 
 	offset  uint32
 	paused  atomic.Bool
-	stopped  atomic.Bool
+	stopped atomic.Bool
 	done    chan struct{}
 }
 
@@ -1126,14 +1126,14 @@ func enumerateAudioDevices(ctx *malgo.AllocatedContext) (*AudioDeviceInventory, 
 				label = fmt.Sprintf("Playback %d", idx+1)
 			}
 			descriptor := AudioDeviceDescriptor{
-					ID:                    info.ID.String(),
-					DeviceID:              info.ID.String(),
-					Label:                 label,
-					Kind:                  AudioDirectionOutput,
-					GroupID:               "",
-					SystemDefault:         info.IsDefault != 0,
-					CommunicationsDefault: false,
-					LastSeen:              now,
+				ID:                    info.ID.String(),
+				DeviceID:              info.ID.String(),
+				Label:                 label,
+				Kind:                  AudioDirectionOutput,
+				GroupID:               "",
+				SystemDefault:         info.IsDefault != 0,
+				CommunicationsDefault: false,
+				LastSeen:              now,
 			}
 			inventory.Outputs = append(inventory.Outputs, descriptor)
 		}
@@ -1149,14 +1149,14 @@ func enumerateAudioDevices(ctx *malgo.AllocatedContext) (*AudioDeviceInventory, 
 				label = fmt.Sprintf("Microphone %d", idx+1)
 			}
 			descriptor := AudioDeviceDescriptor{
-					ID:                    info.ID.String(),
-					DeviceID:              info.ID.String(),
-					Label:                 label,
-					Kind:                  AudioDirectionInput,
-					GroupID:               "",
-					SystemDefault:         info.IsDefault != 0,
-					CommunicationsDefault: false,
-					LastSeen:              now,
+				ID:                    info.ID.String(),
+				DeviceID:              info.ID.String(),
+				Label:                 label,
+				Kind:                  AudioDirectionInput,
+				GroupID:               "",
+				SystemDefault:         info.IsDefault != 0,
+				CommunicationsDefault: false,
+				LastSeen:              now,
 			}
 			inventory.Inputs = append(inventory.Inputs, descriptor)
 		}

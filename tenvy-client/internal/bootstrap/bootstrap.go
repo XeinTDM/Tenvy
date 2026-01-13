@@ -19,7 +19,6 @@ import (
 	"time"
 )
 
-// FileSystem abstracts stat calls so loader discovery can be tested without touching the real disk.
 type FileSystem interface {
 	Stat(name string) (fs.FileInfo, error)
 }
@@ -30,7 +29,6 @@ func (realFileSystem) Stat(name string) (fs.FileInfo, error) {
 	return os.Stat(name)
 }
 
-// LoaderMetadata describes versioning and integrity information for the loader binary.
 type LoaderMetadata struct {
 	Version    string `json:"version"`
 	Checksum   string `json:"checksum"`
@@ -38,70 +36,55 @@ type LoaderMetadata struct {
 	Executable string `json:"executable"`
 }
 
-// LoaderPackage represents the payload returned by a loader downloader.
-// Exactly one of Archive or Binary must be populated.
 type LoaderPackage struct {
 	Archive []byte
 	Binary  []byte
 	Mode    fs.FileMode
 }
 
-// LoaderDownloader fetches loader artifacts when the local copy is missing or outdated.
 type LoaderDownloader interface {
 	Download(ctx context.Context, metadata LoaderMetadata) (LoaderPackage, error)
 }
 
-// LoaderDownloaderFunc adapts a function to the LoaderDownloader interface.
 type LoaderDownloaderFunc func(ctx context.Context, metadata LoaderMetadata) (LoaderPackage, error)
 
-// Download implements LoaderDownloader.
 func (f LoaderDownloaderFunc) Download(ctx context.Context, metadata LoaderMetadata) (LoaderPackage, error) {
 	return f(ctx, metadata)
 }
 
-// LoaderSignatureVerifier validates signatures for a loader binary.
 type LoaderSignatureVerifier interface {
 	Verify(ctx context.Context, loaderPath string, metadata LoaderMetadata) error
 }
 
-// LoaderSignatureVerifierFunc adapts a function to LoaderSignatureVerifier.
 type LoaderSignatureVerifierFunc func(ctx context.Context, loaderPath string, metadata LoaderMetadata) error
 
-// Verify implements LoaderSignatureVerifier.
 func (f LoaderSignatureVerifierFunc) Verify(ctx context.Context, loaderPath string, metadata LoaderMetadata) error {
 	return f(ctx, loaderPath, metadata)
 }
 
-// Options control how the loader command is constructed.
 type Options struct {
-	// ExecutablePath is the absolute path to the stub executable. It is required.
+	// ExecutablePath is the absolute path to the stub executable. Required.
 	ExecutablePath string
-	// OverridePath explicitly points to the loader executable, bypassing discovery when provided.
+	// OverridePath points to the loader executable, bypassing discovery.
 	OverridePath string
-	// LoaderArgs are forwarded to the loader invocation.
-	LoaderArgs []string
-	// BaseEnv is the environment inherited by the loader. Defaults to os.Environ when nil.
+	LoaderArgs   []string
+	// BaseEnv is the environment inherited by the loader. Defaults to os.Environ.
 	BaseEnv []string
-	// AdditionalEnv defines extra environment variables to inject for the loader.
+	// AdditionalEnv defines extra environment variables to inject.
 	AdditionalEnv map[string]string
-	// SearchDirs are additional directories (absolute or relative to ExecutablePath) inspected for the loader.
-	SearchDirs []string
-	// CandidateNames are filenames considered when looking for the loader.
+	// SearchDirs are extra directories inspected for the loader.
+	SearchDirs     []string
 	CandidateNames []string
-	// FileSystem powers file discovery. Defaults to the real OS filesystem when nil.
-	FileSystem FileSystem
-	// DesiredLoader describes the loader release that must be present.
+	// FileSystem powers file discovery. Defaults to the real OS filesystem.
+	FileSystem    FileSystem
 	DesiredLoader *LoaderMetadata
-	// LoaderDownloader fetches loader updates when the current loader is missing or outdated.
-	LoaderDownloader LoaderDownloader
-	// LoaderSignatureVerifier validates loader signatures when provided.
+	// LoaderDownloader fetches loader updates when missing or outdated.
+	LoaderDownloader        LoaderDownloader
 	LoaderSignatureVerifier LoaderSignatureVerifier
-	// LoaderInstallDir overrides the directory where loader artifacts are stored. It may be relative to the
-	// stub executable directory.
+	// LoaderInstallDir overrides where loader artifacts are stored.
 	LoaderInstallDir string
 }
 
-// Command builds an exec.Cmd ready to launch the loader process based on the provided options.
 func Command(ctx context.Context, opts Options) (*exec.Cmd, error) {
 	if strings.TrimSpace(opts.ExecutablePath) == "" {
 		return nil, errors.New("executable path is required")

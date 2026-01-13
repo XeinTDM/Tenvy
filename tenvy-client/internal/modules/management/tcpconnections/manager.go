@@ -42,7 +42,7 @@ type Config struct {
 }
 
 type Manager struct {
-	cfg atomic.Value // Config
+	cfg atomic.Value
 }
 
 type TcpConnectionFamily string
@@ -382,8 +382,6 @@ func (m *Manager) sendSnapshot(ctx context.Context, requestID string, snapshot T
 	}
 	return nil
 }
-
-// Helper functions go below...
 
 type hostResolver struct {
 	enabled bool

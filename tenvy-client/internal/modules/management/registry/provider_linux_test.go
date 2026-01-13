@@ -142,7 +142,6 @@ func TestLinuxProviderDeleteValueHandlesMissingSchema(t *testing.T) {
 
 func TestLinuxProviderReturnsMutationSnapshot(t *testing.T) {
 	runner := newFakeRunner()
-	// After reset, provider will enumerate the schema.
 	runner.set("gsettings reset org.example.alpha first-key", "", nil)
 	runner.set("gsettings list-recursively org.example.alpha", "", nil)
 	provider := newTestNativeProvider(runner)

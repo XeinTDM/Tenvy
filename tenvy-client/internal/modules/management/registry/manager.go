@@ -301,7 +301,6 @@ func (m *Manager) setSuccessResult(result *CommandResult, operation string, payl
 	return nil
 }
 
-// Provider defines the native registry operations implemented per platform.
 type Provider interface {
 	List(ctx context.Context, req ListRequest) (RegistryListResult, error)
 	CreateKey(ctx context.Context, req CreateKeyRequest) (RegistryMutationResult, error)
@@ -320,7 +319,6 @@ type ProviderCapabilities struct {
 	Mutate    bool
 }
 
-// Request/response structures align with the shared contracts used by the server UI.
 type RegistryCommandPayload struct {
 	Request RegistryCommandRequest `json:"request"`
 }
@@ -432,4 +430,11 @@ type DeleteValueRequest struct {
 	Hive    string
 	KeyPath string
 	Name    string
+}
+
+func stringPointer(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }

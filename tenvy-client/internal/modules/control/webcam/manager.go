@@ -55,7 +55,7 @@ type frameSource interface {
 type frameSourceFactory func(deviceID string, settings *protocol.WebcamStreamSettings) (frameSource, error)
 
 type Manager struct {
-	cfg          atomic.Value // stores Config
+	cfg          atomic.Value
 	mu           sync.Mutex
 	sessions     map[string]*streamSession
 	frameFactory frameSourceFactory

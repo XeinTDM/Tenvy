@@ -36,7 +36,6 @@ const (
 	hostResolveTTL  = 5 * time.Minute
 )
 
-// Manager maintains trigger monitor configuration and live metrics/events.
 type Manager struct {
 	mu    sync.Mutex
 	clock clock
@@ -376,7 +375,6 @@ func (m *Manager) observeAppEntriesLocked(ctx context.Context, now time.Time) []
 		return metrics
 	}
 
-	// Build index once to avoid repeated normalization.
 	metrics := make([]metric, 0, len(entries))
 	for _, entry := range entries {
 		state := m.ensureStateLocked(entry)
@@ -399,7 +397,6 @@ func (m *Manager) observeAppEntriesLocked(ctx context.Context, now time.Time) []
 			newSet[sample.PID] = instance
 		}
 
-		// Detect transitions.
 		for pid, instance := range newSet {
 			if _, ok := state.ProcessPIDs[pid]; ok {
 				continue

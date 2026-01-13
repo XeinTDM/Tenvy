@@ -21,8 +21,6 @@ import (
 
 const manifestFileName = "manifest.json"
 
-// Manager inspects local plugin artifacts and produces telemetry snapshots that
-// can be forwarded to the controller.
 type Manager struct {
 	root       string
 	logger     *log.Logger
@@ -33,7 +31,6 @@ type Manager struct {
 	registry   map[string]manifest.ManifestDescriptor
 }
 
-// NewManager creates a plugin manager rooted at the provided directory.
 func NewManager(root string, logger *log.Logger, verify manifest.VerifyOptions) (*Manager, error) {
 	root = strings.TrimSpace(root)
 	if root == "" {
@@ -47,8 +44,6 @@ func NewManager(root string, logger *log.Logger, verify manifest.VerifyOptions) 
 	return manager, nil
 }
 
-// Snapshot walks the plugin root and returns the current installation
-// telemetry. Errors are logged and omitted from the resulting payload.
 func (m *Manager) Snapshot() *manifest.SyncPayload {
 	entries, err := os.ReadDir(m.root)
 	if err != nil {
@@ -258,7 +253,6 @@ func (m *Manager) hasRegistry() bool {
 	return len(m.registry) > 0
 }
 
-// UpdateRegistry caches the approved plugin descriptors from the controller registry feed.
 func (m *Manager) UpdateRegistry(list *manifest.ManifestList) {
 	if m == nil {
 		return
@@ -288,7 +282,6 @@ func (m *Manager) UpdateRegistry(list *manifest.ManifestList) {
 	}
 }
 
-// Root returns the plugin root directory managed by this instance.
 func (m *Manager) Root() string {
 	if m == nil {
 		return ""
@@ -311,7 +304,6 @@ func fileHash(path string) (string, error) {
 	return hex.EncodeToString(sum), nil
 }
 
-// UpdateVerification swaps the verification options used by the manager.
 func (m *Manager) UpdateVerification(opts manifest.VerifyOptions) {
 	m.verifyMu.Lock()
 	m.verifyOpt = cloneVerifyOptions(opts)

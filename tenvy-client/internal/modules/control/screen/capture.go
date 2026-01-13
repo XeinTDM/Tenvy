@@ -14,7 +14,6 @@ var (
 	imageBufferPool = sync.Pool{New: func() interface{} { return new(bytes.Buffer) }}
 )
 
-// EncodeRGBAAsPNG encodes the provided RGBA buffer to a PNG byte slice.
 func EncodeRGBAAsPNG(width, height int, data []byte) ([]byte, error) {
 	if len(data) == 0 || width <= 0 || height <= 0 {
 		return nil, errors.New("invalid frame data")
@@ -35,8 +34,6 @@ func EncodeRGBAAsPNG(width, height int, data []byte) ([]byte, error) {
 	return append([]byte(nil), bufPtr.Bytes()...), nil
 }
 
-// EncodeRGBAAsJPEG encodes the provided RGBA buffer to a JPEG byte slice
-// using the supplied quality value.
 func EncodeRGBAAsJPEG(width, height, quality int, data []byte) ([]byte, error) {
 	if len(data) == 0 || width <= 0 || height <= 0 {
 		return nil, errors.New("invalid frame data")

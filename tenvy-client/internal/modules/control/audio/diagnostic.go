@@ -13,9 +13,6 @@ import (
 	"github.com/gen2brain/malgo"
 )
 
-// RunCaptureDiagnostic enumerates available audio devices and records a short capture
-// window using the system default input device. It returns diagnostic metadata along
-// with the total number of bytes captured during the session.
 func RunCaptureDiagnostic(ctx context.Context, captureWindow time.Duration) (*AudioDiagnosticResult, error) {
 	if captureWindow <= 0 {
 		captureWindow = 2 * time.Second

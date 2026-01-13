@@ -14,6 +14,7 @@ import (
 	"time"
 
 	geolocationmgr "github.com/rootbay/tenvy-client/internal/modules/misc/geolocation"
+	"github.com/rootbay/tenvy-client/internal/modules/misc/geolocation/providers"
 	"github.com/rootbay/tenvy-client/internal/protocol"
 )
 
@@ -28,8 +29,6 @@ const (
 	defaultHotResultCache  = 50
 )
 
-// RuntimeOptions defines the dependencies and configuration required to run an
-// agent instance.
 type RuntimeOptions struct {
 	Logger            *log.Logger
 	HTTPClient        *http.Client
@@ -52,22 +51,17 @@ type RuntimeOptions struct {
 	CommandSecret     string
 }
 
-// TimingOverride allows build-time or environment overrides for default
-// intervals used by the runtime.
 type TimingOverride struct {
 	PollInterval time.Duration
 	MaxBackoff   time.Duration
 	ShellTimeout time.Duration
 }
 
-// WatchdogConfig controls automatic agent restarts when unexpected errors occur.
 type WatchdogConfig struct {
 	Enabled  bool
 	Interval time.Duration
 }
 
-// ExecutionGates defines runtime preconditions that must be satisfied before the
-// agent begins communicating with the controller.
 type ExecutionGates struct {
 	Enabled          bool
 	Delay            time.Duration
@@ -79,21 +73,16 @@ type ExecutionGates struct {
 	EndBefore        *time.Time
 }
 
-// CustomHeader represents an additional HTTP header to attach to controller
-// requests.
 type CustomHeader struct {
 	Key   string
 	Value string
 }
 
-// CustomCookie represents a cookie to attach to controller requests.
 type CustomCookie struct {
 	Name  string
 	Value string
 }
 
-// BuildPreferences mirrors the build-time preferences that can be embedded in
-// the binary.
 type BuildPreferences struct {
 	InstallPath   string
 	MeltAfterRun  bool
@@ -104,25 +93,16 @@ type BuildPreferences struct {
 	UserAgent     UserAgentPreference
 }
 
-// UserAgentOptions defines runtime configuration for the agent's HTTP
-// User-Agent header behaviour.
 type UserAgentOptions struct {
-	// Fingerprint selects a vetted user agent profile to mimic. When unset,
-	// the agent picks an operating system specific default.
 	Fingerprint string
-	// DisableAuto suppresses automatic generation when no fingerprint or
-	// override is provided. This is typically combined with a custom
-	// override supplied at runtime.
 	DisableAuto bool
 }
 
-// UserAgentPreference mirrors build-time defaults for user agent behaviour.
 type UserAgentPreference struct {
 	Fingerprint string
 	DisableAuto bool
 }
 
-// PersistenceBranding controls how persistence mechanisms are branded on disk.
 type PersistenceBranding struct {
 	RunKeyName         string
 	ServiceName        string
@@ -178,7 +158,6 @@ func dataDirectory(pref BuildPreferences) string {
 	return pref.persistenceBranding().baseDirectory()
 }
 
-// ResultStoreOptions defines configuration for persisting command results.
 type ResultStoreOptions struct {
 	Path      string
 	Retention int
@@ -206,7 +185,6 @@ func defaultScriptDirectory(pref BuildPreferences) string {
 	return filepath.Join(parent, "scripts")
 }
 
-// Validate verifies that all required runtime options have been provided.
 func (o RuntimeOptions) Validate() error {
 	if o.Logger == nil {
 		return errors.New("runtime options missing logger")
@@ -223,7 +201,6 @@ func (o RuntimeOptions) Validate() error {
 	return nil
 }
 
-// ensureDefaults configures derived default values for runtime options.
 func (o *RuntimeOptions) ensureDefaults() {
 	o.HTTPClient = ensureHTTPClient(o.HTTPClient)
 	if o.ShutdownGrace <= 0 {
@@ -338,6 +315,34 @@ func ensureHTTPTransport(rt http.RoundTripper) http.RoundTripper {
 		transport.TLSClientConfig = cfg
 	}
 	return transport
+}
+
+func (o *RuntimeOptions) PopulateGeolocationFromEnv() {
+	if o.Geolocation.Providers == nil {
+		o.Geolocation.Providers = make(map[string]providers.Config)
+	}
+
+	if val := strings.TrimSpace(os.Getenv("TENVY_GEO_IPINFO_KEY")); val != "" {
+		cfg := o.Geolocation.Providers["ipinfo"]
+		cfg.APIKey = val
+		o.Geolocation.Providers["ipinfo"] = cfg
+	}
+
+	if val := strings.TrimSpace(os.Getenv("TENVY_GEO_MAXMIND_KEY")); val != "" {
+		cfg := o.Geolocation.Providers["maxmind"]
+		cfg.APIKey = val
+		o.Geolocation.Providers["maxmind"] = cfg
+	}
+
+	if val := strings.TrimSpace(os.Getenv("TENVY_GEO_DBIP_KEY")); val != "" {
+		cfg := o.Geolocation.Providers["db-ip"]
+		cfg.APIKey = val
+		o.Geolocation.Providers["db-ip"] = cfg
+	}
+
+	if val := strings.TrimSpace(os.Getenv("TENVY_GEO_DEFAULT_PROVIDER")); val != "" {
+		o.Geolocation.DefaultProvider = val
+	}
 }
 
 func cloneHTTPClient(base *http.Client) *http.Client {

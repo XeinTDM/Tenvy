@@ -32,7 +32,6 @@ type (
 
 var errSessionReplaced = errors.New("app-vnc session replaced")
 
-// HTTPDoer matches net/http.Client and supports request injection for tests.
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
@@ -58,48 +57,45 @@ type surfaceCaptureFactory func(*sessionState) (surfaceCapturer, error)
 
 type frameIntervalFunc func(protocol.AppVncQuality) time.Duration
 
-// Logger matches the agent logging contract and is satisfied by *log.Logger.
 type Logger interface {
 	Printf(format string, args ...interface{})
 }
 
-// Config controls the runtime behaviour of the App VNC controller.
 type Config struct {
-        Logger         Logger
-        WorkspaceRoot  string
-        AgentID        string
-        BaseURL        string
-        AuthKey        string
-        Client         HTTPDoer
-        UserAgent      string
-        RequestTimeout time.Duration
+	Logger         Logger
+	WorkspaceRoot  string
+	AgentID        string
+	BaseURL        string
+	AuthKey        string
+	Client         HTTPDoer
+	UserAgent      string
+	RequestTimeout time.Duration
 }
 
 type seedDownloadConfig struct {
-        BaseURL   string
-        AgentID   string
-        AuthKey   string
-        Client    HTTPDoer
-        UserAgent string
-        Timeout   time.Duration
+	BaseURL   string
+	AgentID   string
+	AuthKey   string
+	Client    HTTPDoer
+	UserAgent string
+	Timeout   time.Duration
 }
 
-// Controller processes app-vnc commands sent by the controller.
 type Controller struct {
-        mu             sync.Mutex
-        logger         Logger
-        workspaceRoot  string
-        agentID        string
-        baseURL        string
-        authKey        string
-        client         HTTPDoer
-        userAgent      string
-        captureFactory surfaceCaptureFactory
-        frameInterval  frameIntervalFunc
-        requestTimeout time.Duration
-        now            func() time.Time
-        processWaiter  func(*Controller, *exec.Cmd, string)
-        session        *sessionState
+	mu             sync.Mutex
+	logger         Logger
+	workspaceRoot  string
+	agentID        string
+	baseURL        string
+	authKey        string
+	client         HTTPDoer
+	userAgent      string
+	captureFactory surfaceCaptureFactory
+	frameInterval  frameIntervalFunc
+	requestTimeout time.Duration
+	now            func() time.Time
+	processWaiter  func(*Controller, *exec.Cmd, string)
+	session        *sessionState
 }
 
 type sessionState struct {
@@ -120,18 +116,16 @@ type sessionState struct {
 	processID     int
 }
 
-// NewController constructs a controller with default configuration.
 func NewController() *Controller {
-        return &Controller{
-                captureFactory: defaultSurfaceCaptureFactory,
-                frameInterval:  defaultFrameInterval,
-                requestTimeout: 10 * time.Second,
-                now:            time.Now,
-                processWaiter:  (*Controller).awaitProcess,
-        }
+	return &Controller{
+		captureFactory: defaultSurfaceCaptureFactory,
+		frameInterval:  defaultFrameInterval,
+		requestTimeout: 10 * time.Second,
+		now:            time.Now,
+		processWaiter:  (*Controller).awaitProcess,
+	}
 }
 
-// Update applies runtime configuration such as logger routing or workspace roots.
 func (c *Controller) Update(cfg Config) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -152,7 +146,6 @@ func (c *Controller) Update(cfg Config) {
 	}
 }
 
-// HandleCommand decodes the payload and dispatches the requested action.
 func (c *Controller) HandleCommand(ctx context.Context, cmd Command) CommandResult {
 	payload, err := decodePayload(cmd.Payload)
 	if err != nil {
@@ -195,7 +188,6 @@ func (c *Controller) HandleCommand(ctx context.Context, cmd Command) CommandResu
 	return result
 }
 
-// Shutdown terminates any active session and cleans up its workspace.
 func (c *Controller) Shutdown(ctx context.Context) {
 	c.mu.Lock()
 	session := c.session
@@ -855,7 +847,6 @@ func (c *Controller) heartbeat(payload protocol.AppVncCommandPayload) error {
 	return nil
 }
 
-// HandleInputBurst validates the session and enqueues the burst for downstream processing.
 func (c *Controller) HandleInputBurst(ctx context.Context, burst protocol.AppVncInputBurst) error {
 	_ = ctx
 	if len(burst.Events) == 0 {

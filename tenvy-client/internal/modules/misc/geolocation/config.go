@@ -7,9 +7,8 @@ import (
 	"github.com/rootbay/tenvy-client/internal/modules/misc/geolocation/providers"
 )
 
-var defaultProviderOrder = []string{"ipinfo", "maxmind", "db-ip"}
+var defaultProviderOrder = []string{"tenvy", "ipinfo", "maxmind", "db-ip"}
 
-// Config controls provider specific options for the geolocation manager.
 type Config struct {
 	DefaultProvider string
 	Providers       map[string]providers.Config

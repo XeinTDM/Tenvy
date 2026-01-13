@@ -51,7 +51,6 @@ func unregisterStartup(branding PersistenceBranding) error {
 		return nil
 	}
 
-	// Try to remove from both if we have privileges, otherwise just CURRENT_USER
 	roots := []registry.Key{registry.CURRENT_USER}
 	if platform.CurrentUserIsElevated() {
 		roots = append(roots, registry.LOCAL_MACHINE)
@@ -62,7 +61,7 @@ func unregisterStartup(branding PersistenceBranding) error {
 		if err != nil {
 			continue
 		}
-		
+
 		valueName := strings.TrimSpace(branding.RunKeyName)
 		if valueName == "" {
 			valueName = "TenvyAgent"

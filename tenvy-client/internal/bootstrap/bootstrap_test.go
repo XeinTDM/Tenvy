@@ -217,7 +217,6 @@ func TestCommandRepairsCorruptedLoader(t *testing.T) {
 		Executable: "tenvy-client-loader",
 	}
 
-	// Seed metadata indicating the loader is already at the expected version.
 	record := storedLoaderMetadata{
 		LoaderMetadata: *metadata,
 		InstalledAt:    time.Now().Add(-2 * time.Hour),

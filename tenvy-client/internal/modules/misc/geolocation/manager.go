@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -26,10 +27,12 @@ type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
-// Manager executes geolocation lookups using synthetic provider data.
 type Manager struct {
 	mu              sync.Mutex
 	clock           clock
+	httpClient      *http.Client
+	baseURL         string
+	authKey         string
 	providers       []string
 	defaultProvider string
 	last            *lookupResult
@@ -75,10 +78,16 @@ type statusResult struct {
 	GeneratedAt     string        `json:"generatedAt"`
 }
 
-func NewManager(cfg Config) *Manager {
-	providerList, defaultProvider, resolvers, providerConfigs := buildProviderState(cfg)
+func NewManager(cfg Config, client *http.Client, baseURL, authKey string) *Manager {
+	if client == nil {
+		client = http.DefaultClient
+	}
+	providerList, defaultProvider, resolvers, providerConfigs := buildProviderState(cfg, client, baseURL, authKey)
 	return &Manager{
 		clock:           systemClock{},
+		httpClient:      client,
+		baseURL:         baseURL,
+		authKey:         authKey,
 		providers:       providerList,
 		defaultProvider: defaultProvider,
 		resolvers:       resolvers,
@@ -86,24 +95,40 @@ func NewManager(cfg Config) *Manager {
 	}
 }
 
-func (m *Manager) ApplyConfig(cfg Config) {
+func (m *Manager) ApplyConfig(cfg Config, client *http.Client, baseURL, authKey string) {
 	if m == nil {
 		return
 	}
-	providerList, defaultProvider, resolvers, providerConfigs := buildProviderState(cfg)
+	if client == nil {
+		client = m.httpClient
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+	if baseURL == "" {
+		baseURL = m.baseURL
+	}
+	if authKey == "" {
+		authKey = m.authKey
+	}
+	m.httpClient = client
+	m.baseURL = baseURL
+	m.authKey = authKey
+	providerList, defaultProvider, resolvers, providerConfigs := buildProviderState(cfg, client, baseURL, authKey)
 	m.providers = providerList
 	m.defaultProvider = defaultProvider
 	m.resolvers = resolvers
 	m.providerConfig = providerConfigs
 }
 
-func buildProviderState(cfg Config) ([]string, string, map[string]providers.Resolver, map[string]providers.Config) {
+func buildProviderState(cfg Config, client *http.Client, baseURL, authKey string) ([]string, string, map[string]providers.Resolver, map[string]providers.Config) {
 	normalized := cfg.withDefaults()
 
 	knownResolvers := map[string]providers.Resolver{
 		"ipinfo":  providers.IPInfo(),
 		"maxmind": providers.MaxMind(),
 		"db-ip":   providers.DBIP(),
+		"tenvy":   providers.Tenvy(),
 	}
 
 	activeResolvers := make(map[string]providers.Resolver)
@@ -111,22 +136,28 @@ func buildProviderState(cfg Config) ([]string, string, map[string]providers.Reso
 	providerList := make([]string, 0, len(normalized.Providers))
 
 	for _, name := range defaultProviderOrder {
-		if cfg, ok := normalized.Providers[name]; ok {
+		if pcfg, ok := normalized.Providers[name]; ok {
 			if resolver, ok := knownResolvers[name]; ok {
 				providerList = append(providerList, name)
-				providerConfigs[name] = cfg
+				pcfg.HTTPClient = client
+				pcfg.BaseURL = baseURL
+				pcfg.AuthKey = authKey
+				providerConfigs[name] = pcfg
 				activeResolvers[name] = resolver
 			}
 		}
 	}
 
-	for name, cfg := range normalized.Providers {
+	for name, pcfg := range normalized.Providers {
 		if _, seen := providerConfigs[name]; seen {
 			continue
 		}
 		if resolver, ok := knownResolvers[name]; ok {
 			providerList = append(providerList, name)
-			providerConfigs[name] = cfg
+			pcfg.HTTPClient = client
+			pcfg.BaseURL = baseURL
+			pcfg.AuthKey = authKey
+			providerConfigs[name] = pcfg
 			activeResolvers[name] = resolver
 		}
 	}

@@ -187,7 +187,6 @@ func (p *nativeProvider) Remove(ctx context.Context, req RemoveRequest) (RemoveR
 func (p *nativeProvider) fetchState(ctx context.Context) (*cronState, error) {
 	output, err := p.runner.run(ctx, p.cronPath, "-l")
 	if err != nil {
-		// Treat missing crontab as empty configuration
 		if strings.Contains(strings.ToLower(err.Error()), "no crontab") {
 			return newCronState(""), nil
 		}
@@ -200,7 +199,6 @@ func (p *nativeProvider) applyState(ctx context.Context, state *cronState) error
 	_, err := p.runner.runWithInput(ctx, state.serialize(), p.cronPath, "-")
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "no crontab") {
-			// Some cron implementations require newline; retry without error text
 			_, retryErr := p.runner.runWithInput(ctx, state.serialize(), p.cronPath, "-")
 			if retryErr == nil {
 				return nil
@@ -247,7 +245,6 @@ func (s *cronState) parse() {
 		}
 		if strings.HasPrefix(line, managedCommentPrefix) {
 			metadata := parseMetadata(line[len(managedCommentPrefix):])
-			// find next non-empty line as command
 			for j := idx + 1; j < len(s.lines); j++ {
 				commandRaw := s.lines[j]
 				trimmed := strings.TrimSpace(commandRaw)
@@ -446,7 +443,6 @@ func hashCommand(command string) string {
 	return "cron-" + hex.EncodeToString(sum[:8])
 }
 
-// test helper
 func newTestProviderWithRunner(r cronCommandRunner) *nativeProvider {
 	provider := newNativeProvider().(*nativeProvider)
 	provider.runner = r

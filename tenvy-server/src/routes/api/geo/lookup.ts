@@ -56,6 +56,46 @@ export function setCachedGeo(ip: string, payload: GeoLookupPayload): void {
 }
 
 export async function fetchGeoData(fetchFn: typeof fetch, ip: string): Promise<GeoLookupPayload> {
+	const preferred = (process.env.TENVY_GEO_DEFAULT_PROVIDER || '').toLowerCase().trim();
+
+	const maxmindKey = process.env.TENVY_GEO_MAXMIND_KEY;
+	if (maxmindKey && (preferred === 'maxmind' || !preferred)) {
+		try {
+			const [accountID, licenseKey] = maxmindKey.split(':');
+			const auth = btoa(`${accountID}:${licenseKey}`);
+			const response = await fetchFn(`https://geoip.maxmind.com/geoip/v2.1/city/${ip}`, {
+				headers: { Authorization: `Basic ${auth}` }
+			});
+			if (response.ok) {
+				const data = await response.json();
+				return {
+					countryName: data.country?.names?.en || null,
+					countryCode: data.country?.iso_code || null,
+					isProxy: !!data.traits?.is_anonymous_proxy
+				};
+			}
+		} catch (e) {
+			console.error('maxmind lookup failed:', e);
+		}
+	}
+
+	const ipinfoKey = process.env.TENVY_GEO_IPINFO_KEY;
+	if (ipinfoKey && (preferred === 'ipinfo' || !preferred || preferred === 'maxmind')) {
+		try {
+			const response = await fetchFn(`https://ipinfo.io/${ip}/json?token=${ipinfoKey}`);
+			if (response.ok) {
+				const data = await response.json();
+				return {
+					countryName: data.country || null,
+					countryCode: data.country || null,
+					isProxy: false
+				};
+			}
+		} catch (e) {
+			console.error('ipinfo lookup failed:', e);
+		}
+	}
+
 	const endpoint = new URL(`https://ip-api.com/json/${encodeURIComponent(ip)}`);
 	endpoint.searchParams.set('fields', 'status,message,country,countryCode,proxy');
 

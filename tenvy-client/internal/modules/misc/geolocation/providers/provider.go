@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 )
 
-// Result represents the geographic data returned by a provider.
 type Result struct {
 	City        string
 	Region      string
@@ -21,37 +21,43 @@ type Result struct {
 	Timezone    *Timezone
 }
 
-// Timezone describes timezone metadata returned by a provider.
 type Timezone struct {
 	ID           string
 	Offset       string
 	Abbreviation string
 }
 
-// Config contains provider specific runtime options.
 type Config struct {
-	APIKey  string
-	Timeout time.Duration
+	APIKey     string
+	Timeout    time.Duration
+	HTTPClient *http.Client
+	BaseURL    string
+	AuthKey    string
 }
 
-// Normalize returns a sanitized copy of the provider configuration.
 func (c Config) Normalize() Config {
-	copy := Config{APIKey: strings.TrimSpace(c.APIKey), Timeout: c.Timeout}
+	copy := Config{
+		APIKey:     strings.TrimSpace(c.APIKey),
+		Timeout:    c.Timeout,
+		HTTPClient: c.HTTPClient,
+		BaseURL:    strings.TrimSpace(c.BaseURL),
+		AuthKey:    strings.TrimSpace(c.AuthKey),
+	}
 	if copy.Timeout <= 0 {
 		copy.Timeout = 5 * time.Second
+	}
+	if copy.HTTPClient == nil {
+		copy.HTTPClient = http.DefaultClient
 	}
 	return copy
 }
 
-// Resolver resolves an IP into geolocation data.
 type Resolver interface {
 	Lookup(ctx context.Context, ip net.IP, cfg Config) (Result, error)
 }
 
-// ResolverFunc adapts a function into a Resolver implementation.
 type ResolverFunc func(context.Context, net.IP, Config) (Result, error)
 
-// Lookup implements Resolver.
 func (f ResolverFunc) Lookup(ctx context.Context, ip net.IP, cfg Config) (Result, error) {
 	if f == nil {
 		return Result{}, errors.New("resolver not defined")
@@ -59,5 +65,4 @@ func (f ResolverFunc) Lookup(ctx context.Context, ip net.IP, cfg Config) (Result
 	return f(ctx, ip, cfg)
 }
 
-// ErrMissingAPIKey indicates that the provider requires an API key.
 var ErrMissingAPIKey = errors.New("provider api key required")

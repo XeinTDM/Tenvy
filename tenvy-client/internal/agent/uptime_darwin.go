@@ -11,7 +11,11 @@ import (
 
 var (
 	sysctlTimeval = func(name string) (unix.Timeval, error) {
-		return unix.SysctlTimeval(name)
+		tv, err := unix.SysctlTimeval(name)
+		if err != nil {
+			return unix.Timeval{}, err
+		}
+		return *tv, nil
 	}
 	timeNow = time.Now
 )

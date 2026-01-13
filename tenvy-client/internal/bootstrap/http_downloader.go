@@ -11,31 +11,20 @@ import (
 	"time"
 )
 
-// HTTPDownloaderConfig configures the HTTP-based loader downloader.
 type HTTPDownloaderConfig struct {
-	// Client is the HTTP client used for requests. When nil, http.DefaultClient is used.
-	Client *http.Client
-	// URL is the absolute URL of the loader artifact.
-	URL string
-	// ArtifactType indicates whether the remote payload is a zip archive or raw binary.
+	Client       *http.Client
+	URL          string
 	ArtifactType LoaderArtifactType
-	// Mode specifies the filesystem mode to apply to binary payloads. A zero value
-	// defers to the installer defaults.
-	Mode fs.FileMode
+	Mode         fs.FileMode
 }
 
-// LoaderArtifactType enumerates supported artifact encodings.
 type LoaderArtifactType string
 
 const (
-	// LoaderArtifactTypeBinary indicates the remote payload is a single executable.
-	LoaderArtifactTypeBinary LoaderArtifactType = "binary"
-	// LoaderArtifactTypeArchive indicates the remote payload is a zip archive containing the loader files.
+	LoaderArtifactTypeBinary  LoaderArtifactType = "binary"
 	LoaderArtifactTypeArchive LoaderArtifactType = "zip"
 )
 
-// NewHTTPDownloader constructs a LoaderDownloader implementation that retrieves the loader
-// artifact over HTTP based on the provided configuration.
 func NewHTTPDownloader(cfg HTTPDownloaderConfig) (LoaderDownloader, error) {
 	trimmedURL := strings.TrimSpace(cfg.URL)
 	if trimmedURL == "" {
@@ -84,7 +73,6 @@ func NewHTTPDownloader(cfg HTTPDownloaderConfig) (LoaderDownloader, error) {
 	}), nil
 }
 
-// DefaultHTTPClient returns an HTTP client tuned for loader downloads.
 func DefaultHTTPClient() *http.Client {
 	return &http.Client{Timeout: 60 * time.Second}
 }

@@ -114,13 +114,7 @@ type ModuleExtension struct {
 	Hooks        ModuleExtensionHooks
 }
 
-// ModuleExtensionHooks exposes module-specific callbacks that can be wired in by
-// plugins or alternate user interfaces. Hooks are optional; modules ignore
-// fields they do not recognize.
 type ModuleExtensionHooks struct {
-	// ClientChatDelivery delivers operator messages emitted by the
-	// client-chat module. Registering this hook allows plugins or UIs to
-	// surface incoming operator messages locally.
 	ClientChatDelivery clientchat.OperatorMessageConsumer
 }
 

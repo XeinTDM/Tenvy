@@ -645,11 +645,6 @@ func defaultValueName() string {
 	return "(Default)"
 }
 
-func stringPointer(value string) *string {
-	v := value
-	return &v
-}
-
 func sanitizeValueName(name string) string {
 	trimmed := strings.TrimSpace(name)
 	if trimmed == "" || trimmed == defaultValueName() {

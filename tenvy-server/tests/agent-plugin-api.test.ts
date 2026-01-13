@@ -203,16 +203,13 @@ describe('agent plugin API', () => {
 		const sharedModule = await import('../src/routes/api/agents/[id]/plugins/_shared.js');
 		const { telemetryStore } = sharedModule;
 
-		// 1. Initial load to populate the 'plugin' table from manifests
 		await telemetryStore.getManifestSnapshot();
 
-		// 2. Approve the plugin in the database
 		await db
 			.update(pluginTable)
 			.set({ approvalStatus: 'approved', approvedAt: new Date() })
 			.where(eq(pluginTable.id, manifestId));
 
-		// 3. Invalidate snapshot to force rebuild with approved status
 		telemetryStore.invalidateManifestSnapshot();
 		const snapshotResult = await telemetryStore.getManifestSnapshot();
 		expect(snapshotResult.manifests.some((m) => m.pluginId === manifestId)).toBe(true);

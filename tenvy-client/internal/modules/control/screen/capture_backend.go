@@ -21,8 +21,6 @@ type backendCandidate struct {
 	factory backendFactory
 }
 
-// CapabilityError describes why a platform capture backend could not be
-// initialised. It is exposed so callers can surface diagnostics to operators.
 type CapabilityError struct {
 	Backend string
 	Err     error
@@ -60,9 +58,8 @@ var (
 	fallbackCaptureFactory backendFactory = newScreenshotBackend
 )
 
-// SafeCaptureRect captures the specified screen rectangle, selecting the most
-// capable backend at runtime. It recovers from platform panics so transient
-// graphics driver resets do not crash the agent.
+// SafeCaptureRect recovers from platform panics so transient graphics driver
+// resets do not crash the agent.
 func SafeCaptureRect(bounds image.Rectangle) (img *image.RGBA, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -78,15 +75,11 @@ func SafeCaptureRect(bounds image.Rectangle) (img *image.RGBA, err error) {
 	return candidate.Capture(bounds)
 }
 
-// SelectedBackend reports the name of the backend that SafeCaptureRect will use
-// for subsequent captures.
 func SelectedBackend() string {
 	ensureBackend()
 	return backendName
 }
 
-// CapabilityErrors returns the capability issues encountered when evaluating
-// candidate backends. The returned slice should be treated as read-only.
 func CapabilityErrors() []*CapabilityError {
 	capabilityErrMu.Lock()
 	defer capabilityErrMu.Unlock()

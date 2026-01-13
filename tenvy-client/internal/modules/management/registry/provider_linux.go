@@ -117,7 +117,6 @@ func (p *nativeProvider) List(ctx context.Context, req ListRequest) (RegistryLis
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return RegistryListResult{}, err
 			}
-			// Skip schemas that cannot be queried.
 			continue
 		}
 		hive[schema] = key
@@ -296,7 +295,6 @@ func formatGSettingsValue(valueType, data string) ([]string, error) {
 		}
 		return []string{trimmedData}, nil
 	default:
-		// Pass-through for other types
 		return []string{trimmedData}, nil
 	}
 }
@@ -340,15 +338,6 @@ func (p *nativeProvider) DeleteValue(ctx context.Context, req DeleteValueRequest
 	}, nil
 }
 
-func stringPointer(value string) *string {
-	if value == "" {
-		return nil
-	}
-	v := value
-	return &v
-}
-
-// helper used in tests to override runner
 func newTestNativeProvider(r commandRunner) *nativeProvider {
 	provider := newNativeProvider().(*nativeProvider)
 	provider.withRunner(r)

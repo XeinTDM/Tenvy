@@ -3,9 +3,7 @@
 package remotedesktopengine
 
 import (
-	"fmt"
 	"sync"
-	"syscall"
 )
 
 var (
@@ -15,11 +13,8 @@ var (
 
 func ensureVideoToolboxRuntime() error {
 	videoToolboxOnce.Do(func() {
-		framework := syscall.NewLazyDLL("/System/Library/Frameworks/VideoToolbox.framework/VideoToolbox")
-		if err := framework.Load(); err != nil {
-			videoToolboxErr = fmt.Errorf("videotoolbox framework not available: %w", err)
-			return
-		}
+		// VideoToolbox is a system framework on Darwin, usually linked via CGO.
+		// If we are in !cgo mode, we can't easily load frameworks.
 		videoToolboxErr = ErrNativeEncoderUnavailable
 	})
 	return videoToolboxErr

@@ -1,10 +1,12 @@
 import { compileFromFile } from 'json-schema-to-typescript';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 async function generate() {
   const schemaPath = join(import.meta.dirname, '../protocol/schema.json');
-  const outputPath = join(import.meta.dirname, '../types/protocol.d.ts');
+  const tsOutputPath = join(import.meta.dirname, '../types/protocol.d.ts');
+  const goOutputPath = join(import.meta.dirname, '../protocol/protocol.go');
 
   console.log(`Generating types from ${schemaPath}...`);
 
@@ -14,13 +16,66 @@ async function generate() {
       additionalProperties: false
     });
 
-    await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(outputPath, ts);
+    await mkdir(dirname(tsOutputPath), { recursive: true });
+    await writeFile(tsOutputPath, ts);
+    console.log(`Successfully generated TypeScript types to ${tsOutputPath}`);
 
-    console.log(`Successfully generated types to ${outputPath}`);
+    console.log('Running quicktype for Go...');
+    const quicktype = spawnSync('bun', [
+      'x', 'quicktype',
+      '-s', 'schema', schemaPath,
+      '-o', goOutputPath,
+      '--lang', 'go',
+      '--package', 'protocol',
+      '--top-level', 'TenvyProtocol'
+    ], { stdio: 'inherit', shell: true });
+
+    if (quicktype.status !== 0) {
+      throw new Error(`quicktype failed with exit code ${quicktype.status}`);
+    }
+
+    await postProcessGo(goOutputPath);
   } catch (error) {
     console.error('Failed to generate types:', error);
     process.exit(1);
+  }
+}
+
+async function postProcessGo(goPath: string) {
+  try {
+    let content = await Bun.file(goPath).text();
+    
+    const replacements = [
+      {
+        pattern: /Payload\s+map\[string\]interface\{\}/g,
+        replacement: 'Payload   json.RawMessage'
+      },
+      {
+        pattern: /Configuration\s+map\[string\]interface\{\}/g,
+        replacement: 'Configuration json.RawMessage'
+      },
+      {
+        pattern: /Metadata\s+map\[string\]interface\{\}/g,
+        replacement: 'Metadata    json.RawMessage'
+      }
+    ];
+
+    let modified = false;
+    for (const { pattern, replacement } of replacements) {
+      if (pattern.test(content)) {
+        content = content.replace(pattern, replacement);
+        modified = true;
+      }
+    }
+
+    if (modified) {
+      await writeFile(goPath, content);
+      console.log(`Successfully post-processed Go types in ${goPath}`);
+    }
+  } catch (error) {
+    if ((error as any).code !== 'ENOENT') {
+      console.warn('Failed to post-process Go types:', error);
+    }
   }
 }
 

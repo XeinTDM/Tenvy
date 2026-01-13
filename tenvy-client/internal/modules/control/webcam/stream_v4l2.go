@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	frameWaitTimeout      = uint32(5000) // milliseconds
+	frameWaitTimeout      = uint32(5000) // ms
 	reconfigureRetryDelay = 10 * time.Millisecond
 )
 

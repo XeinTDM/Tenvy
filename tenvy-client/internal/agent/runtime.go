@@ -19,8 +19,6 @@ import (
 	manifest "github.com/rootbay/tenvy-client/shared/pluginmanifest"
 )
 
-// Run boots and manages the lifecycle of the agent. It blocks until the
-// provided context is cancelled or a fatal error occurs.
 func Run(ctx context.Context, opts RuntimeOptions) error {
 	runner := func(runCtx context.Context, runOpts RuntimeOptions) error {
 		runOpts.ensureDefaults()

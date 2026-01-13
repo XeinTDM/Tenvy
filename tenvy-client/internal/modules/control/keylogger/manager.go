@@ -76,7 +76,7 @@ type session struct {
 }
 
 type Manager struct {
-	cfg             atomic.Value // Config
+	cfg             atomic.Value
 	mu              sync.Mutex
 	session         *session
 	providerFactory func() Provider

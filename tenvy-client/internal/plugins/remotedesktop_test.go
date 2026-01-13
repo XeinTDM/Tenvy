@@ -165,7 +165,6 @@ func TestStageRemoteDesktopEngineSuccess(t *testing.T) {
 		t.Fatalf("expected installed status, got %s", snapshot.Installations[0].Status)
 	}
 
-	// Subsequent staging should be a no-op.
 	result2, err := plugins.StageRemoteDesktopEngine(ctx, manager, server.Client(), server.URL, "agent-1", "", "stage-test", manifest.RuntimeFacts{}, descriptor)
 	if err != nil {
 		t.Fatalf("restage engine: %v", err)

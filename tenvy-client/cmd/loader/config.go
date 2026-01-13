@@ -57,7 +57,7 @@ func loadRuntimeOptions(logger *log.Logger) (agent.RuntimeOptions, error) {
 	userAgent := strings.TrimSpace(fallback(os.Getenv("TENVY_USER_AGENT"), decodeBase64(defaultUserAgentOverrideEncoded)))
 	commandSecret := strings.TrimSpace(os.Getenv("TENVY_COMMAND_SECRET"))
 
-	return agent.RuntimeOptions{
+	opts := agent.RuntimeOptions{
 		Logger:            logger,
 		ServerURL:         serverURL,
 		SharedSecret:      sharedSecret,
@@ -72,7 +72,11 @@ func loadRuntimeOptions(logger *log.Logger) (agent.RuntimeOptions, error) {
 		CustomCookies:     runtimeConfig.Cookies,
 		EnabledModules:    runtimeConfig.Modules,
 		CommandSecret:     commandSecret,
-	}, nil
+	}
+
+	opts.PopulateGeolocationFromEnv()
+
+	return opts, nil
 }
 
 func defaultServerURL() string {

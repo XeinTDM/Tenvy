@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "gen:protocol": "bun scripts/generate-protocol.ts && bun x quicktype -s schema protocol/schema.json -o protocol/protocol.go --lang go --package protocol --top-level TenvyProtocol"
+    "gen:protocol": "bun scripts/generate-protocol.ts"
   },
   "dependencies": {
     "tweetnacl": "^1.0.3",

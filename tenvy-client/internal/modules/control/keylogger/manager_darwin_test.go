@@ -1,4 +1,4 @@
-//go:build darwin
+//go:build darwin && cgo
 
 package keylogger
 
@@ -15,7 +15,6 @@ func TestManagerDarwinProviderIntegration(t *testing.T) {
 
 	darwinStartCapture = func(ctx context.Context, stream *channelEventStream) error {
 		go func() {
-			// Allow the manager to finish initialization before emitting events.
 			time.Sleep(10 * time.Millisecond)
 			event := CaptureEvent{
 				Timestamp: time.Now(),

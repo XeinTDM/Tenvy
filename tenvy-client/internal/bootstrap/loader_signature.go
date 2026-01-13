@@ -19,8 +19,6 @@ type loaderSignature struct {
 	Signature string `json:"signature"`
 }
 
-// NewLoaderSignatureVerifier constructs a LoaderSignatureVerifier that understands
-// SHA-256 and Ed25519 signatures encoded within LoaderMetadata.Signature.
 func NewLoaderSignatureVerifier() LoaderSignatureVerifier {
 	return LoaderSignatureVerifierFunc(func(ctx context.Context, loaderPath string, metadata LoaderMetadata) error {
 		parsed, err := parseLoaderSignature(metadata.Signature)

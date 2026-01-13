@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 type fakeStream struct {
@@ -116,7 +118,7 @@ func TestManagerStreamsEvents(t *testing.T) {
 	}
 
 	var envelope EventEnvelope
-	if err := json.Unmarshal(req.Body, &envelope); err != nil {
+	if err := msgpack.Unmarshal(req.Body, &envelope); err != nil {
 		t.Fatalf("failed to parse envelope: %v", err)
 	}
 
@@ -159,7 +161,7 @@ func TestManagerOfflineFlush(t *testing.T) {
 
 	req := client.popRequest(t)
 	var envelope EventEnvelope
-	if err := json.Unmarshal(req.Body, &envelope); err != nil {
+	if err := msgpack.Unmarshal(req.Body, &envelope); err != nil {
 		t.Fatalf("failed to parse envelope: %v", err)
 	}
 	if envelope.Mode != ModeOffline {

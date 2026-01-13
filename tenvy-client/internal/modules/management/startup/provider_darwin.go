@@ -222,7 +222,7 @@ func (p *nativeProvider) readAgent(path string) (Entry, error) {
 		return Entry{}, err
 	}
 	var payload map[string]interface{}
-	if err := plist.Unmarshal(data, &payload); err != nil {
+	if _, err := plist.Unmarshal(data, &payload); err != nil {
 		return Entry{}, err
 	}
 	label, _ := payload["Label"].(string)
