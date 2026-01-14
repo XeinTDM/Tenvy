@@ -27,6 +27,7 @@ var (
 	defaultShellTimeoutOverrideSecs = ""
 	defaultRuntimeConfigEncoded     = ""
 	defaultUserAgentOverrideEncoded = ""
+	defaultCommandPublicKeyEncoded  = ""
 )
 
 func loadRuntimeOptions(logger *log.Logger) (agent.RuntimeOptions, error) {
@@ -56,6 +57,7 @@ func loadRuntimeOptions(logger *log.Logger) (agent.RuntimeOptions, error) {
 
 	userAgent := strings.TrimSpace(fallback(os.Getenv("TENVY_USER_AGENT"), decodeBase64(defaultUserAgentOverrideEncoded)))
 	commandSecret := strings.TrimSpace(os.Getenv("TENVY_COMMAND_SECRET"))
+	commandPublicKey := strings.TrimSpace(fallback(os.Getenv("TENVY_COMMAND_PUBLIC_KEY"), decodeBase64(defaultCommandPublicKeyEncoded)))
 
 	opts := agent.RuntimeOptions{
 		Logger:            logger,
@@ -72,6 +74,7 @@ func loadRuntimeOptions(logger *log.Logger) (agent.RuntimeOptions, error) {
 		CustomCookies:     runtimeConfig.Cookies,
 		EnabledModules:    runtimeConfig.Modules,
 		CommandSecret:     commandSecret,
+		CommandPublicKey:  commandPublicKey,
 	}
 
 	opts.PopulateGeolocationFromEnv()

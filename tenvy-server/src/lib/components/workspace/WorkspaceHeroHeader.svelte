@@ -8,7 +8,13 @@
 		hint?: string;
 	};
 
-	const props = $props<{
+	let {
+		client,
+		tool,
+		title: titleProp,
+		subtitle: subtitleProp,
+		metadata: metadataProp = []
+	} = $props<{
 		client: Client;
 		tool: ClientToolDefinition;
 		title?: string;
@@ -16,13 +22,11 @@
 		metadata?: MetadataItem[];
 	}>();
 
-	const client = props.client;
-	const tool = props.tool;
-
-	const title = props.title ?? tool.title;
-	const subtitle =
-		props.subtitle ?? (tool as ClientToolDefinition & { description?: string }).description ?? null;
-	const metadata = props.metadata ?? [];
+	const title = $derived(titleProp ?? tool.title);
+	const subtitle = $derived(
+		subtitleProp ?? (tool as ClientToolDefinition & { description?: string }).description ?? null
+	);
+	const metadata = $derived(metadataProp);
 </script>
 
 <header

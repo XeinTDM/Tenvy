@@ -41,33 +41,43 @@
 		return null;
 	}
 
-	function summarizeResult(event: AuditEventSummary): string {
-		if (!event.executedAt) {
-			return 'Awaiting execution';
-		}
-		if (!event.result) {
-			return 'Completed (no result payload)';
-		}
-		const parsed = parseResult(event.result);
-		if (!parsed) {
-			return event.result.slice(0, 160);
-		}
-		if (parsed.success) {
-			return (parsed.output ?? 'Command completed successfully').slice(0, 160);
-		}
-		return (parsed.error ?? 'Command failed').slice(0, 160);
-	}
+	const enrichedEvents = $derived(
+		events.map((event) => {
+			const parsed = parseResult(event.result);
+			const status: 'pending' | 'success' | 'failure' = !event.executedAt
+				? 'pending'
+				: parsed
+					? parsed.success
+						? 'success'
+						: 'failure'
+					: 'success';
 
-	function resolveStatus(event: AuditEventSummary): 'pending' | 'success' | 'failure' {
-		if (!event.executedAt) {
-			return 'pending';
-		}
-		const parsed = parseResult(event.result);
-		if (!parsed) {
-			return 'success';
-		}
-		return parsed.success ? 'success' : 'failure';
-	}
+			let summary = 'Awaiting execution';
+			if (event.executedAt) {
+				if (event.result) {
+					if (parsed) {
+						summary = (parsed.success
+							? (parsed.output ?? 'Command completed successfully')
+							: (parsed.error ?? 'Command failed')
+						).slice(0, 160);
+					} else {
+						summary = event.result.slice(0, 160);
+					}
+				} else {
+					summary = 'Completed (no result payload)';
+				}
+			}
+
+			const statements = event.acknowledgement?.statements?.map((s) => s.text) ?? [];
+
+			return {
+				...event,
+				status,
+				summary,
+				statements
+			};
+		})
+	);
 
 	function formatTimestamp(value: string | null): string {
 		if (!value) {
@@ -82,10 +92,6 @@
 
 	function formatOperator(value: string | null): string {
 		return value ?? '—';
-	}
-
-	function acknowledgementStatements(event: AuditEventSummary): string[] {
-		return event.acknowledgement?.statements?.map((statement) => statement.text) ?? [];
 	}
 </script>
 
@@ -137,8 +143,7 @@
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-slate-100 dark:divide-slate-900/60">
-							{#each events as event (event.id)}
-								{@const status = resolveStatus(event)}
+							{#each enrichedEvents as event (event.id)}
 								<tr
 									class="bg-white/70 transition hover:bg-slate-50 dark:bg-slate-900/60 dark:hover:bg-slate-900"
 								>
@@ -149,10 +154,10 @@
 										{formatOperator(event.operatorId)}
 									</td>
 									<td class="px-4 py-3">
-										<Badge class={statusStyles[status]}
-											>{status === 'pending'
+										<Badge class={statusStyles[event.status]}
+											>{event.status === 'pending'
 												? 'Pending'
-												: status === 'success'
+												: event.status === 'success'
 													? 'Succeeded'
 													: 'Failed'}</Badge
 										>
@@ -164,7 +169,7 @@
 													{formatTimestamp(event.acknowledgedAt)}
 												</p>
 												<ul class="ml-4 list-disc space-y-1 text-slate-600 dark:text-slate-300">
-													{#each acknowledgementStatements(event) as statement (statement)}
+													{#each event.statements as statement (statement)}
 														<li>{statement}</li>
 													{/each}
 												</ul>
@@ -187,7 +192,7 @@
 										</code>
 									</td>
 									<td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
-										{summarizeResult(event)}
+										{event.summary}
 									</td>
 								</tr>
 							{/each}

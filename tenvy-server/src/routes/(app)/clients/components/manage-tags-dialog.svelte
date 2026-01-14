@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
 	import {
 		Dialog as DialogRoot,
 		DialogContent,
@@ -24,18 +23,17 @@
 		agent = null,
 		availableTags = [],
 		pending = false,
-		error = null
+		error = null,
+		onClose,
+		onSubmit
 	} = $props<{
 		open?: boolean;
 		agent?: AgentSnapshot | null;
 		availableTags?: string[];
 		pending?: boolean;
 		error?: string | null;
-	}>();
-
-	const dispatch = createEventDispatcher<{
-		close: void;
-		submit: { tags: string[] };
+		onClose?: () => void;
+		onSubmit?: (detail: { tags: string[] }) => void;
 	}>();
 
 	let draftTags = $state<string[]>([]);
@@ -60,7 +58,7 @@
 		if (pending) {
 			return;
 		}
-		dispatch('close');
+		onClose?.();
 	}
 
 	function normalizeTag(value: string): string | null {
@@ -135,7 +133,7 @@
 			return;
 		}
 		inputError = null;
-		dispatch('submit', { tags: draftTags });
+		onSubmit?.({ tags: draftTags });
 	}
 
 	const filteredSuggestions = $derived(

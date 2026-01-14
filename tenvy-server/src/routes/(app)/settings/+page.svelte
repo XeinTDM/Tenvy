@@ -27,7 +27,20 @@
 		voucherRedeemedAt: string | null;
 	};
 
-	let { data }: { data: { members: MemberRecord[] } } = $props();
+	type EnrollmentTokenRecord = {
+		token: string;
+		createdAt: string;
+		expiresAt: string | null;
+		createdBy: string | null;
+		maxUses: number;
+		uses: number;
+		revokedAt: string | null;
+		memo: string | null;
+	};
+
+	let {
+		data
+	}: { data: { members: MemberRecord[]; enrollmentTokens: EnrollmentTokenRecord[] } } = $props();
 
 	const roleOptions: { label: string; value: UserRole }[] = [
 		{ label: 'Viewer', value: 'viewer' },
@@ -37,6 +50,49 @@
 	];
 
 	let members = $state<MemberRecord[]>(data.members ?? []);
+	let enrollmentTokens = $state<EnrollmentTokenRecord[]>(data.enrollmentTokens ?? []);
+
+	$effect(() => {
+		members = data.members ?? [];
+		enrollmentTokens = data.enrollmentTokens ?? [];
+	});
+
+	async function revokeToken(token: string) {
+		try {
+			const response = await fetch(`/api/admin/tokens/${token}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) throw new Error('Revocation failed');
+
+			enrollmentTokens = enrollmentTokens.map((t) =>
+				t.token === token ? { ...t, revokedAt: new Date().toISOString() } : t
+			);
+		} catch (err) {
+			console.error('Failed to revoke token', err);
+		}
+	}
+
+	async function createToken() {
+		try {
+			const response = await fetch('/api/admin/tokens', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					memo: 'Manual generation',
+					maxUses: 1,
+					expiresInHours: 24
+				})
+			});
+
+			if (!response.ok) throw new Error('Generation failed');
+
+			const newToken = (await response.json()) as EnrollmentTokenRecord;
+			enrollmentTokens = [newToken, ...enrollmentTokens];
+		} catch (err) {
+			console.error('Failed to generate token', err);
+		}
+	}
 
 	async function setMemberRole(memberId: string, role: UserRole) {
 		const previous = members;
@@ -137,29 +193,29 @@
 		{ label: 'Daily summary', value: 'daily' }
 	];
 
-	const general = $derived.by(() => ({
+	const general = $derived({
 		organizationName: generalOrganizationName,
 		controlPlaneHost: generalControlPlaneHost,
 		maintenanceWindow: generalMaintenanceWindow,
 		autoUpdate: generalAutoUpdate,
 		allowBeta: generalAllowBeta
-	}));
+	});
 
-	const notifications = $derived.by(() => ({
+	const notifications = $derived({
 		realtimeOps: notificationsRealtimeOps,
 		escalateCritical: notificationsEscalateCritical,
 		digestFrequency: notificationsDigestFrequency,
 		emailBridge: notificationsEmailBridge,
 		slackBridge: notificationsSlackBridge
-	}));
+	});
 
-	const security = $derived.by(() => ({
+	const security = $derived({
 		enforceMfa: securityEnforceMfa,
 		sessionTimeoutMinutes: securitySessionTimeoutMinutes,
 		ipAllowlist: securityIpAllowlist,
 		requireApproval: securityRequireApproval,
 		commandQuorum: securityCommandQuorum
-	}));
+	});
 
 	let lastSavedLabel = $state('Never');
 
@@ -213,19 +269,10 @@
 		lastSavedLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 	}
 
-	const generalDirty = $derived.by(() => {
-		const s = saved;
-		return JSON.stringify(general) !== JSON.stringify(s.general);
-	});
-	const notificationsDirty = $derived.by(() => {
-		const s = saved;
-		return JSON.stringify(notifications) !== JSON.stringify(s.notifications);
-	});
-	const securityDirty = $derived.by(() => {
-		const s = saved;
-		return JSON.stringify(security) !== JSON.stringify(s.security);
-	});
-	const hasChanges = $derived.by(() => generalDirty || notificationsDirty || securityDirty);
+	const generalDirty = $derived(JSON.stringify(general) !== JSON.stringify(saved.general));
+	const notificationsDirty = $derived(JSON.stringify(notifications) !== JSON.stringify(saved.notifications));
+	const securityDirty = $derived(JSON.stringify(security) !== JSON.stringify(saved.security));
+	const hasChanges = $derived(generalDirty || notificationsDirty || securityDirty);
 </script>
 
 <section class="space-y-6">
@@ -273,7 +320,7 @@
 									<Select
 										type="single"
 										bind:value={member.role}
-										onchange={(e: CustomEvent<UserRole>) => setMemberRole(member.id, e.detail)}
+										onValueChange={(value) => setMemberRole(member.id, value as UserRole)}
 									>
 										<SelectTrigger>
 											<span class="capitalize">{member.role}</span>
@@ -291,6 +338,86 @@
 								</td>
 								<td class="px-4 py-3 text-muted-foreground">
 									{formatTimestamp(member.voucherExpiresAt)}
+								</td>
+							</tr>
+						{/each}
+					{/if}
+				</tbody>
+			</table>
+		</CardContent>
+	</Card>
+
+	<Card class="border-border/60">
+		<CardHeader class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+			<div>
+				<CardTitle>Enrollment tokens</CardTitle>
+				<CardDescription>
+					Generate one-time or multi-use tokens for new client deployments.
+				</CardDescription>
+			</div>
+			<Button size="sm" class="gap-2" onclick={createToken}>
+				<ShieldCheck class="h-4 w-4" />
+				Generate token
+			</Button>
+		</CardHeader>
+		<CardContent class="overflow-x-auto">
+			<table class="min-w-full divide-y divide-border text-sm">
+				<thead class="bg-muted/40 text-xs tracking-wide text-muted-foreground uppercase">
+					<tr>
+						<th class="px-4 py-2 text-left">Token</th>
+						<th class="px-4 py-2 text-left">Created</th>
+						<th class="px-4 py-2 text-left">Uses</th>
+						<th class="px-4 py-2 text-left">Status</th>
+						<th class="px-4 py-2 text-right">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-border">
+					{#if enrollmentTokens.length === 0}
+						<tr>
+							<td colspan="5" class="px-4 py-6 text-center text-muted-foreground">
+								No enrollment tokens have been generated yet.
+							</td>
+						</tr>
+					{:else}
+						{#each enrollmentTokens as t (t.token)}
+							{@const isExpired = t.expiresAt && new Date(t.expiresAt) < new Date()}
+							{@const isExhausted = t.uses >= t.maxUses}
+							{@const isRevoked = !!t.revokedAt}
+							{@const isActive = !isRevoked && !isExpired && !isExhausted}
+							<tr>
+								<td class="px-4 py-3 font-mono text-xs max-w-[200px] truncate" title={t.token}>
+									{t.token}
+								</td>
+								<td class="px-4 py-3 text-muted-foreground text-xs">
+									{formatTimestamp(t.createdAt)}
+								</td>
+								<td class="px-4 py-3 text-xs">
+									{t.uses} / {t.maxUses}
+								</td>
+								<td class="px-4 py-3">
+									{#if isRevoked}
+										<Badge variant="destructive" class="text-[10px]">Revoked</Badge>
+									{:else if isExhausted}
+										<Badge variant="outline" class="text-[10px]">Exhausted</Badge>
+									{:else if isExpired}
+										<Badge variant="outline" class="text-[10px]">Expired</Badge>
+									{:else}
+										<Badge variant="secondary" class="bg-emerald-500/10 text-emerald-600 text-[10px]"
+											>Active</Badge
+										>
+									{/if}
+								</td>
+								<td class="px-4 py-3 text-right">
+									{#if isActive}
+										<Button
+											variant="ghost"
+											size="icon"
+											class="h-8 w-8 text-rose-500"
+											onclick={() => revokeToken(t.token)}
+										>
+											<TriangleAlert class="h-4 w-4" />
+										</Button>
+									{/if}
 								</td>
 							</tr>
 						{/each}

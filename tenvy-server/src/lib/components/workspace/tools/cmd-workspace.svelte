@@ -26,7 +26,11 @@
 		workingDirectory: string;
 	};
 
-	const { client, agent } = $props<{ client: Client; agent: AgentSnapshot }>();
+	const { client, agent, onLogChange } = $props<{
+		client: Client;
+		agent: AgentSnapshot;
+		onLogChange?: (log: WorkspaceLogEntry[]) => void;
+	}>();
 
 	const tool = getClientTool('cmd');
 	void tool;
@@ -401,6 +405,10 @@
 			dispatching = false;
 		}
 	}
+
+	$effect(() => {
+		onLogChange?.(log);
+	});
 
 	onDestroy(() => {
 		cancelActivePoll();

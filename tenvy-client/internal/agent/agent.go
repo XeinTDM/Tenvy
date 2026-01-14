@@ -52,6 +52,7 @@ type Agent struct {
 	scriptRunner                 *scriptRunner
 	geolocationConfig            geolocationmgr.Config
 	commandSecret                string
+	commandPublicKey             string
 	pluginManifestMu             sync.RWMutex
 	pluginManifestVersion        string
 	pluginManifestDigests        map[string]string

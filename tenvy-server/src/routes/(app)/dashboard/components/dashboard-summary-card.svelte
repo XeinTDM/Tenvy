@@ -13,7 +13,6 @@
 		SelectItem,
 		SelectTrigger
 	} from '$lib/components/ui/select/index.js';
-	import { derived, writable } from 'svelte/store';
 	import { Activity, ArrowDownRight, ArrowUpRight, Gauge, UserPlus, Users } from '@lucide/svelte';
 	import type {
 		DashboardBandwidthSnapshot,
@@ -37,27 +36,18 @@
 	type TrendTone = 'positive' | 'negative' | 'neutral';
 	type TrendDescriptor = { text: string; tone: TrendTone; icon: TrendIcon | null };
 
-	const newClientRange = writable<'today' | 'week'>('today');
-	const newClientSnapshot = derived(
-		newClientRange,
-		($range): DashboardNewClientSnapshot => props.newClients[$range]
-	);
-	const newClientDelta = derived(
-		newClientSnapshot,
-		($snapshot): TrendDescriptor => describePercentDelta($snapshot.deltaPercent)
-	);
+	let newClientRange = $state<'today' | 'week'>('today');
+	const newClientSnapshot = $derived(props.newClients[newClientRange]);
+	const newClientDelta = $derived(describePercentDelta(newClientSnapshot.deltaPercent));
 
-	const bandwidthDelta = describePercentDelta(props.bandwidth.deltaPercent);
-	const latencyDelta = describeLatencyDelta(props.latency.deltaMs);
-	const connectedCaption = `${props.totals.connected}`;
+	const bandwidthDelta = $derived(describePercentDelta(props.bandwidth.deltaPercent));
+	const latencyDelta = $derived(describeLatencyDelta(props.latency.deltaMs));
+	const connectedCaption = $derived(`${props.totals.connected}`);
 
-	const hasBandwidthTelemetry = props.bandwidth.series.length > 0 && props.bandwidth.totalMb > 0;
-	const hasLatencyTelemetry = props.latency.series.length > 0 && props.latency.averageMs > 0;
+	const hasBandwidthTelemetry = $derived(props.bandwidth.series.length > 0 && props.bandwidth.totalMb > 0);
+	const hasLatencyTelemetry = $derived(props.latency.series.length > 0 && props.latency.averageMs > 0);
 
-	const hasNewClientTelemetry = derived(
-		newClientSnapshot,
-		($snapshot): boolean => $snapshot.series.length > 0
-	);
+	const hasNewClientTelemetry = $derived(newClientSnapshot.series.length > 0);
 
 	function describePercentDelta(delta: number | null): TrendDescriptor {
 		if (delta === null) {
@@ -118,10 +108,10 @@
 				<div class="mx-6 w-36">
 					<Select
 						type="single"
-						value={$newClientRange}
+						value={newClientRange}
 						onValueChange={(value) => {
 							if (value === 'today' || value === 'week') {
-								newClientRange.set(value);
+								newClientRange = value;
 							}
 						}}
 					>
@@ -129,7 +119,7 @@
 							id="new-client-range"
 							class="h-9 w-full justify-between border-border/60 bg-muted/40 px-3 text-xs font-medium"
 						>
-							<span>{$newClientRange === 'today' ? 'Today' : 'This week'}</span>
+							<span>{newClientRange === 'today' ? 'Today' : 'This week'}</span>
 						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="today">Today</SelectItem>
@@ -144,25 +134,25 @@
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
 					<div class="text-3xl font-semibold tracking-tight">
-						{integerFormatter.format($newClientSnapshot.total)}
+						{integerFormatter.format(newClientSnapshot.total)}
 					</div>
-					{#if $hasNewClientTelemetry}
-						{#if $newClientDelta.text}
+					{#if hasNewClientTelemetry}
+						{#if newClientDelta.text}
 							<div
 								class={cn(
 									'mt-1 flex items-center gap-1 text-xs',
-									$newClientDelta.tone === 'positive'
+									newClientDelta.tone === 'positive'
 										? 'text-emerald-500'
-										: $newClientDelta.tone === 'negative'
+										: newClientDelta.tone === 'negative'
 											? 'text-rose-500'
 											: 'text-muted-foreground'
 								)}
 							>
-								{#if $newClientDelta.icon}
-									{@const Icon = $newClientDelta.icon}
+								{#if newClientDelta.icon}
+									{@const Icon = newClientDelta.icon}
 									<Icon class="h-3.5 w-3.5" />
 								{/if}
-								<span>{$newClientDelta.text}</span>
+								<span>{newClientDelta.text}</span>
 							</div>
 						{/if}
 					{:else}

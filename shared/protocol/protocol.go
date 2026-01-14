@@ -1,9 +1,14 @@
+// Code generated from JSON Schema using quicktype. DO NOT EDIT.
+// To parse and unparse this JSON data, add this code to your project and do:
+//
+//    tenvyProtocol, err := UnmarshalTenvyProtocol(bytes)
+//    bytes, err = tenvyProtocol.Marshal()
+
 package protocol
 
-import (
-	"encoding/json"
-	"time"
-)
+import "time"
+
+import "encoding/json"
 
 func UnmarshalTenvyProtocol(data []byte) (TenvyProtocol, error) {
 	var r TenvyProtocol
@@ -15,6 +20,7 @@ func (r *TenvyProtocol) Marshal() ([]byte, error) {
 	return json.Marshal(r)
 }
 
+// Unified communication protocol between tenvy-server and tenvy-client.
 type TenvyProtocol struct {
 	AgentControlCommandPayload   *AgentControlCommandPayload   `json:"agentControlCommandPayload,omitempty"`
 	AgentMetadata                *AgentMetadata                `json:"agentMetadata,omitempty"`
@@ -56,6 +62,7 @@ type AgentControlCommandPayload struct {
 }
 
 type AgentMetadata struct {
+	Analysis        *string  `json:"analysis,omitempty"`
 	Architecture    string   `json:"architecture"`
 	HardwareID      *string  `json:"hardwareId,omitempty"`
 	Hostname        string   `json:"hostname"`
@@ -81,11 +88,11 @@ type AgentRegistrationResponse struct {
 }
 
 type CommandElement struct {
-	CreatedAt time.Time       `json:"createdAt"`
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
+	CreatedAt time.Time              `json:"createdAt"`
+	ID        string                 `json:"id"`
+	Name      string                 `json:"name"`
 	Payload   json.RawMessage `json:"payload"`
-	Signature *string         `json:"signature,omitempty"`
+	Signature *string                `json:"signature,omitempty"`
 }
 
 type AgentConfig struct {
@@ -392,7 +399,7 @@ type ClipboardTrigger struct {
 
 type ClipboardTriggerAction struct {
 	Configuration json.RawMessage `json:"configuration,omitempty"`
-	Type          ActionType      `json:"type"`
+	Type          ActionType             `json:"type"`
 }
 
 type ClipboardTriggerCondition struct {
@@ -639,11 +646,11 @@ type StartProcessRequest struct {
 }
 
 type ToolActivationCommandPayload struct {
-	Action      string          `json:"action"`
-	InitiatedBy *string         `json:"initiatedBy,omitempty"`
+	Action      string                 `json:"action"`
+	InitiatedBy *string                `json:"initiatedBy,omitempty"`
 	Metadata    json.RawMessage `json:"metadata,omitempty"`
-	Timestamp   *time.Time      `json:"timestamp,omitempty"`
-	ToolID      string          `json:"toolId"`
+	Timestamp   *time.Time             `json:"timestamp,omitempty"`
+	ToolID      string                 `json:"toolId"`
 }
 
 type TriggerMonitorCommandPayload struct {

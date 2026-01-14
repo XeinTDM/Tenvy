@@ -1,3 +1,5 @@
+github.com/EvilBytecode/GoDefender v1.1.2 h1:HCcPl6xj64Uit5X1+cyIGHzXDN3ARSqjXjw8SdYSxEU=
+github.com/EvilBytecode/GoDefender v1.1.2/go.mod h1:Svwm/sVJa7wUozXqayDQeQFbKPyiNqZng3Os3t/bMPA=
 github.com/blackjack/webcam v0.6.1 h1:K0T6Q0zto23U99gNAa5q/hFoye6uGcKr2aE6hFoxVoE=
 github.com/blackjack/webcam v0.6.1/go.mod h1:zs+RkUZzqpFPHPiwBZ6U5B34ZXXe9i+SiHLKnnukJuI=
 github.com/cespare/xxhash/v2 v2.2.0 h1:DC2CZ1Ep5Y4k3ZQ899DldepgrayRUGE6BBZ/cd9Cj44=

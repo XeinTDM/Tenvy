@@ -80,7 +80,8 @@
         "publicIpAddress": { "type": "string" },
         "tags": { "type": "array", "items": { "type": "string" } },
         "version": { "type": "string" },
-        "hardwareId": { "type": "string" }
+        "hardwareId": { "type": "string" },
+        "analysis": { "type": "string" }
       },
       "required": ["hostname", "username", "os", "architecture"],
       "additionalProperties": false

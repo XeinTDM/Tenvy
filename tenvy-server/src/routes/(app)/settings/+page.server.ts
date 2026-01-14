@@ -1,8 +1,8 @@
 import type { PageServerLoad } from './$types';
 import { requireOperator } from '$lib/server/authorization.js';
 import { db } from '$lib/server/db/index.js';
-import { voucher, user } from '$lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { voucher, user, enrollmentToken } from '$lib/server/db/schema.js';
+import { eq, desc } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const operator = requireOperator(locals.user);
@@ -19,6 +19,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.innerJoin(voucher, eq(user.voucherId, voucher.id))
 		.orderBy(user.createdAt);
 
+	const tokens = await db
+		.select()
+		.from(enrollmentToken)
+		.orderBy(desc(enrollmentToken.createdAt));
+
 	return {
 		user: operator,
 		members: records.map((record) => {
@@ -31,6 +36,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 				createdAt: record.createdAt.toISOString(),
 				voucherExpiresAt: record.voucherExpiresAt ? record.voucherExpiresAt.toISOString() : null,
 				voucherRedeemedAt: record.voucherRedeemedAt ? record.voucherRedeemedAt.toISOString() : null
+			};
+		}),
+		enrollmentTokens: tokens.map((t) => {
+			if (!t.createdAt) throw new Error('Enrollment token missing creation timestamp');
+			return {
+				...t,
+				createdAt: t.createdAt.toISOString(),
+				expiresAt: t.expiresAt ? t.expiresAt.toISOString() : null,
+				revokedAt: t.revokedAt ? t.revokedAt.toISOString() : null
 			};
 		})
 	};

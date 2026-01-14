@@ -4,6 +4,7 @@ import { sha256 } from '@oslojs/crypto/sha2';
 import { encodeBase64url, encodeHexLowerCase } from '@oslojs/encoding';
 import { db } from '$lib/server/db';
 import * as table from '$lib/server/db/schema';
+import { logSystemEvent } from '$lib/server/audit';
 
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
 const SHORT_SESSION_DURATION_MS = 1000 * 60 * 10; // 10 minutes for onboarding
@@ -40,6 +41,7 @@ export async function createSession(
 		description: description ?? resolvedType
 	};
 	await db.insert(table.session).values(session);
+	await logSystemEvent('auth.login', { sessionType: resolvedType }, userId);
 	return session;
 }
 

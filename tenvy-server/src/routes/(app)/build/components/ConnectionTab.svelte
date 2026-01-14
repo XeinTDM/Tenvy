@@ -244,12 +244,12 @@
 					Fine-tune how the agent polls the controller and handles network jitter.
 				</p>
 			</div>
-			<span
-				class="transition-transform duration-200"
-				style={`transform: rotate(${isConnectionOpen ? 180 : 0}deg);`}
-			>
-				<ChevronDown class="h-4 w-4 text-muted-foreground" />
-			</span>
+			<ChevronDown
+				class={cn(
+					'h-4 w-4 text-muted-foreground transition-transform duration-200',
+					isConnectionOpen && 'rotate-180'
+				)}
+			/>
 		</Collapsible.Trigger>
 		<Collapsible.Content>
 			<div class="grid gap-6 md:grid-cols-3 mt-4">
@@ -418,12 +418,12 @@
 					Enable features that require platform-specific toolchains during compilation.
 				</p>
 			</div>
-			<span
-				class="transition-transform duration-200"
-				style={`transform: rotate(${isModulesOpen ? 180 : 0}deg);`}
-			>
-				<ChevronDown class="h-4 w-4 text-muted-foreground" />
-			</span>
+			<ChevronDown
+				class={cn(
+					'h-4 w-4 text-muted-foreground transition-transform duration-200',
+					isModulesOpen && 'rotate-180'
+				)}
+			/>
 		</Collapsible.Trigger>
 		<Collapsible.Content>
 			<div

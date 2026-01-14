@@ -20,16 +20,7 @@
 	} from '$lib/data/marketplace.js';
 	import type { Plugin } from '$lib/data/plugin-view.js';
 
-	let {
-		listings,
-		entitlements,
-		canPurchase = false,
-		canSubmitMarketplace = false,
-		purchaseListing,
-		signatureBadge,
-		formatSignatureTime,
-		statusStyles
-	}: {
+	interface Props {
 		listings: MarketplaceListing[];
 		entitlements: MarketplaceEntitlement[];
 		canPurchase?: boolean;
@@ -42,7 +33,18 @@
 		};
 		formatSignatureTime: (value: string | null | undefined) => string;
 		statusStyles: Record<MarketplaceStatus, string>;
-	} = $props();
+	}
+
+	let {
+		listings,
+		entitlements,
+		canPurchase = false,
+		canSubmitMarketplace = false,
+		purchaseListing,
+		signatureBadge,
+		formatSignatureTime,
+		statusStyles
+	}: Props = $props();
 
 	function isEntitled(listingId: string): boolean {
 		return entitlements.some((entry) => entry.listingId === listingId);
@@ -105,7 +107,7 @@
 								<div class="flex items-center gap-2">
 									<GitFork class="h-3.5 w-3.5" />
 									<a
-										href={resolve(listing.repositoryUrl as any)}
+										href={resolve(listing.repositoryUrl)}
 										rel="noreferrer"
 										target="_blank"
 										class="truncate underline decoration-dotted hover:text-foreground"

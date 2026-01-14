@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {
 		Card,
+		CardAction,
 		CardContent,
 		CardDescription,
 		CardHeader,
@@ -22,7 +23,7 @@
 
 	let { data } = $props<{ data: PageData }>();
 
-	const summaryMetrics: ActivitySummaryMetric[] = data.summary;
+	const summaryMetrics = $derived(data.summary);
 
 	const summaryToneClasses: Record<ActivitySummaryTone, string> = {
 		positive: 'text-emerald-500',
@@ -66,11 +67,13 @@
 
 	type TimelineEntry = PageData['timeline'][number];
 
-	const activityTimeline: ActivityPoint[] = data.timeline.map(
-		(point: TimelineEntry): ActivityPoint => ({
-			...point,
-			timestamp: new Date(point.timestamp)
-		})
+	const activityTimeline = $derived(
+		data.timeline.map(
+			(point: TimelineEntry): ActivityPoint => ({
+				...point,
+				timestamp: new Date(point.timestamp)
+			})
+		)
 	);
 
 	const activityChartConfig = {
@@ -118,15 +121,17 @@
 		}
 	];
 
-	const hasTimelineData = activityTimeline.some(
-		(point) => point.active > 0 || point.idle > 0 || point.suppressed > 0
+	const hasTimelineData = $derived(
+		activityTimeline.some((point) => point.active > 0 || point.idle > 0 || point.suppressed > 0)
 	);
 
 	type ModuleActivityEntry = PageData['moduleActivity'][number];
 
-	const moduleActivity: ModuleActivityEntry[] = data.moduleActivity;
+	const moduleActivity = $derived(data.moduleActivity);
 
-	const hasModuleTelemetry = moduleActivity.some((entry) => entry.executed > 0 || entry.queued > 0);
+	const hasModuleTelemetry = $derived(
+		moduleActivity.some((entry) => entry.executed > 0 || entry.queued > 0)
+	);
 
 	const moduleChartConfig = {
 		executed: {
@@ -168,14 +173,16 @@
 
 	type LatencyEntry = PageData['latency']['points'][number];
 
-	const latencyTrend: LatencyPoint[] = data.latency.points.map(
-		(entry: LatencyEntry): LatencyPoint => ({
-			...entry,
-			timestamp: new Date(entry.timestamp)
-		})
+	const latencyTrend = $derived(
+		data.latency.points.map(
+			(entry: LatencyEntry): LatencyPoint => ({
+				...entry,
+				timestamp: new Date(entry.timestamp)
+			})
+		)
 	);
 
-	const hasLatencySamples = latencyTrend.some((entry) => entry.p50 > 0 || entry.p95 > 0);
+	const hasLatencySamples = $derived(latencyTrend.some((entry) => entry.p50 > 0 || entry.p95 > 0));
 
 	const latencyChartConfig = {
 		p50: {
@@ -209,7 +216,7 @@
 		}
 	];
 
-	const flaggedSessions: ActivityFlaggedSession[] = data.flaggedSessions;
+	const flaggedSessions = $derived(data.flaggedSessions);
 </script>
 
 <section class="space-y-6">
@@ -269,16 +276,16 @@
 		</Card>
 
 		<Card class="xl:col-span-3">
-			<CardHeader class="flex flex-row items-start justify-between space-y-0">
-				<div class="space-y-1">
-					<CardTitle>Command latency percentiles</CardTitle>
-					<CardDescription>
-						Monitors round-trip times captured from controller to clients.
-					</CardDescription>
-				</div>
-				<Badge variant="secondary" class="font-mono text-[0.65rem]">
-					{data.latency.windowLabel}
-				</Badge>
+			<CardHeader>
+				<CardTitle>Command latency percentiles</CardTitle>
+				<CardDescription>
+					Monitors round-trip times captured from controller to clients.
+				</CardDescription>
+				<CardAction>
+					<Badge variant="secondary" class="font-mono text-[0.65rem]">
+						{data.latency.windowLabel}
+					</Badge>
+				</CardAction>
 			</CardHeader>
 			<CardContent>
 				{#if hasLatencySamples}

@@ -20,8 +20,7 @@
 		type ClientToolId,
 		type DialogToolId
 	} from '$lib/data/client-tools';
-	import { isWorkspaceTool } from '$lib/data/client-tool-workspaces';
-	import { createEventDispatcher } from 'svelte';
+	import { isWorkspaceTool } from '$lib/data/client-tools-workspaces.js';
 	import { notifyToolActivationCommand } from '$lib/utils/agent-commands.js';
 	import type {
 		AgentConnectionAction,
@@ -30,12 +29,16 @@
 	import { toast } from 'svelte-sonner';
 	import type { AgentControlCommandPayload, CommandInput } from '../../../../shared/types/messages';
 
-	const { client } = $props<{ client: Client }>();
+	const { client, onConnectionAction } = $props<{
+		client: Client;
+		onConnectionAction?: (detail: {
+			action: AgentConnectionAction;
+			success: boolean;
+			message: string;
+		}) => void;
+	}>();
 
 	let dialogTool = $state<DialogToolId | null>(null);
-	const dispatch = createEventDispatcher<{
-		connection: { action: AgentConnectionAction; success: boolean; message: string };
-	}>();
 
 	type PowerAction = Extract<
 		AgentControlCommandPayload['action'],
@@ -67,7 +70,7 @@
 
 			if (!response.ok) {
 				const message = (await response.text()) || 'Unable to update connection';
-				dispatch('connection', {
+				onConnectionAction?.({
 					action,
 					success: false,
 					message: message.trim()
@@ -83,14 +86,14 @@
 					? `${label} is now disconnected from the controller.`
 					: `${label} has been reconnected to the controller.`;
 
-			dispatch('connection', {
+			onConnectionAction?.({
 				action,
 				success: true,
 				message: successMessage
 			});
 		} catch (err) {
 			const message = err instanceof Error ? err.message : 'Unable to update connection';
-			dispatch('connection', { action, success: false, message });
+			onConnectionAction?.({ action, success: false, message });
 			console.error('Connection request failed:', err);
 		}
 	}
@@ -208,8 +211,8 @@
 
 <ContextMenuContent class="w-64">
 	<ContextMenuGroup>
-		<ContextMenuItem on:select={() => openTool('system-info')}>System Info</ContextMenuItem>
-		<ContextMenuItem on:select={() => openTool('notes')}>Notes</ContextMenuItem>
+		<ContextMenuItem onSelect={() => openTool('system-info')}>System Info</ContextMenuItem>
+		<ContextMenuItem onSelect={() => openTool('notes')}>Notes</ContextMenuItem>
 	</ContextMenuGroup>
 
 	<ContextMenuSeparator />
@@ -218,26 +221,26 @@
 		<ContextMenuSub>
 			<ContextMenuSubTrigger>Control</ContextMenuSubTrigger>
 			<ContextMenuSubContent class="w-48">
-				<ContextMenuItem on:select={() => openTool('app-vnc')}>App VNC</ContextMenuItem>
-				<ContextMenuItem on:select={() => openTool('remote-desktop')}
+				<ContextMenuItem onSelect={() => openTool('app-vnc')}>App VNC</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('remote-desktop')}
 					>Remote Desktop</ContextMenuItem
 				>
-				<ContextMenuItem on:select={() => openTool('webcam-control')}
+				<ContextMenuItem onSelect={() => openTool('webcam-control')}
 					>Webcam Control</ContextMenuItem
 				>
-				<ContextMenuItem on:select={() => openTool('audio-control')}>Audio Control</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('audio-control')}>Audio Control</ContextMenuItem>
 				<ContextMenuSub>
 					<ContextMenuSubTrigger>Keylogger</ContextMenuSubTrigger>
 					<ContextMenuSubContent class="w-48">
-						<ContextMenuItem on:select={() => openTool('keylogger-standard')}
+						<ContextMenuItem onSelect={() => openTool('keylogger-standard')}
 							>Standard</ContextMenuItem
 						>
-						<ContextMenuItem on:select={() => openTool('keylogger-offline')}
+						<ContextMenuItem onSelect={() => openTool('keylogger-offline')}
 							>Offline</ContextMenuItem
 						>
 					</ContextMenuSubContent>
 				</ContextMenuSub>
-				<ContextMenuItem on:select={() => openTool('cmd')}>CMD</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('cmd')}>CMD</ContextMenuItem>
 			</ContextMenuSubContent>
 		</ContextMenuSub>
 	</ContextMenuGroup>
@@ -246,14 +249,14 @@
 		<ContextMenuSub>
 			<ContextMenuSubTrigger>Management</ContextMenuSubTrigger>
 			<ContextMenuSubContent class="w-48">
-				<ContextMenuItem on:select={() => openTool('file-manager')}>File Manager</ContextMenuItem>
-				<ContextMenuItem on:select={() => openTool('system-monitor')}
+				<ContextMenuItem onSelect={() => openTool('file-manager')}>File Manager</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('system-monitor')}
 					>System Monitor</ContextMenuItem
 				>
-				<ContextMenuItem on:select={() => openTool('registry-manager')}
+				<ContextMenuItem onSelect={() => openTool('registry-manager')}
 					>Registry Manager</ContextMenuItem
 				>
-				<ContextMenuItem on:select={() => openTool('clipboard-manager')}
+				<ContextMenuItem onSelect={() => openTool('clipboard-manager')}
 					>Clipboard Manager</ContextMenuItem
 				>
 			</ContextMenuSubContent>
@@ -263,8 +266,8 @@
 	<ContextMenuSeparator />
 
 	<ContextMenuGroup>
-		<ContextMenuItem on:select={() => openTool('recovery')}>Recovery</ContextMenuItem>
-		<ContextMenuItem on:select={() => openTool('options')}>Options</ContextMenuItem>
+		<ContextMenuItem onSelect={() => openTool('recovery')}>Recovery</ContextMenuItem>
+		<ContextMenuItem onSelect={() => openTool('options')}>Options</ContextMenuItem>
 	</ContextMenuGroup>
 
 	<ContextMenuSeparator />
@@ -273,15 +276,15 @@
 		<ContextMenuSub>
 			<ContextMenuSubTrigger>Miscellaneous</ContextMenuSubTrigger>
 			<ContextMenuSubContent class="w-48">
-				<ContextMenuItem on:select={() => openTool('open-url')}>Open URL</ContextMenuItem>
-				<ContextMenuItem on:select={() => openTool('client-chat')}>Client Chat</ContextMenuItem>
-				<ContextMenuItem on:select={() => openTool('trigger-monitor')}
+				<ContextMenuItem onSelect={() => openTool('open-url')}>Open URL</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('client-chat')}>Client Chat</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('trigger-monitor')}
 					>Trigger Monitor</ContextMenuItem
 				>
-				<ContextMenuItem on:select={() => openTool('ip-geolocation')}
+				<ContextMenuItem onSelect={() => openTool('ip-geolocation')}
 					>IP Geolocation</ContextMenuItem
 				>
-				<ContextMenuItem on:select={() => openTool('environment-variables')}
+				<ContextMenuItem onSelect={() => openTool('environment-variables')}
 					>Environment Variables</ContextMenuItem
 				>
 			</ContextMenuSubContent>
@@ -292,8 +295,8 @@
 		<ContextMenuSub>
 			<ContextMenuSubTrigger>System Controls</ContextMenuSubTrigger>
 			<ContextMenuSubContent class="w-48">
-				<ContextMenuItem on:select={() => openTool('reconnect')}>Reconnect</ContextMenuItem>
-				<ContextMenuItem on:select={() => openTool('disconnect')}>Disconnect</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('reconnect')}>Reconnect</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('disconnect')}>Disconnect</ContextMenuItem>
 			</ContextMenuSubContent>
 		</ContextMenuSub>
 	</ContextMenuGroup>
@@ -302,10 +305,10 @@
 		<ContextMenuSub>
 			<ContextMenuSubTrigger>Power</ContextMenuSubTrigger>
 			<ContextMenuSubContent class="w-48">
-				<ContextMenuItem on:select={() => openTool('shutdown')}>Shutdown</ContextMenuItem>
-				<ContextMenuItem on:select={() => openTool('restart')}>Restart</ContextMenuItem>
-				<ContextMenuItem on:select={() => openTool('sleep')}>Sleep</ContextMenuItem>
-				<ContextMenuItem on:select={() => openTool('logoff')}>Logoff</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('shutdown')}>Shutdown</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('restart')}>Restart</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('sleep')}>Sleep</ContextMenuItem>
+				<ContextMenuItem onSelect={() => openTool('logoff')}>Logoff</ContextMenuItem>
 			</ContextMenuSubContent>
 		</ContextMenuSub>
 	</ContextMenuGroup>
@@ -313,6 +316,6 @@
 
 {#if dialogTool}
 	{#key dialogTool}
-		<ClientToolDialog {client} toolId={dialogTool} on:close={handleDialogClose} />
+		<ClientToolDialog {client} toolId={dialogTool} onClose={handleDialogClose} />
 	{/key}
 {/if}

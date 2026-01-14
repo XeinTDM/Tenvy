@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { createEventDispatcher, onMount } from 'svelte';
+	import { onMount } from 'svelte';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import MovableWindow from '$lib/components/ui/movablewindow/MovableWindow.svelte';
 	import { Alert, AlertDescription, AlertTitle } from '$lib/components/ui/alert/index.js';
@@ -45,14 +45,14 @@
 	const {
 		toolId,
 		client,
-		agent = null
+		agent = null,
+		onClose
 	} = $props<{
 		toolId: DialogToolId;
 		client: Client;
 		agent?: AgentSnapshot | null;
+		onClose?: () => void;
 	}>();
-
-	const dispatch = createEventDispatcher<{ close: void }>();
 
 	let open = $state(true);
 
@@ -62,7 +62,7 @@
 
 	function handleOpenChangeComplete(next: boolean) {
 		if (!next) {
-			dispatch('close');
+			onClose?.();
 		}
 	}
 

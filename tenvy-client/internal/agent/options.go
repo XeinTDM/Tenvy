@@ -49,6 +49,7 @@ type RuntimeOptions struct {
 	EnabledModules    []string
 	Geolocation       geolocationmgr.Config
 	CommandSecret     string
+	CommandPublicKey  string
 }
 
 type TimingOverride struct {

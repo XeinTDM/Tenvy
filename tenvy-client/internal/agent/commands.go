@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -50,15 +51,13 @@ func (a *Agent) processCommands(ctx context.Context, commands []protocol.Command
 }
 
 func (a *Agent) verifyCommandSignature(cmd protocol.Command) bool {
-	if a.commandSecret == "" {
+	if a.commandSecret == "" && a.commandPublicKey == "" {
 		return true
 	}
 
 	if cmd.Signature == "" {
 		return false
 	}
-
-	mac := hmac.New(sha256.New, []byte(a.commandSecret))
 
 	payloadString := ""
 	if len(cmd.Payload) > 0 {
@@ -72,10 +71,39 @@ func (a *Agent) verifyCommandSignature(cmd protocol.Command) bool {
 		cmd.CreatedAt,
 	}, "|")
 
-	mac.Write([]byte(data))
-	expectedMAC := hex.EncodeToString(mac.Sum(nil))
+	// Check for signature type prefix
+	if strings.HasPrefix(cmd.Signature, "ed25519:") {
+		if a.commandPublicKey == "" {
+			return false
+		}
+		sigHex := cmd.Signature[len("ed25519:"):]
+		sigBytes, err := hex.DecodeString(sigHex)
+		if err != nil {
+			return false
+		}
+		pubBytes, err := hex.DecodeString(a.commandPublicKey)
+		if err != nil {
+			return false
+		}
+		if len(pubBytes) != ed25519.PublicKeySize {
+			return false
+		}
+		return ed25519.Verify(pubBytes, []byte(data), sigBytes)
+	}
 
-	return hmac.Equal([]byte(cmd.Signature), []byte(expectedMAC))
+	actualSignature := cmd.Signature
+	if strings.HasPrefix(cmd.Signature, "hmac:") {
+		actualSignature = cmd.Signature[len("hmac:"):]
+	}
+
+	if a.commandSecret != "" {
+		mac := hmac.New(sha256.New, []byte(a.commandSecret))
+		mac.Write([]byte(data))
+		expectedMAC := hex.EncodeToString(mac.Sum(nil))
+		return hmac.Equal([]byte(actualSignature), []byte(expectedMAC))
+	}
+
+	return false
 }
 
 func (a *Agent) executeCommand(ctx context.Context, cmd protocol.Command) protocol.CommandResult {

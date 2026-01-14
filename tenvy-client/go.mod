@@ -1,6 +1,6 @@
 module github.com/rootbay/tenvy-client
 
-go 1.22
+go 1.25.5
 
 require (
 	github.com/blackjack/webcam v0.6.1
@@ -19,6 +19,8 @@ require (
 	howett.net/plist v1.0.0
 	nhooyr.io/websocket v1.8.10
 )
+
+require github.com/EvilBytecode/GoDefender v1.1.2
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -53,7 +55,7 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	github.com/yusufpapurcu/wmi v1.2.4
+	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/mock v0.4.0 // indirect
 	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect

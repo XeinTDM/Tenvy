@@ -156,6 +156,7 @@ func runAgentOnce(ctx context.Context, opts RuntimeOptions) error {
 		options:                  options.NewManager(options.ManagerOptions{ScriptDirectory: scriptDir}),
 		geolocationConfig:        opts.Geolocation,
 		commandSecret:            opts.CommandSecret,
+		commandPublicKey:         opts.CommandPublicKey,
 	}
 	agent.scriptRunner = newScriptRunner(agent, agent.options)
 

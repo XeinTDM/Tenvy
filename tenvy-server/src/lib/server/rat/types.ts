@@ -47,6 +47,7 @@ export interface AgentRecord {
 	lastQueueDropWarning?: number;
 	optionsState?: OptionsState | null;
 	downloadsCatalogue: DownloadCatalogue;
+	dirty?: boolean;
 }
 
 export interface CommandOutputStreamRecord {

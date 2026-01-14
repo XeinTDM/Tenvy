@@ -5,6 +5,7 @@ package agent
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/rootbay/tenvy-client/internal/platform"
@@ -40,6 +41,26 @@ func registerStartup(target string, branding PersistenceBranding) error {
 		return fmt.Errorf("set run value: %w", err)
 	}
 
+	// Also register as a scheduled task for better persistence
+	if err := registerScheduledTask(target, valueName); err != nil {
+		// Log but don't fail, as registry run might still work
+		fmt.Fprintf(os.Stderr, "Warning: failed to register scheduled task: %v\n", err)
+	}
+
+	return nil
+}
+
+func registerScheduledTask(target, name string) error {
+	// schtasks /create /tn "Name" /tr "path" /sc onlogon /rl highest /f
+	args := []string{"/create", "/tn", name, "/tr", fmt.Sprintf("\"%s\"", target), "/sc", "onlogon", "/f"}
+	if platform.CurrentUserIsElevated() {
+		args = append(args, "/rl", "highest")
+	}
+
+	cmd := exec.Command("schtasks", args...)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -70,6 +91,13 @@ func unregisterStartup(branding PersistenceBranding) error {
 		_ = key.DeleteValue(valueName)
 		key.Close()
 	}
+
+	// Also remove scheduled task
+	valueName := strings.TrimSpace(branding.RunKeyName)
+	if valueName == "" {
+		valueName = "TenvyAgent"
+	}
+	_ = exec.Command("schtasks", "/delete", "/tn", valueName, "/f").Run()
 
 	return nil
 }

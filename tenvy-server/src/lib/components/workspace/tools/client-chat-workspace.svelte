@@ -25,12 +25,13 @@
 		ClientChatStateResponse
 	} from '$lib/types/client-chat';
 
-	const { client } = $props<{ client: Client }>();
+	const { client, onLogChange } = $props<{
+		client: Client;
+		onLogChange?: (log: WorkspaceLogEntry[]) => void;
+	}>();
 
 	const tool = getClientTool('client-chat');
 	void tool;
-
-	const dispatch = createEventDispatcher<{ logchange: WorkspaceLogEntry[] }>();
 
 	let session = $state<ClientChatSessionState | null>(null);
 	let messages = $state<ClientChatMessage[]>([]);
@@ -176,7 +177,7 @@
 	}
 
 	$effect(() => {
-		dispatch('logchange', log);
+		onLogChange?.(log);
 	});
 
 	onMount(() => {

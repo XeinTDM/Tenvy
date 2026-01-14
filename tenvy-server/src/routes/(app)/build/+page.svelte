@@ -102,7 +102,7 @@
 	let audioStreamingTouched = $state(false);
 	const moduleCatalog = agentModules;
 	let selectedModules = $state(moduleCatalog.map((module) => module.id));
-	const selectedModuleSummary = () => {
+	const selectedModuleSummary = $derived.by(() => {
 		const selectedNames = selectedModules
 			.map((moduleId) => agentModuleIndex.get(moduleId)?.title ?? moduleId)
 			.filter(Boolean);
@@ -115,8 +115,9 @@
 		const remainder = selectedNames.length - preview.length;
 
 		return remainder > 0 ? `${preview.join(', ')} +${remainder} more` : preview.join(', ');
-	};
-	const activeTabMeta = () => TAB_METADATA[activeTab];
+	});
+
+	const activeTabMeta = $derived(TAB_METADATA[activeTab]);
 	type BuildTab = 'connection' | 'persistence' | 'execution' | 'presentation';
 	const DEFAULT_TAB: BuildTab = 'connection';
 	let activeTab = $state<BuildTab>(DEFAULT_TAB);
@@ -189,7 +190,7 @@
 		success: 'Artifact generated. Use the download link below or share the output path.',
 		error: 'Last build failed. Review errors or adjust settings before retrying.'
 	};
-	 const buildStatusBadge = () => BUILD_STATUS_BADGE[buildStatus];
+	const buildStatusBadge = $derived(BUILD_STATUS_BADGE[buildStatus]);
 
 	let tabComponents = $state<Partial<Record<BuildTab, TabComponent>>>({
 		connection: ConnectionTab
@@ -209,7 +210,7 @@
 
 	async function loadTabComponent(tab: BuildTab) {
 		if (tabComponents[tab]) {
-			tabErrors = { ...tabErrors, [tab]: null };
+			tabErrors[tab] = null;
 			return tabComponents[tab];
 		}
 
@@ -217,20 +218,20 @@
 			return;
 		}
 
-		tabLoading = { ...tabLoading, [tab]: true };
-		tabErrors = { ...tabErrors, [tab]: null };
+		tabLoading[tab] = true;
+		tabErrors[tab] = null;
 
 		try {
 			const module = await TAB_COMPONENT_LOADERS[tab]();
-			tabComponents = { ...tabComponents, [tab]: module.default };
+			tabComponents[tab] = module.default;
 			return module.default;
 		} catch (error) {
 			console.error('Failed to load tab component', tab, error);
 			const message =
 				error instanceof Error ? error.message : 'Failed to load tab. Please try again.';
-			tabErrors = { ...tabErrors, [tab]: message };
+			tabErrors[tab] = message;
 		} finally {
-			tabLoading = { ...tabLoading, [tab]: false };
+			tabLoading[tab] = false;
 		}
 	}
 
@@ -946,9 +947,9 @@
 								<p class="text-xs text-muted-foreground">{BUILD_STATUS_HINT[buildStatus]}</p>
 							</div>
 							<Badge
-								class={`rounded-full border px-3 py-1 text-[0.65rem] font-medium ${buildStatusBadge().classes}`}
+								class={`rounded-full border px-3 py-1 text-[0.65rem] font-medium ${buildStatusBadge.classes}`}
 							>
-								{buildStatusBadge().label}
+								{buildStatusBadge.label}
 							</Badge>
 						</div>
 						<div class="space-y-2 text-sm">
@@ -965,7 +966,7 @@
 							<p class="text-xs text-muted-foreground">
 								Target: {targetOS} · {targetArch}
 							</p>
-							<p class="text-xs text-muted-foreground">Modules: {selectedModuleSummary()}</p>
+							<p class="text-xs text-muted-foreground">Modules: {selectedModuleSummary}</p>
 						</div>
 						{#if downloadUrl}
 							<a

@@ -36,7 +36,7 @@
 		};
 	});
 
-	const searchItems = $derived(() => {
+	const searchItems = $derived.by(() => {
 		const items: SearchItem[] = [];
 
 		navItems.forEach((item) => {
@@ -73,11 +73,11 @@
 		return items;
 	});
 
-	const filteredSearchItems = $derived(() => {
+	const filteredSearchItems = $derived.by(() => {
 		const query = searchQuery.trim().toLowerCase();
-		if (!query) return searchItems();
+		if (!query) return searchItems;
 
-		return searchItems().filter(
+		return searchItems.filter(
 			(item) =>
 				item.title.toLowerCase().includes(query) ||
 				item.description?.toLowerCase().includes(query) ||
@@ -85,9 +85,9 @@
 		);
 	});
 
-	const searchGroups = $derived(() => {
+	const searchGroups = $derived.by(() => {
 		const groups: Record<string, SearchItem[]> = {};
-		filteredSearchItems().forEach((item) => {
+		filteredSearchItems.forEach((item) => {
 			if (!groups[item.category]) groups[item.category] = [];
 			groups[item.category].push(item);
 		});
@@ -115,7 +115,7 @@
 			<Kbd.Root class="mr-5">ESC</Kbd.Root>
 		</div>
 		<div class="max-h-[min(480px,70vh)] overflow-y-auto p-2">
-			{#each Object.entries(searchGroups()) as [category, items]}
+			{#each Object.entries(searchGroups) as [category, items]}
 				<div class="px-2 py-2">
 					<h3 class="px-2 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
 						{category}
@@ -164,7 +164,7 @@
 				</span>
 			</div>
 			<div class="text-muted-foreground">
-				<span class="font-medium">{filteredSearchItems().length}</span> results
+				<span class="font-medium">{filteredSearchItems.length}</span> results
 			</div>
 		</div>
 	</Dialog.Content>

@@ -38,7 +38,14 @@
 		ChevronUp
 	} from '@lucide/svelte';
 
-	const { client } = $props<{ client: Client }>();
+	const { client, onLogChange } = $props<{
+		client: Client;
+		onLogChange?: (log: WorkspaceLogEntry[]) => void;
+	}>();
+
+	$effect(() => {
+		onLogChange?.(log);
+	});
 
 	const fileManagerEndpoint = $derived(`/api/agents/${encodeURIComponent(client.id)}/file-manager`);
 

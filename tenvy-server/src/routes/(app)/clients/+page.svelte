@@ -145,15 +145,29 @@
 	let toolDialogAgent = $state<AgentSnapshot | null | undefined>(undefined);
 	let toolDialogClient = $state<Client | null>(null);
 
-	type PageAlertVariant = 'default' | 'destructive';
-
-	type PageAlert = {
+	type PageNotification = {
 		title: string;
 		description: string;
-		variant: PageAlertVariant;
+		variant: 'default' | 'destructive' | 'success';
 	};
 
-	let connectionAlert = $state<PageAlert | null>(null);
+	let pageNotification = $state<PageNotification | null>(null);
+	let notificationTimeout: number | undefined;
+
+	function showNotification(notification: PageNotification) {
+		pageNotification = notification;
+
+		if (!browser) return;
+
+		if (notificationTimeout !== undefined) {
+			window.clearTimeout(notificationTimeout);
+		}
+
+		notificationTimeout = window.setTimeout(() => {
+			pageNotification = null;
+			notificationTimeout = undefined;
+		}, 4000);
+	}
 
 	$effect(() => {
 		if (toolDialog && toolDialogAgent === null) {
@@ -163,7 +177,7 @@
 
 	$effect(() => {
 		const agentId = toolDialog?.agentId ?? null;
-		const agents = $clientsTable.agents;
+		const agents = clientsTable.agents;
 		const agent =
 			agentId !== null ? (agents.find((item) => item.id === agentId) ?? null) : undefined;
 		toolDialogAgent = agent;
@@ -178,34 +192,20 @@
 
 	$effect(() => {
 		const agentId = tagsDialogAgentId;
-		const agents = $clientsTable.agents;
+		const agents = clientsTable.agents;
 		tagsAgent = agentId ? (agents.find((agent) => agent.id === agentId) ?? null) : null;
 	});
-
-	type CopyFeedback = { message: string; variant: 'success' | 'error' } | null;
-	let copyFeedback = $state<CopyFeedback>(null);
-	let copyFeedbackTimeout: number | undefined;
-	let connectionAlertTimeout: number | undefined;
 
 	function hasActiveConnection(agent: AgentSnapshot): boolean {
 		return agent.status === 'online';
 	}
 
-	function showConnectionAlert(alert: PageAlert) {
-		connectionAlert = alert;
-
-		if (!browser) {
-			return;
-		}
-
-		if (connectionAlertTimeout !== undefined) {
-			window.clearTimeout(connectionAlertTimeout);
-		}
-
-		connectionAlertTimeout = window.setTimeout(() => {
-			connectionAlert = null;
-			connectionAlertTimeout = undefined;
-		}, 4000);
+	function showConnectionAlert(alert: { title: string; description: string; variant: 'default' | 'destructive' }) {
+		showNotification({
+			title: alert.title,
+			description: alert.description,
+			variant: alert.variant
+		});
 	}
 
 	function formatDate(value: string): string {
@@ -306,8 +306,8 @@
 			return;
 		}
 
-		const agents = $clientsTable.agents;
-		const knownLookups = $ipLocationStore;
+		const agents = clientsTable.agents;
+		const knownLookups = get(ipLocationStore);
 		const pending = new SvelteSet<string>();
 
 		for (const agent of agents) {
@@ -380,13 +380,13 @@
 		tagsDialogError = null;
 	}
 
-	async function handleTagsSubmit(event: CustomEvent<{ tags: string[] }>) {
+	async function handleTagsSubmit(detail: { tags: string[] }) {
 		const targetAgent = tagsAgent;
 		if (!targetAgent) {
 			return;
 		}
 
-		const tags = event.detail?.tags ?? [];
+		const tags = detail?.tags ?? [];
 		tagsDialogPending = true;
 		tagsDialogError = null;
 
@@ -405,7 +405,7 @@
 			const payload = (await response.json()) as AgentTagUpdateResponse;
 			const updatedAgent = payload.agent;
 
-			const current = get(clientsTable).agents;
+			const current = clientsTable.agents;
 			clientsTable.setAgents(
 				current.map((item) => (item.id === updatedAgent.id ? updatedAgent : item))
 			);
@@ -561,30 +561,22 @@
 		await requestConnectionAction(agent, 'reconnect');
 	}
 
-	function setCopyFeedback(feedback: CopyFeedback) {
-		copyFeedback = feedback;
-		if (!browser) {
-			return;
-		}
-		if (copyFeedbackTimeout !== undefined) {
-			window.clearTimeout(copyFeedbackTimeout);
-		}
-		if (feedback) {
-			copyFeedbackTimeout = window.setTimeout(() => {
-				copyFeedback = null;
-				copyFeedbackTimeout = undefined;
-			}, 2500);
-		}
-	}
-
 	async function copyAgentId(agentId: string) {
 		if (!browser) return;
 		try {
 			await navigator.clipboard.writeText(agentId);
-			setCopyFeedback({ message: 'Agent ID copied to clipboard', variant: 'success' });
+			showNotification({
+				title: 'Copied',
+				description: 'Agent ID copied to clipboard',
+				variant: 'success'
+			});
 		} catch (err) {
 			console.error(err);
-			setCopyFeedback({ message: 'Unable to copy agent ID', variant: 'error' });
+			showNotification({
+				title: 'Copy failed',
+				description: 'Unable to copy agent ID',
+				variant: 'destructive'
+			});
 		}
 	}
 
@@ -593,14 +585,9 @@
 			return;
 		}
 
-		if (copyFeedbackTimeout !== undefined) {
-			window.clearTimeout(copyFeedbackTimeout);
-			copyFeedbackTimeout = undefined;
-		}
-
-		if (connectionAlertTimeout !== undefined) {
-			window.clearTimeout(connectionAlertTimeout);
-			connectionAlertTimeout = undefined;
+		if (notificationTimeout !== undefined) {
+			window.clearTimeout(notificationTimeout);
+			notificationTimeout = undefined;
 		}
 	});
 
@@ -736,6 +723,24 @@
 	}
 </script>
 
+{#snippet TableHeaderTooltip(title: string, content: string, center = true)}
+	<TableHead class={cn(center && 'text-center')}>
+		<Tooltip>
+			<TooltipTrigger>
+				{#snippet child({ props })}
+					<span {...props} class={cn('inline-flex cursor-help items-center gap-1', center && 'w-full justify-center')}>
+						{title}
+						<Info class="size-3 text-muted-foreground" aria-hidden="true" />
+					</span>
+				{/snippet}
+			</TooltipTrigger>
+			<TooltipContent side="top" align="center" class="max-w-[18rem] text-xs">
+				{content}
+			</TooltipContent>
+		</Tooltip>
+	</TableHead>
+{/snippet}
+
 <svelte:head>
 	<title>Clients · Tenvy</title>
 </svelte:head>
@@ -752,8 +757,8 @@
 					<Input
 						id="client-search"
 						placeholder="Hostname, user, ID, IP, or tag"
-						value={$clientsTable.searchQuery}
-						oninput={(event) => clientsTable.setSearchQuery(event.currentTarget.value)}
+						value={clientsTable.searchQuery}
+						oninput={(event) => (clientsTable.searchQuery = event.currentTarget.value)}
 						class="pl-10"
 					/>
 				</div>
@@ -763,15 +768,15 @@
 					<Label for="client-status-filter" class="text-sm font-medium">Status</Label>
 					<Select
 						type="single"
-						value={$clientsTable.statusFilter}
+						value={clientsTable.statusFilter}
 						onValueChange={(value) =>
-							clientsTable.setStatusFilter(value as 'all' | AgentSnapshot['status'])}
+							(clientsTable.statusFilter = value as 'all' | AgentSnapshot['status'])}
 					>
 						<SelectTrigger id="client-status-filter" class="w-full">
 							<span class="truncate">
-								{$clientsTable.statusFilter === 'all'
+								{clientsTable.statusFilter === 'all'
 									? 'All statuses'
-									: statusLabels[$clientsTable.statusFilter]}
+									: statusLabels[clientsTable.statusFilter]}
 							</span>
 						</SelectTrigger>
 						<SelectContent>
@@ -786,18 +791,18 @@
 					<Label for="client-tag-filter" class="text-sm font-medium">Tag</Label>
 					<Select
 						type="single"
-						value={$clientsTable.tagFilter}
-						onValueChange={(value) => clientsTable.setTagFilter(value === 'all' ? 'all' : value)}
+						value={clientsTable.tagFilter}
+						onValueChange={(value) => (clientsTable.tagFilter = value === 'all' ? 'all' : value)}
 					>
 						<SelectTrigger id="client-tag-filter" class="w-full">
 							<span class="truncate">
-								{$clientsTable.tagFilter === 'all' ? 'All tags' : $clientsTable.tagFilter}
+								{clientsTable.tagFilter === 'all' ? 'All tags' : clientsTable.tagFilter}
 							</span>
 						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="all">All tags</SelectItem>
-							{#if $clientsTable.availableTags.length > 0}
-								{#each $clientsTable.availableTags as tag (tag)}
+							{#if clientsTable.availableTags.length > 0}
+								{#each clientsTable.availableTags as tag (tag)}
 									<SelectItem value={tag}>{tag}</SelectItem>
 								{/each}
 							{:else}
@@ -810,14 +815,14 @@
 					<Label for="client-page-size" class="text-sm font-medium">Per page</Label>
 					<Select
 						type="single"
-						value={$clientsTable.perPage.toString()}
+						value={clientsTable.perPage.toString()}
 						onValueChange={(value) => {
 							const next = Number.parseInt(value, 10);
-							clientsTable.setPerPage(Number.isNaN(next) ? perPageOptions[0] : next);
+							clientsTable.perPage = Number.isNaN(next) ? perPageOptions[0] : next;
 						}}
 					>
 						<SelectTrigger id="client-page-size" class="w-full">
-							<span>{$clientsTable.perPage} rows</span>
+							<span>{clientsTable.perPage} rows</span>
 						</SelectTrigger>
 						<SelectContent>
 							{#each perPageOptions as option (option)}
@@ -828,29 +833,20 @@
 				</div>
 			</div>
 		</div>
-		{#if connectionAlert}
-			<Alert variant={connectionAlert.variant}>
-				<AlertCircle class="h-4 w-4" />
-				<AlertTitle>{connectionAlert.title}</AlertTitle>
-				<AlertDescription>{connectionAlert.description}</AlertDescription>
-			</Alert>
-		{/if}
-
-		{#if copyFeedback}
-			<Alert
-				variant={copyFeedback.variant === 'error' ? 'destructive' : 'default'}
-				class={copyFeedback.variant === 'success'
-					? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500'
-					: undefined}
+		{#if pageNotification}
+			<Alert 
+				variant={pageNotification.variant === 'destructive' ? 'destructive' : 'default'}
+				class={pageNotification.variant === 'success' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500' : undefined}
 			>
-				{#if copyFeedback.variant === 'error'}
-					<AlertCircle class="h-4 w-4" />
-					<AlertTitle>Copy failed</AlertTitle>
+				{#if pageNotification.variant === 'destructive'}
+					<AlertCircle class="h-4 w-4 text-destructive" />
+				{:else if pageNotification.variant === 'success'}
+					<CheckCircle2 class="h-4 w-4 text-emerald-500" />
 				{:else}
-					<CheckCircle2 class="h-4 w-4" />
-					<AlertTitle>Copied</AlertTitle>
+					<Info class="h-4 w-4" />
 				{/if}
-				<AlertDescription>{copyFeedback.message}</AlertDescription>
+				<AlertTitle>{pageNotification.title}</AlertTitle>
+				<AlertDescription>{pageNotification.description}</AlertDescription>
 			</Alert>
 		{/if}
 	</div>
@@ -868,141 +864,22 @@
 							</colgroup>
 							<TableHeader>
 								<TableRow>
-									<TableHead class="w-[16rem]">
-										<Tooltip>
-											<TooltipTrigger>
-												{#snippet child({ props })}
-													<span {...props} class="inline-flex cursor-help items-center gap-1">
-														Location
-														<Info class="size-3 text-muted-foreground" aria-hidden="true" />
-													</span>
-												{/snippet}
-											</TooltipTrigger>
-											<TooltipContent side="top" align="center" class="max-w-[18rem] text-xs">
-												Approximate location derived from the agent&apos;s reported metadata and IP
-												geolocation.
-											</TooltipContent>
-										</Tooltip>
-									</TableHead>
-									<TableHead class="w-24 text-center">
-										<Tooltip>
-											<TooltipTrigger>
-												{#snippet child({ props })}
-													<span {...props} class="inline-flex cursor-help items-center gap-1">
-														Public IP
-														<Info class="size-3 text-muted-foreground" aria-hidden="true" />
-													</span>
-												{/snippet}
-											</TooltipTrigger>
-											<TooltipContent side="top" align="center" class="max-w-[18rem] text-xs">
-												Public-facing IP address reported by the agent during its latest check-in.
-											</TooltipContent>
-										</Tooltip>
-									</TableHead>
-									<TableHead class="w-24 text-center">
-										<Tooltip>
-											<TooltipTrigger>
-												{#snippet child({ props })}
-													<span {...props} class="inline-flex cursor-help items-center gap-1">
-														Username
-														<Info class="size-3 text-muted-foreground" aria-hidden="true" />
-													</span>
-												{/snippet}
-											</TooltipTrigger>
-											<TooltipContent side="top" align="center" class="max-w-[18rem] text-xs">
-												Logged-in user account reported by the agent.
-											</TooltipContent>
-										</Tooltip>
-									</TableHead>
-									<TableHead class="w-48 text-center">
-										<Tooltip>
-											<TooltipTrigger>
-												{#snippet child({ props })}
-													<span {...props} class="inline-flex cursor-help items-center gap-1">
-														Tags
-														<Info class="size-3 text-muted-foreground" aria-hidden="true" />
-													</span>
-												{/snippet}
-											</TooltipTrigger>
-											<TooltipContent side="top" align="center" class="max-w-[18rem] text-xs">
-												Operator-defined tags applied to this agent.
-											</TooltipContent>
-										</Tooltip>
-									</TableHead>
-									<TableHead class="w-20 text-center">
-										<Tooltip>
-											<TooltipTrigger>
-												{#snippet child({ props })}
-													<span
-														{...props}
-														class="inline-flex w-full cursor-help items-center justify-center gap-1"
-													>
-														OS
-														<Info class="size-3 text-muted-foreground" aria-hidden="true" />
-													</span>
-												{/snippet}
-											</TooltipTrigger>
-											<TooltipContent side="top" align="center" class="max-w-[18rem] text-xs">
-												Operating system detected on the agent.
-											</TooltipContent>
-										</Tooltip>
-									</TableHead>
-									<TableHead class="w-24 text-center">
-										<Tooltip>
-											<TooltipTrigger>
-												{#snippet child({ props })}
-													<span {...props} class="inline-flex cursor-help items-center gap-1">
-														Ping
-														<Info class="size-3 text-muted-foreground" aria-hidden="true" />
-													</span>
-												{/snippet}
-											</TooltipTrigger>
-											<TooltipContent side="top" align="center" class="max-w-[18rem] text-xs">
-												Latest round-trip latency reported by the agent during sync. Displays N/A
-												when the agent has not provided latency metrics.
-											</TooltipContent>
-										</Tooltip>
-									</TableHead>
-									<TableHead class="w-24 text-center">
-										<Tooltip>
-											<TooltipTrigger>
-												{#snippet child({ props })}
-													<span {...props} class="inline-flex cursor-help items-center gap-1">
-														Version
-														<Info class="size-3 text-muted-foreground" aria-hidden="true" />
-													</span>
-												{/snippet}
-											</TooltipTrigger>
-											<TooltipContent side="top" align="center" class="max-w-[18rem] text-xs">
-												Tenvy agent build version currently running on the endpoint.
-											</TooltipContent>
-										</Tooltip>
-									</TableHead>
-									<TableHead class="w-28 text-center">
-										<Tooltip>
-											<TooltipTrigger>
-												{#snippet child({ props })}
-													<span
-														{...props}
-														class="inline-flex w-full cursor-help items-center justify-center gap-1"
-													>
-														Status
-														<Info class="size-3 text-muted-foreground" aria-hidden="true" />
-													</span>
-												{/snippet}
-											</TooltipTrigger>
-											<TooltipContent side="top" align="center" class="max-w-[18rem] text-xs">
-												Current connection state reported by the agent.
-											</TooltipContent>
-										</Tooltip>
-									</TableHead>
+									{@render TableHeaderTooltip('Location', 'Approximate location derived from the agent\'s reported metadata and IP geolocation.', false)}
+									{@render TableHeaderTooltip('Public IP', 'Public-facing IP address reported by the agent during its latest check-in.')}
+									{@render TableHeaderTooltip('Username', 'Logged-in user account reported by the agent.')}
+									{@render TableHeaderTooltip('Tags', 'Operator-defined tags applied to this agent.')}
+									{@render TableHeaderTooltip('OS', 'Operating system detected on the agent.')}
+									{@render TableHeaderTooltip('Ping', 'Latest round-trip latency reported by the agent during sync.')}
+									{@render TableHeaderTooltip('Version', 'Tenvy agent build version currently running on the endpoint.')}
+									{@render TableHeaderTooltip('Status', 'Current connection state reported by the agent.')}
 								</TableRow>
 							</TableHeader>
+
 							<TableBody>
-								{#if $clientsTable.paginatedAgents.length === 0}
+								{#if clientsTable.paginatedAgents.length === 0}
 									<TableRow>
 										<TableCell colspan={8} class="py-12 text-center text-sm text-muted-foreground">
-											{#if $clientsTable.agents.length === 0}
+											{#if clientsTable.agents.length === 0}
 												No agents connected yet.
 												<Button
 													type="button"
@@ -1017,14 +894,14 @@
 										</TableCell>
 									</TableRow>
 								{:else}
-									{#each $clientsTable.paginatedAgents as agent (agent.id)}
+									{#each clientsTable.paginatedAgents as agent (agent.id)}
 										<ClientsTableRow
 											{agent}
 											{formatDate}
 											{formatPing}
 											{getAgentTags}
 											{getAgentLocation}
-											ipLocations={$ipLocationStore}
+											ipLocations={get(ipLocationStore)}
 											openManageTags={openManageTagsDialog}
 											onTagClick={handleTagFilter}
 											{openSection}
@@ -1038,11 +915,11 @@
 				</ScrollArea>
 			{:else}
 				<div class="space-y-3">
-					{#if $clientsTable.paginatedAgents.length === 0}
+					{#if clientsTable.paginatedAgents.length === 0}
 						<div
 							class="rounded-lg border border-border/60 bg-background/80 p-6 text-center text-sm text-muted-foreground"
 						>
-							{#if $clientsTable.agents.length === 0}
+							{#if clientsTable.agents.length === 0}
 								No agents connected yet.
 								<Button type="button" class="mt-3" onclick={() => (deployDialogOpen = true)}>
 									View deployment guide
@@ -1052,7 +929,7 @@
 							{/if}
 						</div>
 					{:else}
-						{#each $clientsTable.paginatedAgents as agent (agent.id)}
+						{#each clientsTable.paginatedAgents as agent (agent.id)}
 							<ClientsTableRow
 								layout="card"
 								{agent}
@@ -1060,7 +937,7 @@
 								{formatPing}
 								{getAgentTags}
 								{getAgentLocation}
-								ipLocations={$ipLocationStore}
+								ipLocations={get(ipLocationStore)}
 								openManageTags={openManageTagsDialog}
 								onTagClick={handleTagFilter}
 								{openSection}
@@ -1073,16 +950,16 @@
 		</TooltipProvider>
 
 		<div class="px-1 text-sm text-muted-foreground md:px-4">
-			{#if $clientsTable.filteredAgents.length === 0}
+			{#if clientsTable.filteredAgents.length === 0}
 				No agents to display.
 			{:else}
-				Showing {$clientsTable.pageRange.start}–{$clientsTable.pageRange.end} of {$clientsTable
+				Showing {clientsTable.pageRange.start}–{clientsTable.pageRange.end} of {clientsTable
 					.filteredAgents.length}
-				{$clientsTable.filteredAgents.length === 1 ? ' agent' : ' agents'}.
+				{clientsTable.filteredAgents.length === 1 ? ' agent' : ' agents'}.
 			{/if}
 		</div>
 
-		{#if $clientsTable.filteredAgents.length > 0 && $clientsTable.totalPages > 1}
+		{#if clientsTable.filteredAgents.length > 0 && clientsTable.totalPages > 1}
 			<nav class="flex justify-center">
 				<ul class="flex flex-row items-center gap-1">
 					<li>
@@ -1091,13 +968,13 @@
 							variant="ghost"
 							class="flex h-9 items-center gap-1 px-2.5 sm:pl-2.5"
 							onclick={() => clientsTable.previousPage()}
-							disabled={$clientsTable.currentPage <= 1}
+							disabled={clientsTable.currentPage <= 1}
 						>
 							<ChevronLeft class="size-4" />
 							<span class="sr-only sm:not-sr-only">Previous</span>
 						</Button>
 					</li>
-					{#each $clientsTable.paginationItems as item, index (typeof item === 'number' ? `page-${item}` : `ellipsis-${index}`)}
+					{#each clientsTable.paginationItems as item, index (typeof item === 'number' ? `page-${item}` : `ellipsis-${index}`)}
 						<li>
 							{#if item === 'ellipsis'}
 								<span class="flex h-9 w-9 items-center justify-center text-sm text-muted-foreground"
@@ -1106,7 +983,7 @@
 							{:else}
 								<Button
 									type="button"
-									variant={item === $clientsTable.currentPage ? 'outline' : 'ghost'}
+									variant={item === clientsTable.currentPage ? 'outline' : 'ghost'}
 									class="h-9 w-9 px-0"
 									onclick={() => clientsTable.goToPage(item)}
 								>
@@ -1121,7 +998,7 @@
 							variant="ghost"
 							class="flex h-9 items-center gap-1 px-2.5 sm:pl-2.5"
 							onclick={() => clientsTable.nextPage()}
-							disabled={$clientsTable.currentPage >= $clientsTable.totalPages}
+							disabled={clientsTable.currentPage >= clientsTable.totalPages}
 						>
 							<span class="sr-only sm:not-sr-only">Next</span>
 							<ChevronRight class="size-4" />
@@ -1138,7 +1015,7 @@
 				client={toolDialogClient}
 				agent={toolDialogAgent}
 				toolId={toolDialog.toolId}
-				on:close={() => (toolDialog = null)}
+				onClose={() => (toolDialog = null)}
 			/>
 		{/key}
 	{/if}
@@ -1148,10 +1025,10 @@
 	<ManageTagsDialog
 		open={Boolean(tagsDialogAgentId && tagsAgent)}
 		agent={tagsAgent}
-		availableTags={$clientsTable.availableTags}
+		availableTags={clientsTable.availableTags}
 		pending={tagsDialogPending}
 		error={tagsDialogError}
-		on:close={closeManageTagsDialog}
-		on:submit={handleTagsSubmit}
+		onClose={closeManageTagsDialog}
+		onSubmit={handleTagsSubmit}
 	/>
 </section>

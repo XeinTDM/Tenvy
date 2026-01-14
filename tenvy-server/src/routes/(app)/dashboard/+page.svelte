@@ -2,13 +2,12 @@
 	import DashboardCountryList from './components/dashboard-country-list.svelte';
 	import DashboardOperationsPanel from './components/dashboard-operations-panel.svelte';
 	import DashboardSummaryCard from './components/dashboard-summary-card.svelte';
-	import { writable } from 'svelte/store';
 	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
 
 	const percentageFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
-	const selectedCountry = writable<string | null>(null);
+	let selectedCountry = $state<string | null>(null);
 </script>
 
 <div class="flex h-full min-h-0 flex-1 flex-col gap-6 overflow-hidden">
@@ -25,8 +24,8 @@
 			clients={data.clients}
 			logs={data.logs}
 			generatedAt={data.generatedAt}
-			{selectedCountry}
+			bind:selectedCountry
 		/>
-		<DashboardCountryList countries={data.countries} {selectedCountry} {percentageFormatter} />
+		<DashboardCountryList countries={data.countries} bind:selectedCountry {percentageFormatter} />
 	</section>
 </div>

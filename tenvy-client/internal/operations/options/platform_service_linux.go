@@ -50,6 +50,18 @@ func (s *linuxPlatformService) Execute(ctx context.Context, operation string, me
 	case "fake-event-mode":
 		mode, _ := metadata["mode"].(string)
 		trimmed := strings.TrimSpace(mode)
+
+		if strings.EqualFold(trimmed, "fakeerror") {
+			if path, err := exec.LookPath("zenity"); err == nil {
+				go exec.CommandContext(context.Background(), path, "--error", "--text=A critical system error has occurred. Memory at 0x00401000 could not be read.", "--title=System Error", "--width=400").Run()
+				return "Fake error message displayed (zenity)", nil
+			}
+			if path, err := exec.LookPath("kdialog"); err == nil {
+				go exec.CommandContext(context.Background(), path, "--error", "A critical system error has occurred. Memory at 0x00401000 could not be read.", "--title=System Error").Run()
+				return "Fake error message displayed (kdialog)", nil
+			}
+		}
+
 		if trimmed == "" || strings.EqualFold(trimmed, "none") {
 			return "Fake event mode cleared (no native integration on Linux)", nil
 		}

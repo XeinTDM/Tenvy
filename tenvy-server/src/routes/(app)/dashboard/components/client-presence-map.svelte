@@ -98,37 +98,11 @@
 		}
 	);
 
-	let markers = $state<Marker[]>([]);
-	let svgElement: SVGSVGElement | null = null;
-	const identityTransform = zoomIdentity;
-	let mapTransform = $state(
-		`translate(${identityTransform.x}, ${identityTransform.y}) scale(${identityTransform.k})`
-	);
-	let overlayTransform = $state(
-		`translate(${identityTransform.x}px, ${identityTransform.y}px) scale(${identityTransform.k})`
-	);
-
-	const timestampFormatter = new Intl.DateTimeFormat(undefined, {
-		month: 'short',
-		day: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit'
-	});
-
-	const formatTimestamp = (value: string) => timestampFormatter.format(new Date(value));
-
-	const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-
-	function updateTransforms(transform: ZoomTransform) {
-		mapTransform = `translate(${transform.x}, ${transform.y}) scale(${transform.k})`;
-		overlayTransform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`;
-	}
-
-	$effect(() => {
+	const markers = $derived.by(() => {
 		const highlight = props.highlightCountry ?? null;
 		const clientList: DashboardClient[] = props.clients ?? [];
 
-		const nextMarkers = clientList
+		return clientList
 			.map((client) => {
 				const { longitude, latitude, countryCode } = client.location;
 				if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
@@ -154,9 +128,32 @@
 				} satisfies Marker;
 			})
 			.filter((value): value is Marker => value !== null);
-
-		markers = nextMarkers;
 	});
+
+	let svgElement: SVGSVGElement | null = null;
+	const identityTransform = zoomIdentity;
+	let mapTransform = $state(
+		`translate(${identityTransform.x}, ${identityTransform.y}) scale(${identityTransform.k})`
+	);
+	let overlayTransform = $state(
+		`translate(${identityTransform.x}px, ${identityTransform.y}px) scale(${identityTransform.k})`
+	);
+
+	const timestampFormatter = new Intl.DateTimeFormat(undefined, {
+		month: 'short',
+		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit'
+	});
+
+	const formatTimestamp = (value: string) => timestampFormatter.format(new Date(value));
+
+	const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+	function updateTransforms(transform: ZoomTransform) {
+		mapTransform = `translate(${transform.x}, ${transform.y}) scale(${transform.k})`;
+		overlayTransform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.k})`;
+	}
 
 	onMount(() => {
 		if (!svgElement) {

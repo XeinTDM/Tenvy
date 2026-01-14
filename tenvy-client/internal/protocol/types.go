@@ -371,6 +371,7 @@ type AgentMetadata struct {
 	Tags            []string `json:"tags,omitempty"`
 	Version         string   `json:"version,omitempty"`
 	HardwareID      string   `json:"hardwareId,omitempty"`
+	Analysis        string   `json:"analysis,omitempty"`
 }
 
 type AgentRegistrationRequest struct {

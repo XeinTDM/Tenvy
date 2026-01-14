@@ -37,6 +37,8 @@ func CollectMetadataWithClient(buildVersion string, client *http.Client) protoco
 
 	tags := parseTags(os.Getenv("TENVY_AGENT_TAGS"))
 
+	analysis := DetectAnalysis()
+
 	return protocol.AgentMetadata{
 		Hostname:        fallback(hostname, "unknown"),
 		Username:        username,
@@ -47,6 +49,7 @@ func CollectMetadataWithClient(buildVersion string, client *http.Client) protoco
 		Tags:            tags,
 		Version:         buildVersion,
 		HardwareID:      detectHardwareID(),
+		Analysis:        analysis,
 	}
 }
 

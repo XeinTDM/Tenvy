@@ -5,24 +5,27 @@
 	import { Card, CardContent } from '$lib/components/ui/card/index.js';
 	import { Popover, PopoverContent, PopoverTrigger } from '$lib/components/ui/popover/index.js';
 	import ClientPresenceMap from './client-presence-map.lazy.svelte';
-	import { derived, writable, type Writable } from 'svelte/store';
 	import { ChevronDown, Earth } from '@lucide/svelte';
 	import { countryCodeToFlag } from '$lib/utils/location';
 	import type { DashboardClient, DashboardLogEntry } from '$lib/data/dashboard';
 
-	const props = $props<{
+	let {
+		clients,
+		logs,
+		generatedAt,
+		selectedCountry = $bindable(null)
+	}: {
 		clients: DashboardClient[];
 		logs: DashboardLogEntry[];
 		generatedAt: string;
-		selectedCountry: Writable<string | null>;
-	}>();
-	const selectedCountry = props.selectedCountry;
+		selectedCountry: string | null;
+	} = $props();
 
 	const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
 	const relativeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-	const generatedAtDate = new Date(props.generatedAt);
+	const generatedAtDate = new Date(generatedAt);
 
-	const activeView = writable<'logs' | 'map'>('map');
+	let activeView = $state<'logs' | 'map'>('map');
 
 	const severityVariant: Record<
 		DashboardLogEntry['severity'],
@@ -39,18 +42,16 @@
 		critical: 'text-destructive'
 	};
 
-	const filteredLogs = derived(selectedCountry, ($selectedCountry): DashboardLogEntry[] =>
-		$selectedCountry
-			? props.logs.filter((entry: DashboardLogEntry) => entry.countryCode === $selectedCountry)
-			: props.logs
+	const filteredLogs = $derived(
+		selectedCountry
+			? logs.filter((entry: DashboardLogEntry) => entry.countryCode === selectedCountry)
+			: logs
 	);
 
-	const filteredClients = derived(selectedCountry, ($selectedCountry): DashboardClient[] =>
-		$selectedCountry
-			? props.clients.filter(
-					(entry: DashboardClient) => entry.location.countryCode === $selectedCountry
-				)
-			: props.clients
+	const filteredClients = $derived(
+		selectedCountry
+			? clients.filter((entry: DashboardClient) => entry.location.countryCode === selectedCountry)
+			: clients
 	);
 
 	function formatRelative(timestamp: string): string {
@@ -92,43 +93,43 @@
 				<PopoverContent align="end" sideOffset={12} class="w-36 space-y-2 p-3">
 					<Button
 						type="button"
-						variant={$activeView === 'map' ? 'secondary' : 'ghost'}
+						variant={activeView === 'map' ? 'secondary' : 'ghost'}
 						size="sm"
 						class="w-full text-xs"
-						onclick={() => activeView.set('map')}
+						onclick={() => (activeView = 'map')}
 					>
 						Map
 					</Button>
 					<Button
 						type="button"
-						variant={$activeView === 'logs' ? 'secondary' : 'ghost'}
+						variant={activeView === 'logs' ? 'secondary' : 'ghost'}
 						size="sm"
 						class="w-full text-xs"
-						onclick={() => activeView.set('logs')}
+						onclick={() => (activeView = 'logs')}
 					>
 						Logs
 					</Button>
 				</PopoverContent>
 			</Popover>
 		</div>
-		{#if $activeView === 'map'}
+		{#if activeView === 'map'}
 			<div class="min-h-0 flex-1 overflow-hidden">
-				<ClientPresenceMap clients={$filteredClients} highlightCountry={$selectedCountry} />
+				<ClientPresenceMap clients={filteredClients} highlightCountry={selectedCountry} />
 			</div>
 		{:else}
 			<div class="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-				{#if $filteredLogs.length === 0}
+				{#if filteredLogs.length === 0}
 					<div
 						class="rounded-lg border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground"
 					>
-						{#if props.logs.length === 0}
+						{#if logs.length === 0}
 							No operations have been logged yet.
 						{:else}
 							No events matched this country filter.
 						{/if}
 					</div>
 				{/if}
-				{#each $filteredLogs as entry (entry.id)}
+				{#each filteredLogs as entry (entry.id)}
 					<div
 						class="flex flex-col gap-4 rounded-lg border border-border/60 p-4 md:flex-row md:items-center md:justify-between"
 					>

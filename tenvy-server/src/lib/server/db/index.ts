@@ -18,6 +18,7 @@ if (!env.DATABASE_URL.startsWith('file::memory:') && env.DATABASE_URL !== ':memo
 const client = new Database(env.DATABASE_URL);
 
 client.pragma('foreign_keys = ON');
+client.pragma('journal_mode = WAL');
 
 client.exec(
 	`BEGIN;
@@ -286,6 +287,17 @@ CREATE TABLE IF NOT EXISTS audit_event (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS audit_event_command_idx ON audit_event (command_id);
 CREATE INDEX IF NOT EXISTS audit_event_agent_idx ON audit_event (agent_id);
+
+CREATE TABLE IF NOT EXISTS system_audit_event (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        actor_id TEXT REFERENCES user(id) ON DELETE SET NULL,
+        action TEXT NOT NULL,
+        target_id TEXT,
+        details TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+CREATE INDEX IF NOT EXISTS system_audit_event_actor_idx ON system_audit_event (actor_id);
+CREATE INDEX IF NOT EXISTS system_audit_event_action_idx ON system_audit_event (action);
 
 CREATE TABLE IF NOT EXISTS keylogger_session (
         id TEXT PRIMARY KEY NOT NULL,

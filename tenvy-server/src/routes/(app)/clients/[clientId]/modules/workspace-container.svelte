@@ -99,6 +99,20 @@
 	function returnToClients() {
 		goto(resolve('/clients' as any));
 	}
+
+	let workspaceLog = $state<WorkspaceLogEntry[]>([]);
+	const logStatusMeta: Record<WorkspaceLogEntry['status'], string> = {
+		draft: 'bg-muted text-muted-foreground border-transparent',
+		queued: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
+		pending: 'bg-sky-500/10 text-sky-600 border-sky-500/30',
+		'in-progress': 'bg-primary/10 text-primary border-primary/30 animate-pulse',
+		complete: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
+		failed: 'bg-rose-500/10 text-rose-600 border-rose-500/30'
+	};
+
+	function handleLogChange(next: WorkspaceLogEntry[]) {
+		workspaceLog = next;
+	}
 </script>
 
 <section class="space-y-6">
@@ -124,43 +138,83 @@
 	</div>
 
 	<div class="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-		<aside class="space-y-6 rounded-lg border border-border/60 bg-background/40 p-4">
-			{#each groupedTools as group, index (group.key)}
-				<div class="space-y-2">
-					<p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-						{group.label}
-					</p>
-					<div class="flex flex-col gap-1">
-						{#each group.items as item (item.id)}
-							{@const isActive = activeToolId === item.id}
-							<a
-								class={cn(
-									'flex items-center justify-between rounded-md border border-transparent px-3 py-2 text-sm transition hover:border-primary/40 hover:bg-primary/5',
-									isActive
-										? 'border-primary/60 bg-primary/10 text-primary'
-										: 'text-muted-foreground'
-								)}
-								href={resolve(toWorkspaceUrl(item) as any)}
-							>
-								<span class="truncate">{item.title}</span>
-								{#if isWorkspaceTool(item.id as ClientToolId)}
-									<span
+		<aside class="flex flex-col gap-6">
+			<div class="space-y-6 rounded-lg border border-border/60 bg-background/40 p-4">
+				{#each groupedTools as group, index (group.key)}
+					<div class="space-y-2">
+						<p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+							{group.label}
+						</p>
+						<div class="flex flex-col gap-1">
+							{#each group.items as item (item.id)}
+								{@const isActive = activeToolId === item.id}
+								<a
+									class={cn(
+										'flex items-center justify-between rounded-md border border-transparent px-3 py-2 text-sm transition hover:border-primary/40 hover:bg-primary/5',
+										isActive
+											? 'border-primary/60 bg-primary/10 text-primary'
+											: 'text-muted-foreground'
+									)}
+									href={resolve(toWorkspaceUrl(item) as any)}
+								>
+									<span class="truncate">{item.title}</span>
+									{#if isWorkspaceTool(item.id as ClientToolId)}
+										<span
+											class={cn(
+												'text-[0.65rem] font-medium tracking-wide uppercase',
+												isActive ? 'text-primary' : 'text-muted-foreground/70'
+											)}
+										>
+											Workspace
+										</span>
+									{/if}
+								</a>
+							{/each}
+						</div>
+					</div>
+					{#if index < groupedTools.length - 1}
+						<Separator />
+					{/if}
+				{/each}
+			</div>
+
+			{#if workspaceLog.length > 0}
+				<div class="flex flex-1 flex-col gap-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+					<div class="flex items-center justify-between">
+						<p class="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+							Activity log
+						</p>
+						<Badge variant="outline" class="h-5 px-1.5 font-mono text-[9px]">
+							{workspaceLog.length}
+						</Badge>
+					</div>
+					<div class="space-y-3">
+						{#each workspaceLog as entry (entry.id)}
+							<div class="space-y-1">
+								<div class="flex items-center justify-between gap-2">
+									<span class="truncate text-[11px] font-medium text-foreground">
+										{entry.action}
+									</span>
+									<Badge
+										variant="outline"
 										class={cn(
-											'text-[0.65rem] font-medium tracking-wide uppercase',
-											isActive ? 'text-primary' : 'text-muted-foreground/70'
+											'h-4 border px-1 text-[8px] font-semibold tracking-tight uppercase',
+											logStatusMeta[entry.status]
 										)}
 									>
-										Workspace
-									</span>
+										{entry.status}
+									</Badge>
+								</div>
+								{#if entry.detail}
+									<p class="line-clamp-2 text-[10px] leading-tight text-muted-foreground">
+										{entry.detail}
+									</p>
 								{/if}
-							</a>
+							</div>
 						{/each}
 					</div>
 				</div>
-				{#if index < groupedTools.length - 1}
-					<Separator />
-				{/if}
-			{/each}
+			{/if}
 		</aside>
 
 		<div class="space-y-4">
@@ -184,7 +238,12 @@
 					</CardHeader>
 					<CardContent class="space-y-4">
 						{#key `${client.id}-${activeTool.id}`}
-							<ClientToolWorkspace {client} {agent} tool={activeTool} />
+							<ClientToolWorkspace
+								{client}
+								{agent}
+								tool={activeTool}
+								onLogChange={handleLogChange}
+							/>
 						{/key}
 					</CardContent>
 				</Card>

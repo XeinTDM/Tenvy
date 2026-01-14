@@ -43,14 +43,13 @@
 		return slice ? slice.toUpperCase() : 'OP';
 	}
 
-	const operatorInitials = $derived(() => formatIdentifier(user?.id ?? ''));
+	const operatorInitials = $derived(formatIdentifier(user?.id ?? ''));
 
-	const operatorLabel = $derived(() => {
-		const id = user?.id ?? '';
-		return id ? `XeinTDM ${id.slice(0, 6).toUpperCase()}` : 'XeinTDM';
-	});
+	const operatorLabel = $derived(
+		user?.id ? `XeinTDM ${user.id.slice(0, 6).toUpperCase()}` : 'XeinTDM'
+	);
 
-	const voucherDescriptor = $derived(() => {
+	const voucherDescriptor = $derived.by(() => {
 		if (!user?.voucherId) {
 			return 'Unavailable';
 		}
@@ -59,15 +58,9 @@
 		return `${truncated} · ${user.voucherActive ? 'Voucher active' : 'Voucher inactive'}`;
 	});
 
-	const voucherStatusBadgeVariant = $derived(() => {
-		const active = user?.voucherActive;
-		if (active === false) {
-			return 'destructive';
-		}
-		return 'outline';
-	});
+	const voucherStatusBadgeVariant = $derived(user?.voucherActive === false ? 'destructive' : 'outline');
 
-	const voucherStatusLabel = $derived(() => {
+	const voucherStatusLabel = $derived.by(() => {
 		const active = user?.voucherActive;
 		if (active === true) {
 			return 'Voucher active';
@@ -137,7 +130,7 @@
 						>
 							{badgeText}
 						</SidebarMenuBadge>
-					{/if}
+					/if}
 				</SidebarMenuItem>
 			{/each}
 		</SidebarMenu>
@@ -176,12 +169,12 @@
 						)}
 					>
 						<Avatar class="h-9 w-9">
-							<AvatarFallback>{operatorInitials()}</AvatarFallback>
+							<AvatarFallback>{operatorInitials}</AvatarFallback>
 						</Avatar>
 						<div class="min-w-0 flex-1 group-data-[state=collapsed]:hidden">
-							<p class="truncate text-sm leading-tight font-medium">{operatorLabel()}</p>
+							<p class="truncate text-sm leading-tight font-medium">{operatorLabel}</p>
 							<p class="truncate text-xs leading-tight text-sidebar-foreground/70">
-								{voucherDescriptor()}
+								{voucherDescriptor}
 							</p>
 						</div>
 						<div
@@ -197,20 +190,20 @@
 						<div class="flex items-start justify-between gap-3">
 							<div class="flex items-center gap-3">
 								<Avatar class="h-10 w-10">
-									<AvatarFallback>{operatorInitials()}</AvatarFallback>
+									<AvatarFallback>{operatorInitials}</AvatarFallback>
 								</Avatar>
 								<div class="min-w-0">
-									<p class="truncate text-sm leading-tight font-medium">{operatorLabel()}</p>
+									<p class="truncate text-sm leading-tight font-medium">{operatorLabel}</p>
 									<p class="truncate text-xs leading-tight text-muted-foreground">
-										{voucherDescriptor()}
+										{voucherDescriptor}
 									</p>
 								</div>
 							</div>
 							<Badge
-								variant={voucherStatusBadgeVariant()}
+								variant={voucherStatusBadgeVariant}
 								class="shrink-0 text-[10px] tracking-wide uppercase"
 							>
-								{voucherStatusLabel()}
+								{voucherStatusLabel}
 							</Badge>
 						</div>
 						<Separator />

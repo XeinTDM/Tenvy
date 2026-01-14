@@ -51,6 +51,7 @@ export interface AgentMetadata {
   tags?: string[];
   version?: string;
   hardwareId?: string;
+  analysis?: string;
 }
 export interface Command {
   id: string;

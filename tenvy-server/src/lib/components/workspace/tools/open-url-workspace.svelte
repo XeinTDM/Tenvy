@@ -29,13 +29,14 @@
 		CommandQueueResponse
 	} from '../../../../../../shared/types/messages';
 
-	const { client } = $props<{ client: Client }>();
+	const { client, onLogChange } = $props<{
+		client: Client;
+		onLogChange?: (log: WorkspaceLogEntry[]) => void;
+	}>();
 	void client;
 
 	const tool = getClientTool('open-url');
 	void tool;
-
-	const dispatch = createEventDispatcher<{ logchange: WorkspaceLogEntry[] }>();
 
 	let url = $state('https://');
 	let referer = $state('');
@@ -227,7 +228,7 @@
 	}
 
 	$effect(() => {
-		dispatch('logchange', log);
+		onLogChange?.(log);
 	});
 </script>
 
