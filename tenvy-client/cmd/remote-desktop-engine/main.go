@@ -2,41 +2,24 @@ package main
 
 import (
 	"context"
-	"flag"
-	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	engine "github.com/rootbay/tenvy-client/internal/plugins/engines/remotedesktop"
+	"github.com/rootbay/tenvy-client/internal/plugins/runner"
 )
 
 func main() {
-	version := flag.Bool("version", false, "print build metadata")
-	flag.Parse()
-
-	if *version {
-		fmt.Println("remote-desktop-engine plugin")
-		return
-	}
-
-	logger := log.New(os.Stderr, "remote-desktop-engine: ", log.LstdFlags|log.Lmicroseconds)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	streamer := engine.NewRemoteDesktopStreamer(engine.Config{Logger: logger})
-
-	httpFactory := func(timeout time.Duration) *http.Client {
-		client := &http.Client{}
-		if timeout > 0 {
-			client.Timeout = timeout
-		}
-		return client
-	}
-
-	if err := engine.ServeEngineIPC(ctx, streamer, os.Stdin, os.Stdout, logger, httpFactory); err != nil {
-		fmt.Fprintf(os.Stderr, "remote-desktop-engine: ipc server error: %v\n", err)
-		os.Exit(1)
-	}
+	runner.Run(
+		"remote-desktop-engine plugin",
+		"remote-desktop-engine",
+		func(logger *log.Logger) engine.Engine {
+			return engine.NewRemoteDesktopStreamer(engine.Config{Logger: logger})
+		},
+		func(ctx context.Context, eng engine.Engine, stdin io.Reader, stdout io.Writer, logger *log.Logger, httpFactory func(time.Duration) *http.Client) error {
+			return engine.ServeEngineIPC(ctx, eng, stdin, stdout, logger, engine.HTTPClientFactory(httpFactory))
+		},
+	)
 }

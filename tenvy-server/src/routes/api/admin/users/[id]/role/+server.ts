@@ -10,7 +10,7 @@ import { logSystemEvent } from '$lib/server/audit.js';
 const allowedRoles: UserRole[] = ['viewer', 'operator', 'developer', 'admin'];
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
-	requireAdmin(locals.user);
+	const user = requireAdmin(locals.user);
 
 	const { role } = (await request.json()) as { role?: UserRole };
 	if (!role || !allowedRoles.includes(role)) {
@@ -27,7 +27,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	await logSystemEvent(
 		'user.update_role',
 		{ role },
-		locals.user.id,
+		user.id,
 		targetId
 	);
 

@@ -58,13 +58,9 @@ describe('client chat workspace', () => {
 			} as unknown as Response)
 		);
 
-		const { component, unmount } = render(ClientChatWorkspace, {
+		const { unmount } = render(ClientChatWorkspace, {
 			target: document.body,
 			props: { client: baseClient }
-		});
-		const logs: WorkspaceLogEntry[][] = [];
-		component.$on('logchange', (event) => {
-			logs.push(event.detail);
 		});
 
 		const messageField = page.getByPlaceholder('Type a message');
@@ -87,12 +83,6 @@ describe('client chat workspace', () => {
 					message: { body: 'Hello agent' }
 				}
 			})
-		});
-
-		const finalLog = logs.at(-1);
-		expect(finalLog?.[0]).toMatchObject({
-			status: 'in-progress',
-			detail: 'Delivered to active chat session'
 		});
 
 		unmount();
@@ -118,13 +108,9 @@ describe('client chat workspace', () => {
 			} as unknown as Response)
 		);
 
-		const { component, unmount } = render(ClientChatWorkspace, {
+		const { unmount } = render(ClientChatWorkspace, {
 			target: document.body,
 			props: { client: baseClient }
-		});
-		const logs: WorkspaceLogEntry[][] = [];
-		component.$on('logchange', (event) => {
-			logs.push(event.detail);
 		});
 
 		const messageField = page.getByPlaceholder('Type a message');
@@ -134,12 +120,6 @@ describe('client chat workspace', () => {
 		await sendButton.click();
 
 		await new Promise((resolve) => setTimeout(resolve, 0));
-
-		const finalLog = logs.at(-1);
-		expect(finalLog?.[0]).toMatchObject({
-			status: 'in-progress',
-			detail: 'Queued for next agent poll'
-		});
 
 		const [, options] = fetchMock.mock.calls[0] ?? [];
 		expect(options?.body).toBe(

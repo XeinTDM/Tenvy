@@ -271,6 +271,7 @@ func newDefaultModuleManager() *moduleManager {
 	registry.register(newStartupModule())
 	registry.register(newTaskManagerModule())
 	registry.register(newTCPConnectionsModule())
+	registry.register(newLotlModule())
 	registry.register(newClientChatModule())
 	registry.register(newTriggerMonitorModule())
 	registry.register(newGeoModule())

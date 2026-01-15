@@ -45,9 +45,9 @@
 	import { buildLocationDisplay } from '$lib/utils/location';
 	import { isLikelyPrivateIp } from '$lib/utils/ip';
 	import { formatAgentLatency } from '$lib/utils/agent-latency';
+	import { cn } from '$lib/utils.js';
 	import { toast } from 'svelte-sonner';
 	import type { Client } from '$lib/data/clients';
-	import { get, writable } from 'svelte/store';
 	import { onDestroy } from 'svelte';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -115,7 +115,7 @@
 	let { data } = $props<{ data: { agents: AgentSnapshot[] } }>();
 
 	const clientsTable = createClientsTableStore(data.agents ?? []);
-	const ipLocationStore = writable<Record<string, GeoLookupPayload>>({});
+	let ipLocations = $state<Record<string, GeoLookupPayload>>({});
 	const inFlightLookups = new SvelteSet<string>();
 
 	$effect(() => {
@@ -271,21 +271,13 @@
 
 			if (response.ok) {
 				const payload = (await response.json()) as Record<string, GeoLookupPayload>;
-				const results = { ...payload };
-
-				for (const ip of ips) {
-					if (!(ip in results)) {
-						results[ip] = { countryName: null, countryCode: null, isProxy: false };
-					}
-				}
-
-				ipLocationStore.update((current) => ({ ...current, ...results }));
+				ipLocations = { ...ipLocations, ...payload };
 			} else {
 				const failurePayload: Record<string, GeoLookupPayload> = {};
 				for (const ip of ips) {
 					failurePayload[ip] = { countryName: null, countryCode: null, isProxy: false };
 				}
-				ipLocationStore.update((current) => ({ ...current, ...failurePayload }));
+				ipLocations = { ...ipLocations, ...failurePayload };
 			}
 		} catch (err) {
 			console.error('Failed to fetch geo locations', err);
@@ -293,7 +285,7 @@
 			for (const ip of ips) {
 				failurePayload[ip] = { countryName: null, countryCode: null, isProxy: false };
 			}
-			ipLocationStore.update((current) => ({ ...current, ...failurePayload }));
+			ipLocations = { ...ipLocations, ...failurePayload };
 		} finally {
 			for (const ip of ips) {
 				inFlightLookups.delete(ip);
@@ -307,7 +299,6 @@
 		}
 
 		const agents = clientsTable.agents;
-		const knownLookups = get(ipLocationStore);
 		const pending = new SvelteSet<string>();
 
 		for (const agent of agents) {
@@ -316,7 +307,7 @@
 				continue;
 			}
 
-			if (knownLookups[normalized] || inFlightLookups.has(normalized)) {
+			if (ipLocations[normalized] || inFlightLookups.has(normalized)) {
 				continue;
 			}
 
@@ -901,7 +892,7 @@
 											{formatPing}
 											{getAgentTags}
 											{getAgentLocation}
-											ipLocations={get(ipLocationStore)}
+											{ipLocations}
 											openManageTags={openManageTagsDialog}
 											onTagClick={handleTagFilter}
 											{openSection}
@@ -937,7 +928,7 @@
 								{formatPing}
 								{getAgentTags}
 								{getAgentLocation}
-								ipLocations={get(ipLocationStore)}
+								{ipLocations}
 								openManageTags={openManageTagsDialog}
 								onTagClick={handleTagFilter}
 								{openSection}

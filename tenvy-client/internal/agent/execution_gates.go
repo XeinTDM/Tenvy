@@ -19,6 +19,7 @@ type gateEnvironment interface {
 	Username() string
 	Locale() string
 	WaitForInternet(context.Context, string) error
+	IsAnalysisDetected() bool
 }
 
 type defaultGateEnvironment struct {
@@ -47,6 +48,10 @@ func (e defaultGateEnvironment) Username() string {
 
 func (e defaultGateEnvironment) Locale() string {
 	return currentLocale()
+}
+
+func (e defaultGateEnvironment) IsAnalysisDetected() bool {
+	return DetectAnalysis() != ""
 }
 
 func (e defaultGateEnvironment) WaitForInternet(ctx context.Context, address string) error {
@@ -194,6 +199,14 @@ func enforceExecutionGatesWithEnv(
 		}
 		if err := env.WaitForInternet(ctx, address); err != nil {
 			return err
+		}
+	}
+
+	if gates.RequireNoAnalysis {
+		if env.IsAnalysisDetected() {
+			// If we wanted to be even stealthier, we could return a more cryptic error
+			// or just let it time out.
+			return fmt.Errorf("execution blocked by analysis detection")
 		}
 	}
 

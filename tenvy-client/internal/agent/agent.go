@@ -30,6 +30,7 @@ type Agent struct {
 	startTime                    time.Time
 	metadata                     protocol.AgentMetadata
 	sharedSecret                 string
+	ecdhSharedSecret             []byte
 	preferences                  BuildPreferences
 	notes                        *notes.Manager
 	buildVersion                 string

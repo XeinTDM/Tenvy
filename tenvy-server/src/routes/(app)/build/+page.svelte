@@ -117,7 +117,6 @@
 		return remainder > 0 ? `${preview.join(', ')} +${remainder} more` : preview.join(', ');
 	});
 
-	const activeTabMeta = $derived(TAB_METADATA[activeTab]);
 	type BuildTab = 'connection' | 'persistence' | 'execution' | 'presentation';
 	const DEFAULT_TAB: BuildTab = 'connection';
 	let activeTab = $state<BuildTab>(DEFAULT_TAB);
@@ -142,28 +141,30 @@
 		}
 	};
 
-	 type TabSummary = {
-	 	description: string;
-	 };
+	type TabSummary = {
+		description: string;
+	};
 
 	const TAB_METADATA: Record<BuildTab, TabSummary> = {
-	 	connection: {
-	 		description:
-	 			'Define how the agent reaches your controller, from connection endpoints to protocol and module selection.'
-	 	},
-	 	persistence: {
-	 		description:
-	 			'Configure installation paths, startup hooks, and runtime hardening to keep the agent alive and stealthy.'
-	 	},
-	 	execution: {
-	 		description:
-	 			'Control execution timing, allowed users/locales, and internet requirements so the agent behaves predictably.'
-	 	},
-	 	presentation: {
-	 		description:
-	 			'Tweak the binary’s icon, metadata, and file appearance so it blends with legitimate software on the target.'
-	 	}
+		connection: {
+			description:
+				'Define how the agent reaches your controller, from connection endpoints to protocol and module selection.'
+		},
+		persistence: {
+			description:
+				'Configure installation paths, startup hooks, and runtime hardening to keep the agent alive and stealthy.'
+		},
+		execution: {
+			description:
+				'Control execution timing, allowed users/locales, and internet requirements so the agent behaves predictably.'
+		},
+		presentation: {
+			description:
+				'Tweak the binary’s icon, metadata, and file appearance so it blends with legitimate software on the target.'
+		}
 	};
+
+	const activeTabMeta = $derived(TAB_METADATA[activeTab]);
 
 	const BUILD_STATUS_BADGE: Record<BuildStatus, { label: string; classes: string }> = {
 		idle: {
@@ -184,14 +185,17 @@
 		}
 	};
 
+	let buildStatus = $state<BuildStatus>('idle');
+	let buildError = $state<string | null>(null);
+	const buildStatusBadge = $derived(BUILD_STATUS_BADGE[buildStatus]);
+
 	const BUILD_STATUS_HINT: Record<BuildStatus, string> = {
 		idle: 'The builder is idle. Configure the tabs above and run a build when you’re ready.',
 		running: 'Compilation is running. Notifications will surface progress and results.',
 		success: 'Artifact generated. Use the download link below or share the output path.',
 		error: 'Last build failed. Review errors or adjust settings before retrying.'
 	};
-	const buildStatusBadge = $derived(BUILD_STATUS_BADGE[buildStatus]);
-
+	
 	let tabComponents = $state<Partial<Record<BuildTab, TabComponent>>>({
 		connection: ConnectionTab
 	});
@@ -355,8 +359,6 @@
 
 	const isWindowsTarget = $derived(targetOS === 'windows');
 
-	let buildStatus = $state<BuildStatus>('idle');
-	let buildError = $state<string | null>(null);
 	let downloadUrl = $state<string | null>(null);
 	let outputPath = $state<string | null>(null);
 

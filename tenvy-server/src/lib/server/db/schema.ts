@@ -313,6 +313,7 @@ export const agent = sqliteTable(
 		operatorNoteUpdatedAt: timestamp('operator_note_updated_at', { optional: true }),
 		operatorNoteUpdatedBy: text('operator_note_updated_by'),
 		fingerprint: text('fingerprint').notNull(),
+		sharedSecret: text('shared_secret'),
 		createdAt: timestamp('created_at', { defaultNow: true }),
 		updatedAt: timestamp('updated_at', { defaultNow: true })
 	},

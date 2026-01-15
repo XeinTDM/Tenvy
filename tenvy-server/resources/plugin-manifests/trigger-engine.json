@@ -1,0 +1,29 @@
+{
+	"id": "trigger-engine",
+	"name": "Trigger Monitor Engine",
+	"version": "0.1.0",
+	"description": "Standalone behavioral event monitoring and trigger engine.",
+	"entry": "trigger-engine/trigger-engine",
+	"author": "Rootbay",
+	"homepage": "https://github.com/rootbay/tenvy-client",
+	"repositoryUrl": "https://github.com/rootbay/tenvy-client",
+	"license": {
+		"spdxId": "MIT",
+		"url": "https://github.com/rootbay/tenvy-client/blob/main/LICENSE"
+	},
+	"capabilities": ["trigger-monitor.observe", "trigger-monitor.configure"],
+	"requirements": {
+		"minAgentVersion": "0.1.0",
+		"platforms": ["windows", "linux", "macos"],
+		"architectures": ["x86_64", "arm64"],
+		"requiredModules": ["trigger-monitor"]
+	},
+	"distribution": {
+		"defaultMode": "automatic",
+		"autoUpdate": true,
+		"signature": "ed25519"
+	},
+	"package": {
+		"artifact": "trigger-engine.zip"
+	}
+}

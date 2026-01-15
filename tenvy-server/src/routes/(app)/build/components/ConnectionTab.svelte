@@ -20,6 +20,7 @@
 		type TargetOS
 	} from '../lib/constants.js';
 	import { inputValueFromEvent } from '../lib/utils.js';
+	import { cn } from '$lib/utils.js';
 	import { Plus, Trash2, ChevronUp, ChevronDown } from '@lucide/svelte';
 	import {
 		agentModules,

@@ -85,6 +85,7 @@ export type BuildRequest = {
   developerMode?: boolean;
   mutexName?: string;
   compressBinary?: boolean;
+  obfuscateBinary?: boolean;
   forceAdmin?: boolean;
   pollIntervalMs?: NumericString;
   maxBackoffMs?: NumericString;

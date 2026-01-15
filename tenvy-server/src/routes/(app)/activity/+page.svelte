@@ -31,6 +31,13 @@
 		neutral: 'text-muted-foreground'
 	};
 
+	const enrichedSummaryMetrics = $derived(
+		summaryMetrics.map((metric: ActivitySummaryMetric) => ({
+			...metric,
+			toneClass: summaryToneClasses[metric.tone]
+		}))
+	);
+
 	const flaggedStatusMeta: Record<
 		ActivityFlaggedSession['status'],
 		{ label: string; badgeClass: string }
@@ -122,7 +129,9 @@
 	];
 
 	const hasTimelineData = $derived(
-		activityTimeline.some((point) => point.active > 0 || point.idle > 0 || point.suppressed > 0)
+		activityTimeline.some(
+			(point: ActivityPoint) => point.active > 0 || point.idle > 0 || point.suppressed > 0
+		)
 	);
 
 	type ModuleActivityEntry = PageData['moduleActivity'][number];
@@ -130,7 +139,7 @@
 	const moduleActivity = $derived(data.moduleActivity);
 
 	const hasModuleTelemetry = $derived(
-		moduleActivity.some((entry) => entry.executed > 0 || entry.queued > 0)
+		moduleActivity.some((entry: ModuleActivityEntry) => entry.executed > 0 || entry.queued > 0)
 	);
 
 	const moduleChartConfig = {
@@ -182,7 +191,9 @@
 		)
 	);
 
-	const hasLatencySamples = $derived(latencyTrend.some((entry) => entry.p50 > 0 || entry.p95 > 0));
+	const hasLatencySamples = $derived(
+		latencyTrend.some((entry: LatencyPoint) => entry.p50 > 0 || entry.p95 > 0)
+	);
 
 	const latencyChartConfig = {
 		p50: {
@@ -217,16 +228,23 @@
 	];
 
 	const flaggedSessions = $derived(data.flaggedSessions);
+
+	const enrichedFlaggedSessions = $derived(
+		flaggedSessions.map((session: ActivityFlaggedSession) => ({
+			...session,
+			meta: flaggedStatusMeta[session.status]
+		}))
+	);
 </script>
 
 <section class="space-y-6">
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-		{#each summaryMetrics as metric (metric.id)}
+		{#each enrichedSummaryMetrics as metric (metric.id)}
 			<Card class="border-border/60">
 				<CardHeader class="space-y-2">
 					<CardTitle class="text-sm font-medium text-muted-foreground">{metric.label}</CardTitle>
 					<div class="text-2xl font-semibold">{metric.value}</div>
-					<p class={`text-xs ${summaryToneClasses[metric.tone]}`}>{metric.delta}</p>
+					<p class={`text-xs ${metric.toneClass}`}>{metric.delta}</p>
 				</CardHeader>
 			</Card>
 		{/each}
@@ -365,14 +383,14 @@
 				</CardDescription>
 			</CardHeader>
 			<CardContent class="space-y-4">
-				{#if flaggedSessions.length === 0}
+				{#if enrichedFlaggedSessions.length === 0}
 					<div
 						class="rounded-lg border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground"
 					>
 						No sessions are currently flagged for review.
 					</div>
 				{:else}
-					{#each flaggedSessions as session (session.client)}
+					{#each enrichedFlaggedSessions as session (session.client)}
 						<div class="rounded-lg border border-border/60 p-4">
 							<div class="flex items-start justify-between gap-4">
 								<div class="space-y-1">
@@ -388,9 +406,9 @@
 									</Badge>
 									<Badge
 										variant="outline"
-										class={`text-[0.65rem] ${flaggedStatusMeta[session.status].badgeClass}`}
+										class={`text-[0.65rem] ${session.meta.badgeClass}`}
 									>
-										{flaggedStatusMeta[session.status].label}
+										{session.meta.label}
 									</Badge>
 								</div>
 							</div>

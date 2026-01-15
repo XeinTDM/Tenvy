@@ -1,0 +1,29 @@
+{
+	"id": "audio-engine",
+	"name": "Audio Control Engine",
+	"version": "0.1.0",
+	"description": "Standalone audio capture and playback engine.",
+	"entry": "audio-engine/audio-engine",
+	"author": "Rootbay",
+	"homepage": "https://github.com/rootbay/tenvy-client",
+	"repositoryUrl": "https://github.com/rootbay/tenvy-client",
+	"license": {
+		"spdxId": "MIT",
+		"url": "https://github.com/rootbay/tenvy-client/blob/main/LICENSE"
+	},
+	"capabilities": ["audio.capture", "audio.inject"],
+	"requirements": {
+		"minAgentVersion": "0.1.0",
+		"platforms": ["windows", "linux", "macos"],
+		"architectures": ["x86_64", "arm64"],
+		"requiredModules": ["audio-control"]
+	},
+	"distribution": {
+		"defaultMode": "automatic",
+		"autoUpdate": true,
+		"signature": "ed25519"
+	},
+	"package": {
+		"artifact": "audio-engine.zip"
+	}
+}

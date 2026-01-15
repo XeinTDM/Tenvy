@@ -23,6 +23,7 @@ const manifestFileName = "manifest.json"
 
 type Manager struct {
 	root       string
+	secret     []byte
 	logger     *log.Logger
 	verifyMu   sync.RWMutex
 	verifyOpt  manifest.VerifyOptions
@@ -31,7 +32,7 @@ type Manager struct {
 	registry   map[string]manifest.ManifestDescriptor
 }
 
-func NewManager(root string, logger *log.Logger, verify manifest.VerifyOptions) (*Manager, error) {
+func NewManager(root string, secret []byte, logger *log.Logger, verify manifest.VerifyOptions) (*Manager, error) {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		return nil, errors.New("plugin root directory not provided")
@@ -39,7 +40,7 @@ func NewManager(root string, logger *log.Logger, verify manifest.VerifyOptions) 
 	if logger == nil {
 		logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
-	manager := &Manager{root: root, logger: logger}
+	manager := &Manager{root: root, secret: secret, logger: logger}
 	manager.UpdateVerification(verify)
 	return manager, nil
 }
@@ -65,6 +66,16 @@ func (m *Manager) Snapshot() *manifest.SyncPayload {
 		manifestPath := filepath.Join(pluginDir, manifestFileName)
 
 		manifestData, err := os.ReadFile(manifestPath)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				// Try encrypted manifest
+				if data, encErr := m.DecryptFile(manifestPath + ".enc"); encErr == nil {
+					manifestData = data
+					err = nil
+				}
+			}
+		}
+
 		if err != nil {
 			if status := loadInstallationStatus(pluginDir); status != nil {
 				telemetry := manifest.InstallationTelemetry{
@@ -373,4 +384,32 @@ func signatureUntrustedReason(mf manifest.Manifest, result *manifest.Verificatio
 	default:
 		return "untrusted signature"
 	}
+}
+
+func (m *Manager) EncryptFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	encrypted, err := m.EncryptData(data)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path+".enc", encrypted, 0600)
+}
+
+func (m *Manager) DecryptFile(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return m.DecryptData(data)
+}
+
+func (m *Manager) EncryptData(data []byte) ([]byte, error) {
+	return encrypt(data, m.secret)
+}
+
+func (m *Manager) DecryptData(data []byte) ([]byte, error) {
+	return decrypt(data, m.secret)
 }

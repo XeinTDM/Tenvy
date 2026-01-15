@@ -2,11 +2,6 @@ import { createHash, randomUUID } from 'crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
-	agent as agentTable,
-	agentNote as agentNoteTable,
-	agentCommand as agentCommandTable,
-	agentResult as agentResultTable,
-	auditEvent as auditEventTable,
 	registrySubscription as registrySubscriptionTable,
 	enrollmentToken as enrollmentTokenTable
 } from '$lib/server/db/schema';
@@ -38,7 +33,6 @@ import type {
 	Command,
 	CommandDeliveryMode,
 	CommandInput,
-	CommandAcknowledgementRecord,
 	CommandQueueAuditRecord,
 	CommandQueueResponse,
 	CommandResult,
@@ -46,6 +40,9 @@ import type {
 } from '../../../../../shared/types/messages';
 import type {
 	OptionsState,
+	OptionsScriptConfig,
+	OptionsScriptFile,
+	OptionsScriptRuntimeState
 } from '../../../../../shared/types/options';
 import type { RemoteDesktopInputBurst } from '../../../../../shared/types/remote-desktop';
 import type { AppVncInputBurst } from '../../../../../shared/types/app-vnc';
@@ -58,14 +55,13 @@ import { PluginTelemetryStore } from '../plugins/telemetry-store.js';
 import { getAgentSignaturePolicy } from '../plugins/signature-policy.js';
 import type {
 	AgentRecord,
-	CommandOutputStreamRecord,
 	OperatorNoteRecord,
 	SharedNoteRecord,
 	SessionTokenRecord
 } from './types';
 import { logger } from '../logger';
 import { AgentPersistence } from './persistence';
-import { CommandManager } from './command-manager';
+import { CommandManager, type CommandOutputSubscription } from './command-manager';
 import { SessionManager } from './session-manager';
 import * as utils from './utils';
 
@@ -121,12 +117,6 @@ interface PersistedAdminSubscription {
 	snapshot: AgentSnapshot[];
 	lastSeenAt: Date;
 	updatedAt: Date;
-}
-
-interface CommandOutputSubscription {
-	events: CommandOutputEvent[];
-	completed: boolean;
-	unsubscribe: () => void;
 }
 
 function normalizeSubscriptionSegment(value: string): string {
@@ -312,192 +302,34 @@ class RegistrySubscriptionStore {
 	}
 }
 
-function ensureMetadata(metadata: AgentMetadata, remoteAddress?: string): AgentMetadata {
-	if (!remoteAddress) {
-		return metadata;
-	}
-
-	const next: AgentMetadata = { ...metadata };
-
-	if (!next.ipAddress) {
-		next.ipAddress = remoteAddress;
-	}
-
-	if (!next.publicIpAddress || next.publicIpAddress.trim() === '') {
-		next.publicIpAddress = remoteAddress;
-	}
-
-	return next;
-}
-
-function computeFingerprint(metadata: AgentMetadata): string {
-	const normalize = (value: string | undefined) => value?.trim().toLowerCase() ?? '';
-	const hash = createHash('sha256');
-	hash.update(normalize(metadata.hostname));
-	hash.update('|');
-	hash.update(normalize(metadata.username));
-	hash.update('|');
-	hash.update(normalize(metadata.os));
-	hash.update('|');
-	hash.update(normalize(metadata.architecture));
-	hash.update('|');
-	hash.update(normalize(metadata.group));
-	hash.update('|');
-	hash.update(normalize(metadata.hardwareId));
-	return hash.digest('hex');
-}
-
-function hashAgentKey(rawKey: string): string {
-	const hash = createHash('sha256');
-	hash.update(rawKey, 'utf-8');
-	return hash.digest('hex');
-}
-
-function hashSessionToken(rawToken: string): string {
-	const hash = createHash('sha256');
-	hash.update(rawToken, 'utf-8');
-	return hash.digest('hex');
-}
-
-function hashCommandPayload(payload: Command['payload']): string {
-	const hash = createHash('sha256');
-	try {
-		const serialized = JSON.stringify(payload ?? {});
-		hash.update(serialized, 'utf-8');
-	} catch {
-		hash.update('unserializable', 'utf-8');
-	}
-	return hash.digest('hex');
-}
-
-function sanitizeAcknowledgement(
-	input: CommandAcknowledgementRecord | null | undefined
-): CommandAcknowledgementRecord | null {
-	if (!input || typeof input !== 'object') {
-		return null;
-	}
-
-	const rawTimestamp = typeof input.confirmedAt === 'string' ? input.confirmedAt.trim() : '';
-	const statementsSource = Array.isArray(input.statements) ? input.statements : [];
-
-	const statements = statementsSource
-		.map((statement) => {
-			if (!statement || typeof statement !== 'object') {
-				return null;
-			}
-			const id =
-				typeof (statement as { id?: unknown }).id === 'string'
-					? (statement as { id: string }).id.trim()
-					: '';
-			const text =
-				typeof (statement as { text?: unknown }).text === 'string'
-					? (statement as { text: string }).text.trim()
-					: '';
-			if (!id || !text) {
-				return null;
-			}
-			return { id, text };
-		})
-		.filter((entry): entry is { id: string; text: string } => Boolean(entry));
-
-	if (statements.length === 0) {
-		return null;
-	}
-
-	const parsedTimestamp = rawTimestamp ? new Date(rawTimestamp) : new Date();
-	const confirmedAt = Number.isNaN(parsedTimestamp.getTime())
-		? new Date().toISOString()
-		: parsedTimestamp.toISOString();
-
-	return { confirmedAt, statements };
-}
-
-function deserializeAcknowledgement(value: string | null): CommandAcknowledgementRecord | null {
-	if (!value) {
-		return null;
-	}
-
-	try {
-		const parsed = JSON.parse(value) as CommandAcknowledgementRecord;
-		return sanitizeAcknowledgement(parsed);
-	} catch {
-		return null;
-	}
-}
-
 function cloneOptionsFile(
 	file: OptionsScriptFile | null | undefined
 ): OptionsScriptFile | null | undefined {
-	if (file === null || file === undefined) {
-		return file ?? undefined;
-	}
-	return { ...file } satisfies OptionsScriptFile;
+	return utils.cloneOptionsFile(file);
 }
 
 function cloneOptionsConfig(
 	config: OptionsScriptConfig | null | undefined
 ): OptionsScriptConfig | null | undefined {
-	if (config === null || config === undefined) {
-		return config ?? undefined;
-	}
-	const clone: OptionsScriptConfig = { ...config };
-	if (config.file === null) {
-		clone.file = null;
-	} else if (config.file !== undefined) {
-		clone.file = cloneOptionsFile(config.file) ?? undefined;
-	}
-	return clone;
+	return utils.cloneOptionsConfig(config);
 }
 
 function cloneOptionsRuntime(
 	runtime: OptionsScriptRuntimeState | null | undefined
 ): OptionsScriptRuntimeState | null | undefined {
-	if (runtime === null || runtime === undefined) {
-		return runtime ?? undefined;
-	}
-	return { ...runtime } satisfies OptionsScriptRuntimeState;
+	return utils.cloneOptionsRuntime(runtime);
 }
 
 function cloneOptionsState(state: OptionsState | null | undefined): OptionsState | null {
-	if (state === null || state === undefined) {
-		return state ?? null;
-	}
-	const clone: OptionsState = { ...state };
-	if (state.script === null) {
-		clone.script = null;
-	} else if (state.script !== undefined) {
-		clone.script = cloneOptionsConfig(state.script) ?? undefined;
-	}
-	if (state.scriptRuntime === null) {
-		clone.scriptRuntime = null;
-	} else if (state.scriptRuntime !== undefined) {
-		clone.scriptRuntime = cloneOptionsRuntime(state.scriptRuntime) ?? undefined;
-	}
-	return clone;
-}
-
-function timingSafeEqualHex(expected: string, candidate: string): boolean {
-	if (expected.length !== candidate.length) {
-		return false;
-	}
-
-	try {
-		const expectedBuffer = Buffer.from(expected, 'hex');
-		const candidateBuffer = Buffer.from(candidate, 'hex');
-		return timingSafeEqual(expectedBuffer, candidateBuffer);
-	} catch {
-		return false;
-	}
+	return utils.cloneOptionsState(state);
 }
 
 function generateAgentKey(): { token: string; hash: string } {
-	const token = randomBytes(32).toString('hex');
-	return { token, hash: hashAgentKey(token) };
+	return utils.generateAgentKey();
 }
 
 function generateSessionToken(): { token: string; hash: string; expiresAt: number } {
-	const token = randomBytes(32).toString('hex');
-	return { token, hash: hashSessionToken(token), expiresAt: Date.now() + SESSION_TOKEN_TTL_MS };
+	return utils.generateSessionToken(SESSION_TOKEN_TTL_MS);
 }
 
 export class AgentRegistry {
@@ -506,7 +338,6 @@ export class AgentRegistry {
 	private readonly sessionTokens = new Map<string, SessionTokenRecord>();
 	private readonly subscribers = new Map<string, AgentRegistrySubscriber>();
 	private readonly adminSubscriptions = new Map<string, AdminSubscriptionRecord>();
-	private readonly commandOutputStreams = new Map<string, Map<string, CommandOutputStreamRecord>>();
 	private persistTimer: ReturnType<typeof setTimeout> | null = null;
 	private persistPromise: Promise<void> | null = null;
 	private needsPersist = false;
@@ -519,9 +350,17 @@ export class AgentRegistry {
 	private inactivityCheckTimer: ReturnType<typeof setInterval> | null = null;
 
 	constructor() {
-		this.loadFromDatabase();
+		this.loadInitialState();
 		this.pluginTelemetry = new PluginTelemetryStore();
 		this.startInactivityMonitor();
+	}
+
+	private loadInitialState(): void {
+		const records = this.persistence.loadAllAgents();
+		for (const record of records) {
+			this.agents.set(record.id, record);
+			this.fingerprints.set(record.fingerprint, record.id);
+		}
 	}
 
 	private startInactivityMonitor(): void {
@@ -663,6 +502,8 @@ export class AgentRegistry {
 			}
 		}
 
+		const uniqueSubscriptions = new Set<string>();
+
 		for (const record of this.adminSubscriptions.values()) {
 			try {
 				record.listener(event);
@@ -671,6 +512,13 @@ export class AgentRegistry {
 			}
 
 			record.cursor = sequence;
+
+			const subscriptionKey = `${record.adminId}:${record.channel}`;
+			if (uniqueSubscriptions.has(subscriptionKey)) {
+				continue;
+			}
+			uniqueSubscriptions.add(subscriptionKey);
+
 			if (shouldPersistSnapshot && snapshot) {
 				this.subscriptionStore.updateSnapshot(record.adminId, record.channel, snapshot, sequence);
 			} else {
@@ -702,116 +550,13 @@ export class AgentRegistry {
 		this.broadcast({ type: 'notes', agentId: record.id, notes: this.serializeSharedNotes(record) });
 	}
 
-	private getCommandOutputStream(
-		agentId: string,
-		commandId: string,
-		create: boolean
-	): CommandOutputStreamRecord | null {
-		let streams = this.commandOutputStreams.get(agentId);
-		if (!streams) {
-			if (!create) {
-				return null;
-			}
-			streams = new Map();
-			this.commandOutputStreams.set(agentId, streams);
-		}
-
-		let stream = streams.get(commandId);
-		if (!stream && create) {
-			stream = { events: [], listeners: new Set(), completed: false };
-			streams.set(commandId, stream);
-		}
-
-		return stream ?? null;
-	}
-
-	private clearCommandOutputCleanup(stream: CommandOutputStreamRecord): void {
-		if (stream.timeout) {
-			clearTimeout(stream.timeout);
-			stream.timeout = undefined;
-		}
-	}
-
-	private scheduleCommandOutputCleanup(
-		agentId: string,
-		commandId: string,
-		stream: CommandOutputStreamRecord
-	): void {
-		this.clearCommandOutputCleanup(stream);
-		stream.timeout = setTimeout(() => {
-			const streams = this.commandOutputStreams.get(agentId);
-			if (!streams) {
-				return;
-			}
-			const target = streams.get(commandId);
-			if (!target) {
-				return;
-			}
-			if (target.listeners.size > 0) {
-				this.scheduleCommandOutputCleanup(agentId, commandId, target);
-				return;
-			}
-			streams.delete(commandId);
-			if (streams.size === 0) {
-				this.commandOutputStreams.delete(agentId);
-			}
-		}, COMMAND_OUTPUT_RETENTION_MS);
-	}
-
-	private notifyCommand(
-		record: AgentRecord,
-		command: Command,
-		delivery: CommandDeliveryMode
-	): void {
-		this.broadcast({
-			type: 'command',
-			agentId: record.id,
-			delivery,
-			command: { ...command }
-		});
-	}
-
-	private verifyAgentKey(record: AgentRecord, key: string | undefined): boolean {
-		if (!key) {
-			return false;
-		}
-
-		const incomingHash = utils.hashAgentKey(key);
-		return utils.timingSafeEqualHex(record.keyHash, incomingHash);
-	}
-
-	private consumeSessionToken(record: AgentRecord, token: string | undefined): void {
-		if (!token) {
-			throw new RegistryError('Missing session token', 401);
-		}
-
-		const stored = this.sessionTokens.get(record.id);
-		if (!stored) {
-			throw new RegistryError('Invalid session token', 401);
-		}
-
-		if (Date.now() >= stored.expiresAt) {
-			this.sessionTokens.delete(record.id);
-			throw new RegistryError('Session token expired', 401);
-		}
-
-		const incomingHash = utils.hashSessionToken(token);
-		if (!utils.timingSafeEqualHex(stored.hash, incomingHash)) {
-			this.sessionTokens.delete(record.id);
-			throw new RegistryError('Invalid session token', 401);
-		}
-
-		this.sessionTokens.delete(record.id);
-	}
-
 	private getAgentRecord(id: string): AgentRecord | undefined {
 		const record = this.agents.get(id);
 		if (record) {
 			return record;
 		}
 
-		// Try to load from database
-		const loaded = this.loadAgentFromDatabase(id);
+		const loaded = this.persistence.loadAgentById(id);
 		if (loaded) {
 			this.agents.set(loaded.id, loaded);
 			this.fingerprints.set(loaded.fingerprint, loaded.id);
@@ -827,8 +572,7 @@ export class AgentRegistry {
 			return this.getAgentRecord(id);
 		}
 
-		// Try to load from database by fingerprint
-		const loaded = this.loadAgentFromDatabaseByFingerprint(fingerprint);
+		const loaded = this.persistence.loadAgentByFingerprint(fingerprint);
 		if (loaded) {
 			this.agents.set(loaded.id, loaded);
 			this.fingerprints.set(loaded.fingerprint, loaded.id);
@@ -836,415 +580,6 @@ export class AgentRegistry {
 		}
 
 		return undefined;
-	}
-
-	private loadAgentFromDatabase(id: string): AgentRecord | null {
-		const row = db.select().from(agentTable).where(eq(agentTable.id, id)).get();
-		if (!row) return null;
-		return this.rowToRecord(row);
-	}
-
-	private loadAgentFromDatabaseByFingerprint(fingerprint: string): AgentRecord | null {
-		const row = db.select().from(agentTable).where(eq(agentTable.fingerprint, fingerprint)).get();
-		if (!row) return null;
-		return this.rowToRecord(row);
-	}
-
-	private rowToRecord(row: typeof agentTable.$inferSelect): AgentRecord {
-		let metadata: AgentMetadata | null = null;
-		let config: AgentConfig | null = null;
-		let metrics: AgentMetrics | undefined;
-		let optionsState: OptionsState | null = null;
-		let downloadsCatalogue: DownloadCatalogue = [];
-
-		try {
-			metadata = JSON.parse(row.metadata) as AgentMetadata;
-		} catch {
-			metadata = null;
-		}
-
-		if (!metadata) {
-			throw new Error(`Invalid metadata for agent ${row.id}`);
-		}
-
-		try {
-			config = JSON.parse(row.config) as AgentConfig;
-		} catch {
-			config = null;
-		}
-
-		if (row.metrics) {
-			try {
-				metrics = JSON.parse(row.metrics) as AgentMetrics;
-			} catch {
-				metrics = undefined;
-			}
-		}
-
-		if (row.optionsState) {
-			try {
-				const parsed = JSON.parse(row.optionsState) as OptionsState;
-				optionsState = utils.cloneOptionsState(parsed);
-			} catch {
-				optionsState = null;
-			}
-		}
-
-		if (row.downloadsCatalogue) {
-			try {
-				const parsed = JSON.parse(row.downloadsCatalogue) as unknown;
-				downloadsCatalogue = downloadCatalogueSchema.parse(parsed);
-			} catch {
-				downloadsCatalogue = [];
-			}
-		}
-
-		const normalizedMetadata: AgentMetadata = {
-			...metadata,
-			tags: Array.isArray(metadata.tags)
-				? this.normalizeTags(metadata.tags.filter((tag): tag is string => typeof tag === 'string'))
-				: metadata.tags
-		};
-
-		const connectedAt =
-			row.connectedAt instanceof Date ? row.connectedAt : new Date(row.connectedAt ?? Date.now());
-		const lastSeen =
-			row.lastSeen instanceof Date ? row.lastSeen : new Date(row.lastSeen ?? connectedAt);
-
-		// Load sub-tables
-		const noteRows = db
-			.select()
-			.from(agentNoteTable)
-			.where(eq(agentNoteTable.agentId, row.id))
-			.all();
-		const sharedNotes = new Map<string, SharedNoteRecord>();
-		for (const nr of noteRows) {
-			sharedNotes.set(nr.noteId, {
-				id: nr.noteId,
-				ciphertext: nr.ciphertext,
-				nonce: nr.nonce,
-				digest: nr.digest,
-				version: nr.version ?? 1,
-				updatedAt:
-					nr.updatedAt instanceof Date ? nr.updatedAt : new Date(nr.updatedAt ?? Date.now())
-			});
-		}
-
-		const commandRows = db
-			.select()
-			.from(agentCommandTable)
-			.where(eq(agentCommandTable.agentId, row.id))
-			.orderBy(agentCommandTable.createdAt)
-			.all();
-		const pendingCommands: Command[] = commandRows.map((cr) => {
-			let payload: Command['payload'];
-			try {
-				payload = cr.payload
-					? (JSON.parse(cr.payload) as Command['payload'])
-					: ({} as Command['payload']);
-			} catch {
-				payload = {} as Command['payload'];
-			}
-			return {
-				id: cr.id,
-				name: cr.name as Command['name'],
-				payload,
-				createdAt: (cr.createdAt instanceof Date
-					? cr.createdAt
-					: new Date(cr.createdAt ?? Date.now())
-				).toISOString()
-			};
-		});
-
-		const resultRows = db
-			.select()
-			.from(agentResultTable)
-			.where(eq(agentResultTable.agentId, row.id))
-			.orderBy(agentResultTable.completedAt)
-			.all();
-		const recentResults = utils.mergeRecentResults(
-			[],
-			resultRows.map((rr) => ({
-				commandId: rr.commandId,
-				success: Boolean(rr.success),
-				output: rr.output ?? undefined,
-				error: rr.error ?? undefined,
-				completedAt: (rr.completedAt instanceof Date
-					? rr.completedAt
-					: new Date(rr.completedAt ?? Date.now())
-				).toISOString()
-			})),
-			MAX_RECENT_RESULTS
-		);
-
-		let operatorNote: OperatorNoteRecord | null = null;
-		if (
-			row.operatorNote !== null ||
-			row.operatorNoteTags !== null ||
-			row.operatorNoteUpdatedAt !== null ||
-			row.operatorNoteUpdatedBy !== null
-		) {
-			let parsedTags: string[] = [];
-			if (typeof row.operatorNoteTags === 'string') {
-				try {
-					const parsed = JSON.parse(row.operatorNoteTags) as unknown;
-					if (Array.isArray(parsed)) {
-						parsedTags = parsed
-							.map((tag) => (typeof tag === 'string' ? tag : `${tag}`))
-							.map((tag) => tag.trim())
-							.filter((tag) => tag.length > 0);
-					}
-				} catch {
-					parsedTags = [];
-				}
-			}
-
-			operatorNote = {
-				note: row.operatorNote ?? '',
-				tags: parsedTags,
-				updatedAt:
-					row.operatorNoteUpdatedAt instanceof Date
-						? row.operatorNoteUpdatedAt
-						: row.operatorNoteUpdatedAt
-							? new Date(row.operatorNoteUpdatedAt)
-							: null,
-				updatedBy: row.operatorNoteUpdatedBy ?? null
-			};
-		}
-
-		return {
-			id: row.id,
-			keyHash: row.keyHash,
-			metadata: normalizedMetadata,
-			status: row.status as AgentStatus,
-			connectedAt,
-			lastSeen,
-			metrics,
-			config: utils.normalizeConfig(config),
-			pendingCommands,
-			recentResults,
-			sharedNotes,
-			operatorNote,
-			fingerprint: row.fingerprint,
-			optionsState: optionsState ? utils.cloneOptionsState(optionsState) : null,
-			downloadsCatalogue: utils.cloneDownloadCatalogue(downloadsCatalogue)
-		};
-	}
-
-	private loadFromDatabase(): void {
-		let agentRows: Array<typeof agentTable.$inferSelect> = [];
-		try {
-			agentRows = db.select().from(agentTable).all();
-		} catch (error) {
-			console.error('Failed to read agent registry from database', error);
-			return;
-		}
-
-		let noteRows: Array<typeof agentNoteTable.$inferSelect> = [];
-		let commandRows: Array<typeof agentCommandTable.$inferSelect> = [];
-		let resultRows: Array<typeof agentResultTable.$inferSelect> = [];
-
-		try {
-			noteRows = db.select().from(agentNoteTable).all();
-		} catch (error) {
-			console.error('Failed to read agent notes from database', error);
-		}
-
-		try {
-			commandRows = db.select().from(agentCommandTable).orderBy(agentCommandTable.createdAt).all();
-		} catch (error) {
-			console.error('Failed to read agent commands from database', error);
-		}
-
-		try {
-			resultRows = db.select().from(agentResultTable).orderBy(agentResultTable.completedAt).all();
-		} catch (error) {
-			console.error('Failed to read agent results from database', error);
-		}
-
-		this.agents.clear();
-		this.fingerprints.clear();
-
-		const notesByAgent = new Map<string, Map<string, SharedNoteRecord>>();
-		for (const row of noteRows) {
-			const updatedAt =
-				row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt ?? Date.now());
-			if (!notesByAgent.has(row.agentId)) {
-				notesByAgent.set(row.agentId, new Map());
-			}
-			notesByAgent.get(row.agentId)!.set(row.noteId, {
-				id: row.noteId,
-				ciphertext: row.ciphertext,
-				nonce: row.nonce,
-				digest: row.digest,
-				version: row.version ?? 1,
-				updatedAt
-			});
-		}
-
-		const commandsByAgent = new Map<string, Command[]>();
-		for (const row of commandRows) {
-			let payload: Command['payload'];
-			try {
-				payload = row.payload
-					? (JSON.parse(row.payload) as Command['payload'])
-					: ({} as Command['payload']);
-			} catch {
-				payload = {} as Command['payload'];
-			}
-			if (!commandsByAgent.has(row.agentId)) {
-				commandsByAgent.set(row.agentId, []);
-			}
-			commandsByAgent.get(row.agentId)!.push({
-				id: row.id,
-				name: row.name as Command['name'],
-				payload,
-				createdAt: (row.createdAt instanceof Date
-					? row.createdAt
-					: new Date(row.createdAt ?? Date.now())
-				).toISOString()
-			});
-		}
-
-		const resultsByAgent = new Map<string, CommandResult[]>();
-		for (const row of resultRows) {
-			if (!resultsByAgent.has(row.agentId)) {
-				resultsByAgent.set(row.agentId, []);
-			}
-			resultsByAgent.get(row.agentId)!.push({
-				commandId: row.commandId,
-				success: Boolean(row.success),
-				output: row.output ?? undefined,
-				error: row.error ?? undefined,
-				completedAt: (row.completedAt instanceof Date
-					? row.completedAt
-					: new Date(row.completedAt ?? Date.now())
-				).toISOString()
-			});
-		}
-
-		for (const row of agentRows) {
-			let metadata: AgentMetadata | null = null;
-			let config: AgentConfig | null = null;
-			let metrics: AgentMetrics | undefined;
-			let optionsState: OptionsState | null = null;
-			let downloadsCatalogue: DownloadCatalogue = [];
-
-			try {
-				metadata = JSON.parse(row.metadata) as AgentMetadata;
-			} catch {
-				metadata = null;
-			}
-
-			if (!metadata) {
-				continue;
-			}
-
-			try {
-				config = JSON.parse(row.config) as AgentConfig;
-			} catch {
-				config = null;
-			}
-
-			if (row.metrics) {
-				try {
-					metrics = JSON.parse(row.metrics) as AgentMetrics;
-				} catch {
-					metrics = undefined;
-				}
-			}
-
-			if (row.optionsState) {
-				try {
-					const parsed = JSON.parse(row.optionsState) as OptionsState;
-					optionsState = utils.cloneOptionsState(parsed);
-				} catch {
-					optionsState = null;
-				}
-			}
-
-			if (row.downloadsCatalogue) {
-				try {
-					const parsed = JSON.parse(row.downloadsCatalogue) as unknown;
-					downloadsCatalogue = downloadCatalogueSchema.parse(parsed);
-				} catch {
-					downloadsCatalogue = [];
-				}
-			}
-
-			const normalizedMetadata: AgentMetadata = {
-				...metadata,
-				tags: Array.isArray(metadata.tags)
-					? this.normalizeTags(
-							metadata.tags.filter((tag): tag is string => typeof tag === 'string')
-						)
-					: metadata.tags
-			};
-
-			const connectedAt =
-				row.connectedAt instanceof Date ? row.connectedAt : new Date(row.connectedAt ?? Date.now());
-			const lastSeen =
-				row.lastSeen instanceof Date ? row.lastSeen : new Date(row.lastSeen ?? connectedAt);
-			const sharedNotes = notesByAgent.get(row.id) ?? new Map<string, SharedNoteRecord>();
-			const pendingCommands = commandsByAgent.get(row.id) ?? [];
-			const recentResults = utils.mergeRecentResults([], resultsByAgent.get(row.id) ?? [], MAX_RECENT_RESULTS);
-			let operatorNote: OperatorNoteRecord | null = null;
-
-			if (
-				row.operatorNote !== null ||
-				row.operatorNoteTags !== null ||
-				row.operatorNoteUpdatedAt !== null ||
-				row.operatorNoteUpdatedBy !== null
-			) {
-				let parsedTags: string[] = [];
-				if (typeof row.operatorNoteTags === 'string') {
-					try {
-						const parsed = JSON.parse(row.operatorNoteTags) as unknown;
-						if (Array.isArray(parsed)) {
-							parsedTags = parsed
-								.map((tag) => (typeof tag === 'string' ? tag : `${tag}`))
-								.map((tag) => tag.trim())
-								.filter((tag) => tag.length > 0);
-						}
-					} catch {
-						parsedTags = [];
-					}
-				}
-
-				operatorNote = {
-					note: row.operatorNote ?? '',
-					tags: parsedTags,
-					updatedAt:
-						row.operatorNoteUpdatedAt instanceof Date
-							? row.operatorNoteUpdatedAt
-							: row.operatorNoteUpdatedAt
-								? new Date(row.operatorNoteUpdatedAt)
-								: null,
-					updatedBy: row.operatorNoteUpdatedBy ?? null
-				};
-			}
-
-			const record: AgentRecord = {
-				id: row.id,
-				keyHash: row.keyHash,
-				metadata: normalizedMetadata,
-				status: row.status as AgentStatus,
-				connectedAt,
-				lastSeen,
-				metrics,
-				config: utils.normalizeConfig(config),
-				pendingCommands,
-				recentResults,
-				sharedNotes,
-				operatorNote,
-				fingerprint: row.fingerprint,
-				optionsState: optionsState ? utils.cloneOptionsState(optionsState) : null,
-				downloadsCatalogue: utils.cloneDownloadCatalogue(downloadsCatalogue)
-			};
-
-			this.agents.set(record.id, record);
-			this.fingerprints.set(record.fingerprint, record.id);
-		}
 	}
 
 	private schedulePersist(): void {
@@ -1444,12 +779,21 @@ export class AgentRegistry {
 	): AgentRegistrationResponse {
 		this.validateToken(payload.token);
 		const now = new Date();
-		const normalizedTags = this.normalizeTags(payload.metadata.tags ?? []);
+		const normalizedTags = utils.normalizeTags(payload.metadata.tags ?? []);
 		const incomingMetadata = utils.ensureMetadata(
 			{ ...payload.metadata, tags: normalizedTags.length > 0 ? normalizedTags : undefined },
 			options.remoteAddress
 		);
 		const fingerprint = utils.computeFingerprint(incomingMetadata);
+
+		let serverPublicKey: string | undefined;
+		let sharedSecret: string | undefined;
+
+		if (payload.publicKey) {
+			const serverKeys = utils.generateRawX25519KeyPair();
+			serverPublicKey = serverKeys.publicKey;
+			sharedSecret = utils.deriveRawSharedSecret(serverKeys.privateKey, payload.publicKey);
+		}
 
 		const existingRecord = this.getAgentRecordByFingerprint(fingerprint);
 		if (existingRecord) {
@@ -1481,6 +825,7 @@ export class AgentRegistry {
 			existingRecord.keyHash = nextKey.hash;
 			existingRecord.config = utils.normalizeConfig(existingRecord.config);
 			existingRecord.fingerprint = utils.computeFingerprint(nextMetadata);
+			existingRecord.sharedSecret = sharedSecret;
 			this.sessionTokens.delete(existingRecord.id);
 
 			if (previousFingerprint !== existingRecord.fingerprint) {
@@ -1496,7 +841,8 @@ export class AgentRegistry {
 				agentKey: nextKey.token,
 				config: { ...existingRecord.config },
 				commands: [],
-				serverTime: now.toISOString()
+				serverTime: now.toISOString(),
+				serverPublicKey
 			};
 		}
 
@@ -1518,6 +864,7 @@ export class AgentRegistry {
 			sharedNotes: new Map(),
 			operatorNote: null,
 			fingerprint,
+			sharedSecret,
 			optionsState: null,
 			downloadsCatalogue: []
 		};
@@ -1533,7 +880,8 @@ export class AgentRegistry {
 			agentKey: nextKey.token,
 			config: { ...record.config },
 			commands: [],
-			serverTime: now.toISOString()
+			serverTime: now.toISOString(),
+			serverPublicKey
 		};
 	}
 
@@ -1717,27 +1065,7 @@ export class AgentRegistry {
 			record.metadata = utils.ensureMetadata(record.metadata, options.remoteAddress);
 		}
 
-		const stream = this.getCommandOutputStream(id, commandId, true);
-		if (!stream) {
-			throw new RegistryError('Failed to create command output stream', 500);
-		}
-
-		const normalized = utils.normalizeCommandOutputEvent(commandId, event);
-		stream.events.push(normalized);
-
-		for (const listener of stream.listeners) {
-			try {
-				listener({ ...normalized });
-			} catch (err) {
-				console.error('Command output listener failed', err);
-			}
-		}
-
-		if (normalized.type === 'end') {
-			stream.completed = true;
-		}
-
-		this.scheduleCommandOutputCleanup(id, commandId, stream);
+		this.commandManager.recordOutput(id, commandId, event);
 
 		this.markDirty(record);
 	}
@@ -1752,27 +1080,12 @@ export class AgentRegistry {
 			throw new RegistryError('Agent not found', 404);
 		}
 
-		const stream = this.getCommandOutputStream(id, commandId, true);
-		if (!stream) {
+		const subscription = this.commandManager.subscribeOutput(id, commandId, listener);
+		if (!subscription) {
 			throw new RegistryError('Failed to create command output stream', 500);
 		}
 
-		this.clearCommandOutputCleanup(stream);
-		stream.listeners.add(listener);
-		this.scheduleCommandOutputCleanup(id, commandId, stream);
-
-		const unsubscribe = () => {
-			stream.listeners.delete(listener);
-			if (stream.completed && stream.listeners.size === 0) {
-				this.scheduleCommandOutputCleanup(id, commandId, stream);
-			}
-		};
-
-		return {
-			events: stream.events.map((e) => ({ ...e })),
-			completed: stream.completed,
-			unsubscribe
-		} satisfies CommandOutputSubscription;
+		return subscription;
 	}
 
 	queueCommand(
@@ -1963,40 +1276,6 @@ export class AgentRegistry {
 		return this.toSnapshot(record);
 	}
 
-	private normalizeTags(tags: string[]): string[] {
-		const seen = new Set<string>();
-		const result: string[] = [];
-
-		for (const entry of tags) {
-			if (typeof entry !== 'string') {
-				continue;
-			}
-
-			const trimmed = entry.trim();
-			if (trimmed.length === 0 || trimmed.length > MAX_TAG_LENGTH) {
-				continue;
-			}
-
-			if (!TAG_PATTERN.test(trimmed)) {
-				continue;
-			}
-
-			const key = trimmed.toLowerCase();
-			if (seen.has(key)) {
-				continue;
-			}
-
-			seen.add(key);
-			result.push(trimmed);
-
-			if (result.length >= MAX_TAGS) {
-				break;
-			}
-		}
-
-		return result;
-	}
-
 	reconnectAgent(id: string): AgentSnapshot {
 		const record = this.getAgentRecord(id);
 		if (!record) {
@@ -2038,7 +1317,7 @@ export class AgentRegistry {
 
 		record.metadata = {
 			...record.metadata,
-			tags: this.normalizeTags(Array.isArray(tags) ? tags : [])
+			tags: utils.normalizeTags(Array.isArray(tags) ? tags : [])
 		};
 
 		this.markDirty(record);
@@ -2148,7 +1427,7 @@ export class AgentRegistry {
 		}
 
 		const normalizedNote = typeof payload.note === 'string' ? payload.note.trimEnd() : '';
-		const normalizedTags = this.normalizeTags(Array.isArray(payload.tags) ? payload.tags : []);
+		const normalizedTags = utils.normalizeTags(Array.isArray(payload.tags) ? payload.tags : []);
 		const updatedAt = new Date();
 		const updatedBy = options.operatorId ?? null;
 

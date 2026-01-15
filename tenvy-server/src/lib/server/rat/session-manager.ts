@@ -1,5 +1,6 @@
 import type { AgentRecord } from './types';
 import type { AgentCommandEnvelope, Command } from '../../../../../shared/types/messages';
+import { EncryptionManager } from './encryption';
 
 const SOCKET_OPEN_STATE = (() => {
 	const globalSocket = (globalThis as { WebSocket?: { OPEN?: number } }).WebSocket;
@@ -10,6 +11,8 @@ const SOCKET_OPEN_STATE = (() => {
 })();
 
 export class SessionManager {
+	private readonly encryptionManager = new EncryptionManager();
+
 	deliverViaSession(record: AgentRecord, command: Command): boolean {
 		const session = record.session;
 		if (!session) {
@@ -23,7 +26,19 @@ export class SessionManager {
 
 		try {
 			const envelope: AgentCommandEnvelope = { type: 'command', command };
-			socket.send(JSON.stringify(envelope));
+			
+			if (record.sharedSecret) {
+				const payload = Buffer.from(JSON.stringify(envelope), 'utf8');
+				const encrypted = this.encryptionManager.encrypt(payload, record.sharedSecret);
+				const encryptedEnvelope = {
+					type: 'encrypted',
+					data: encrypted.toString('base64')
+				};
+				socket.send(JSON.stringify(encryptedEnvelope));
+			} else {
+				socket.send(JSON.stringify(envelope));
+			}
+			
 			return true;
 		} catch {
 			return false;

@@ -10,7 +10,7 @@ describe('dashboard-country-list', () => {
 	it('renders a fallback when no countries are available', () => {
 		const { getByText } = render(DashboardCountryList, {
 			countries: [],
-			selectedCountry: writable<string | null>(null),
+			selectedCountry: null,
 			percentageFormatter
 		});
 

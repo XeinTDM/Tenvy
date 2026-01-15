@@ -48,7 +48,11 @@
 		}
 	};
 
-	const props = $props<{ client: Client; mode: KeyloggerMode }>();
+	const props = $props<{
+		client: Client;
+		mode: KeyloggerMode;
+		onLogChange?: (log: WorkspaceLogEntry[]) => void;
+	}>();
 	const client = props.client;
 	const mode = props.mode;
 
@@ -63,6 +67,10 @@
 	let emitProcessNames = $state(false);
 	let includeScreenshots = $state(false);
 	let log = $state<WorkspaceLogEntry[]>([]);
+
+	$effect(() => {
+		props.onLogChange?.(log);
+	});
 	let session = $state<KeyloggerSessionState | null>(null);
 	let telemetryState = $state<KeyloggerTelemetryState>({ batches: [], totalEvents: 0 });
 	let queuePending = $state(false);

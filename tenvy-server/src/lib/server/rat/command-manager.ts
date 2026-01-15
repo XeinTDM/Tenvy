@@ -7,11 +7,27 @@ import type {
 	Command,
 	CommandResult,
 	CommandQueueAuditRecord,
-	CommandAcknowledgementRecord
+	CommandAcknowledgementRecord,
+	CommandOutputEvent
 } from '../../../../../shared/types/messages';
-import type { AgentRecord } from './types';
+import type { AgentRecord, CommandOutputStreamRecord } from './types';
+import {
+	hashCommandPayload,
+	sanitizeAcknowledgement,
+	deserializeAcknowledgement,
+	normalizeCommandOutputEvent,
+	COMMAND_OUTPUT_RETENTION_MS
+} from './utils';
+
+export interface CommandOutputSubscription {
+	events: CommandOutputEvent[];
+	completed: boolean;
+	unsubscribe: () => void;
+}
 
 export class CommandManager {
+	private readonly commandOutputStreams = new Map<string, Map<string, CommandOutputStreamRecord>>();
+
 	signCommand(command: Command): string | undefined {
 		const privateKeyHex = process.env.TENVY_COMMAND_PRIVATE_KEY;
 		const secret = process.env.TENVY_COMMAND_SECRET;
@@ -30,7 +46,7 @@ export class CommandManager {
 				// tweetnacl expects a 64-byte secret key (seed + public key)
 				// Node's crypto usually provides just the 32-byte seed.
 				// If it's 32 bytes, we need to expand it.
-				let fullKey = privateKey;
+				let fullKey: Uint8Array = privateKey;
 				if (privateKey.length === 32) {
 					fullKey = sign.keyPair.fromSeed(privateKey).secretKey;
 				}
@@ -56,13 +72,14 @@ export class CommandManager {
 		operatorId?: string,
 		acknowledgement?: CommandAcknowledgementRecord | null
 	): CommandQueueAuditRecord | null {
-		const payloadHash = this.hashCommandPayload(command.payload);
-		const sanitizedAck = this.sanitizeAcknowledgement(acknowledgement);
+		const payloadHash = hashCommandPayload(command.payload);
+		const sanitizedAck = sanitizeAcknowledgement(acknowledgement);
 		const acknowledgedAt = sanitizedAck ? new Date(sanitizedAck.confirmedAt) : null;
 		const acknowledgementJson = sanitizedAck ? JSON.stringify(sanitizedAck) : null;
 
 		try {
-			db.insert(auditEventTable)
+			const row = db
+				.insert(auditEventTable)
 				.values({
 					commandId: command.id,
 					agentId: record.id,
@@ -85,16 +102,11 @@ export class CommandManager {
 						acknowledgement: acknowledgementJson
 					}
 				})
-				.run();
-
-			const row = db
-				.select({
+				.returning({
 					id: auditEventTable.id,
 					acknowledgedAt: auditEventTable.acknowledgedAt,
 					acknowledgement: auditEventTable.acknowledgement
 				})
-				.from(auditEventTable)
-				.where(eq(auditEventTable.commandId, command.id))
 				.get();
 
 			if (row) {
@@ -102,7 +114,7 @@ export class CommandManager {
 					eventId: typeof row.id === 'number' ? row.id : null,
 					acknowledgedAt:
 						row.acknowledgedAt instanceof Date ? row.acknowledgedAt.toISOString() : null,
-					acknowledgement: this.deserializeAcknowledgement(row.acknowledgement)
+					acknowledgement: deserializeAcknowledgement(row.acknowledgement)
 				} satisfies CommandQueueAuditRecord;
 			}
 		} catch (error) {
@@ -140,69 +152,101 @@ export class CommandManager {
 		}
 	}
 
-	private hashCommandPayload(payload: Command['payload']): string {
-		const hash = createHash('sha256');
-		try {
-			const serialized = JSON.stringify(payload ?? {});
-			hash.update(serialized, 'utf-8');
-		} catch {
-			hash.update('unserializable', 'utf-8');
+	recordOutput(agentId: string, commandId: string, event: CommandOutputEvent): void {
+		const stream = this.getCommandOutputStream(agentId, commandId, true);
+		if (!stream) return;
+
+		const normalized = normalizeCommandOutputEvent(commandId, event);
+		stream.events.push(normalized);
+
+		for (const listener of stream.listeners) {
+			try {
+				listener({ ...normalized });
+			} catch (err) {
+				console.error('Command output listener failed', err);
+			}
 		}
-		return hash.digest('hex');
+
+		if (normalized.type === 'end') {
+			stream.completed = true;
+		}
+
+		this.scheduleCommandOutputCleanup(agentId, commandId, stream);
 	}
 
-	private sanitizeAcknowledgement(
-		input: CommandAcknowledgementRecord | null | undefined
-	): CommandAcknowledgementRecord | null {
-		if (!input || typeof input !== 'object') {
-			return null;
-		}
+	subscribeOutput(
+		agentId: string,
+		commandId: string,
+		listener: (event: CommandOutputEvent) => void
+	): CommandOutputSubscription | null {
+		const stream = this.getCommandOutputStream(agentId, commandId, true);
+		if (!stream) return null;
 
-		const rawTimestamp = typeof input.confirmedAt === 'string' ? input.confirmedAt.trim() : '';
-		const statementsSource = Array.isArray(input.statements) ? input.statements : [];
+		this.clearCommandOutputCleanup(stream);
+		stream.listeners.add(listener);
+		this.scheduleCommandOutputCleanup(agentId, commandId, stream);
 
-		const statements = statementsSource
-			.map((statement) => {
-				if (!statement || typeof statement !== 'object') {
-					return null;
-				}
-				const id =
-					typeof (statement as { id?: unknown }).id === 'string'
-						? (statement as { id: string }).id.trim()
-						: '';
-				const text =
-					typeof (statement as { text?: unknown }).text === 'string'
-						? (statement as { text: string }).text.trim()
-						: '';
-				if (!id || !text) {
-					return null;
-				}
-				return { id, text };
-			})
-			.filter((entry): entry is { id: string; text: string } => Boolean(entry));
+		const unsubscribe = () => {
+			stream.listeners.delete(listener);
+			if (stream.completed && stream.listeners.size === 0) {
+				this.scheduleCommandOutputCleanup(agentId, commandId, stream);
+			}
+		};
 
-		if (statements.length === 0) {
-			return null;
-		}
-
-		const parsedTimestamp = rawTimestamp ? new Date(rawTimestamp) : new Date();
-		const confirmedAt = Number.isNaN(parsedTimestamp.getTime())
-			? new Date().toISOString()
-			: parsedTimestamp.toISOString();
-
-		return { confirmedAt, statements };
+		return {
+			events: stream.events.map((e) => ({ ...e })),
+			completed: stream.completed,
+			unsubscribe
+		};
 	}
 
-	private deserializeAcknowledgement(value: string | null): CommandAcknowledgementRecord | null {
-		if (!value) {
-			return null;
+	private getCommandOutputStream(
+		agentId: string,
+		commandId: string,
+		create: boolean
+	): CommandOutputStreamRecord | null {
+		let streams = this.commandOutputStreams.get(agentId);
+		if (!streams) {
+			if (!create) return null;
+			streams = new Map();
+			this.commandOutputStreams.set(agentId, streams);
 		}
 
-		try {
-			const parsed = JSON.parse(value) as CommandAcknowledgementRecord;
-			return this.sanitizeAcknowledgement(parsed);
-		} catch {
-			return null;
+		let stream = streams.get(commandId);
+		if (!stream && create) {
+			stream = { events: [], listeners: new Set(), completed: false };
+			streams.set(commandId, stream);
 		}
+
+		return stream ?? null;
+	}
+
+	private clearCommandOutputCleanup(stream: CommandOutputStreamRecord): void {
+		if (stream.timeout) {
+			clearTimeout(stream.timeout);
+			stream.timeout = undefined;
+		}
+	}
+
+	private scheduleCommandOutputCleanup(
+		agentId: string,
+		commandId: string,
+		stream: CommandOutputStreamRecord
+	): void {
+		this.clearCommandOutputCleanup(stream);
+		stream.timeout = setTimeout(() => {
+			const streams = this.commandOutputStreams.get(agentId);
+			if (!streams) return;
+			const target = streams.get(commandId);
+			if (!target) return;
+			if (target.listeners.size > 0) {
+				this.scheduleCommandOutputCleanup(agentId, commandId, target);
+				return;
+			}
+			streams.delete(commandId);
+			if (streams.size === 0) {
+				this.commandOutputStreams.delete(agentId);
+			}
+		}, COMMAND_OUTPUT_RETENTION_MS);
 	}
 }

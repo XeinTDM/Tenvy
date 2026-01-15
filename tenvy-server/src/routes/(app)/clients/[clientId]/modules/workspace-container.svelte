@@ -13,14 +13,12 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { cn } from '$lib/utils.js';
 	import type { Client } from '$lib/data/clients';
-	import {
-		buildClientToolUrl,
-		type ClientToolDefinition,
-		type ClientToolId
-	} from '$lib/data/client-tools';
+	import { buildClientToolUrl, type ClientToolDefinition, type ClientToolId } from '$lib/data/client-tools';
 	import ClientToolWorkspace from '$lib/components/workspace/client-tool-workspace.svelte';
 	import { isWorkspaceTool } from '$lib/data/client-tool-workspaces';
 	import type { AgentSnapshot } from '../../../../../../../shared/types/agent';
+	import type { WorkspaceLogEntry } from '$lib/workspace/types';
+	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { ArrowLeft, X } from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
 

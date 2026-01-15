@@ -108,7 +108,7 @@ func runAgentOnce(ctx context.Context, opts RuntimeOptions) error {
 	}
 	resolvedUserAgent := resolveUserAgentString(opts.UserAgentOverride, fingerprint, disableAuto, fallbackVersion)
 
-	registration, err := registerAgentWithRetry(
+	registration, sharedSecret, err := registerAgentWithRetry(
 		ctx,
 		opts.Logger,
 		client,
@@ -145,6 +145,7 @@ func runAgentOnce(ctx context.Context, opts RuntimeOptions) error {
 		startTime:                time.Now(),
 		metadata:                 metadata,
 		sharedSecret:             opts.SharedSecret,
+		ecdhSharedSecret:         sharedSecret,
 		preferences:              opts.Preferences,
 		buildVersion:             opts.BuildVersion,
 		userAgentOverride:        opts.UserAgentOverride,
@@ -164,7 +165,7 @@ func runAgentOnce(ctx context.Context, opts RuntimeOptions) error {
 
 	verifyOpts := deriveSignatureVerifyOptions(registration.Config, opts.Logger)
 
-	if manager, err := plugins.NewManager(defaultPluginRoot(opts.Preferences), opts.Logger, verifyOpts); err != nil {
+	if manager, err := plugins.NewManager(defaultPluginRoot(opts.Preferences), agent.ecdhSharedSecret, opts.Logger, verifyOpts); err != nil {
 		opts.Logger.Printf("plugin telemetry disabled: %v", err)
 	} else {
 		agent.plugins = manager

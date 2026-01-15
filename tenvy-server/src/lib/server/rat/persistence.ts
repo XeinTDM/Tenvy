@@ -6,8 +6,27 @@ import {
 	agentCommand as agentCommandTable,
 	agentResult as agentResultTable
 } from '$lib/server/db/schema';
-import type { AgentRecord } from './types';
-import { MAX_PENDING_COMMANDS } from './utils';
+import type {
+	AgentMetadata,
+	AgentMetrics,
+	AgentStatus
+} from '../../../../../shared/types/agent';
+import {
+	defaultAgentConfig,
+	type AgentConfig,
+} from '../../../../../shared/types/config';
+import type {
+	OptionsState
+} from '../../../../../shared/types/options';
+import type { Command, CommandResult } from '../../../../../shared/types/messages';
+import {
+	downloadCatalogueSchema,
+	type DownloadCatalogue
+} from '$lib/types/downloads';
+import type { AgentRecord, SharedNoteRecord, OperatorNoteRecord } from './types';
+import * as utils from './utils';
+
+const { MAX_RECENT_RESULTS } = utils;
 
 export class AgentPersistence {
 	async persistAgents(agents: AgentRecord[]): Promise<void> {
@@ -44,6 +63,7 @@ export class AgentPersistence {
 					operatorNoteUpdatedAt: record.operatorNote?.updatedAt ?? null,
 					operatorNoteUpdatedBy: record.operatorNote?.updatedBy ?? null,
 					fingerprint: record.fingerprint,
+					sharedSecret: record.sharedSecret ? utils.encryptDatabaseField(record.sharedSecret) : null,
 					createdAt: record.connectedAt,
 					updatedAt: now
 				};
@@ -65,6 +85,7 @@ export class AgentPersistence {
 							operatorNoteUpdatedAt: payload.operatorNoteUpdatedAt,
 							operatorNoteUpdatedBy: payload.operatorNoteUpdatedBy,
 							fingerprint: payload.fingerprint,
+							sharedSecret: payload.sharedSecret,
 							updatedAt: payload.updatedAt
 						})
 						.where(eq(agentTable.id, record.id))
@@ -126,5 +147,223 @@ export class AgentPersistence {
 				record.dirty = false;
 			}
 		});
+	}
+
+	loadAllAgents(): AgentRecord[] {
+		let agentRows: Array<typeof agentTable.$inferSelect> = [];
+		try {
+			agentRows = db.select().from(agentTable).all();
+		} catch (error) {
+			console.error('Failed to read agent records from database', error);
+			return [];
+		}
+
+		const noteRows = db.select().from(agentNoteTable).all();
+		const commandRows = db.select().from(agentCommandTable).orderBy(agentCommandTable.createdAt).all();
+		const resultRows = db.select().from(agentResultTable).orderBy(agentResultTable.completedAt).all();
+
+		const notesByAgent = new Map<string, Map<string, SharedNoteRecord>>();
+		for (const row of noteRows) {
+			const updatedAt = row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt ?? Date.now());
+			if (!notesByAgent.has(row.agentId)) {
+				notesByAgent.set(row.agentId, new Map());
+			}
+			notesByAgent.get(row.agentId)!.set(row.noteId, {
+				id: row.noteId,
+				ciphertext: row.ciphertext,
+				nonce: row.nonce,
+				digest: row.digest,
+				version: row.version ?? 1,
+				updatedAt
+			});
+		}
+
+		const commandsByAgent = new Map<string, Command[]>();
+		for (const row of commandRows) {
+			let payload: Command['payload'];
+			try {
+				payload = row.payload ? JSON.parse(row.payload) : {};
+			} catch {
+				payload = {};
+			}
+			if (!commandsByAgent.has(row.agentId)) {
+				commandsByAgent.set(row.agentId, []);
+			}
+			commandsByAgent.get(row.agentId)!.push({
+				id: row.id,
+				name: row.name as Command['name'],
+				payload,
+				createdAt: (row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt ?? Date.now())).toISOString()
+			});
+		}
+
+		const resultsByAgent = new Map<string, CommandResult[]>();
+		for (const row of resultRows) {
+			if (!resultsByAgent.has(row.agentId)) {
+				resultsByAgent.set(row.agentId, []);
+			}
+			resultsByAgent.get(row.agentId)!.push({
+				commandId: row.commandId,
+				success: Boolean(row.success),
+				output: row.output ?? undefined,
+				error: row.error ?? undefined,
+				completedAt: (row.completedAt instanceof Date ? row.completedAt : new Date(row.completedAt ?? Date.now())).toISOString()
+			});
+		}
+
+		return agentRows
+			.map((row) => {
+				try {
+					return this.rowToRecord(
+						row,
+						notesByAgent.get(row.id) ?? new Map(),
+						commandsByAgent.get(row.id) ?? [],
+						resultsByAgent.get(row.id) ?? []
+					);
+				} catch (error) {
+					console.error(`Failed to load agent ${row.id}:`, error);
+					return null;
+				}
+			})
+			.filter((a): a is AgentRecord => a !== null);
+	}
+
+	loadAgentById(id: string): AgentRecord | null {
+		const row = db.select().from(agentTable).where(eq(agentTable.id, id)).get();
+		if (!row) return null;
+
+		const noteRows = db.select().from(agentNoteTable).where(eq(agentNoteTable.agentId, id)).all();
+		const commandRows = db.select().from(agentCommandTable).where(eq(agentCommandTable.agentId, id)).orderBy(agentCommandTable.createdAt).all();
+		const resultRows = db.select().from(agentResultTable).where(eq(agentResultTable.agentId, id)).orderBy(agentResultTable.completedAt).all();
+
+		const sharedNotes = new Map<string, SharedNoteRecord>();
+		for (const nr of noteRows) {
+			sharedNotes.set(nr.noteId, {
+				id: nr.noteId,
+				ciphertext: nr.ciphertext,
+				nonce: nr.nonce,
+				digest: nr.digest,
+				version: nr.version ?? 1,
+				updatedAt: nr.updatedAt instanceof Date ? nr.updatedAt : new Date(nr.updatedAt ?? Date.now())
+			});
+		}
+
+		const pendingCommands: Command[] = commandRows.map((cr) => ({
+			id: cr.id,
+			name: cr.name as Command['name'],
+			payload: cr.payload ? JSON.parse(cr.payload) : {},
+			createdAt: (cr.createdAt instanceof Date ? cr.createdAt : new Date(cr.createdAt ?? Date.now())).toISOString()
+		}));
+
+		const recentResults = utils.mergeRecentResults(
+			[],
+			resultRows.map((rr) => ({
+				commandId: rr.commandId,
+				success: Boolean(rr.success),
+				output: rr.output ?? undefined,
+				error: rr.error ?? undefined,
+				completedAt: (rr.completedAt instanceof Date ? rr.completedAt : new Date(rr.completedAt ?? Date.now())).toISOString()
+			})),
+			MAX_RECENT_RESULTS
+		);
+
+		return this.rowToRecord(row, sharedNotes, pendingCommands, recentResults);
+	}
+
+	loadAgentByFingerprint(fingerprint: string): AgentRecord | null {
+		const row = db.select().from(agentTable).where(eq(agentTable.fingerprint, fingerprint)).get();
+		if (!row) return null;
+		return this.loadAgentById(row.id);
+	}
+
+	private rowToRecord(
+		row: typeof agentTable.$inferSelect,
+		sharedNotes: Map<string, SharedNoteRecord>,
+		pendingCommands: Command[],
+		results: CommandResult[]
+	): AgentRecord {
+		let metadata: AgentMetadata | null = null;
+		try {
+			metadata = JSON.parse(row.metadata) as AgentMetadata;
+		} catch {
+			throw new Error(`Invalid metadata for agent ${row.id}`);
+		}
+
+		let config: AgentConfig = utils.normalizeConfig(null);
+		if (row.config) {
+			try {
+				config = utils.normalizeConfig(JSON.parse(row.config) as Partial<AgentConfig>);
+			} catch {
+				// use default
+			}
+		}
+
+		let metrics: AgentMetrics | undefined;
+		if (row.metrics) {
+			try {
+				metrics = JSON.parse(row.metrics) as AgentMetrics;
+			} catch {
+				// ignore
+			}
+		}
+
+		let optionsState: OptionsState | null = null;
+		if (row.optionsState) {
+			try {
+				optionsState = utils.cloneOptionsState(JSON.parse(row.optionsState) as OptionsState);
+			} catch {
+				// ignore
+			}
+		}
+
+		let downloadsCatalogue: DownloadCatalogue = [];
+		if (row.downloadsCatalogue) {
+			try {
+				downloadsCatalogue = downloadCatalogueSchema.parse(JSON.parse(row.downloadsCatalogue));
+			} catch {
+				// ignore
+			}
+		}
+
+		let operatorNote: OperatorNoteRecord | null = null;
+		if (row.operatorNote !== null) {
+			let tags: string[] = [];
+			try {
+				tags = row.operatorNoteTags ? JSON.parse(row.operatorNoteTags) : [];
+			} catch {
+				// ignore
+			}
+			operatorNote = {
+				note: row.operatorNote,
+				tags,
+				updatedAt: row.operatorNoteUpdatedAt ? new Date(row.operatorNoteUpdatedAt) : null,
+				updatedBy: row.operatorNoteUpdatedBy ?? null
+			};
+		}
+
+		const connectedAt = row.connectedAt instanceof Date ? row.connectedAt : new Date(row.connectedAt ?? Date.now());
+		const lastSeen = row.lastSeen instanceof Date ? row.lastSeen : new Date(row.lastSeen ?? connectedAt);
+
+		return {
+			id: row.id,
+			keyHash: row.keyHash,
+			metadata: {
+				...metadata,
+				tags: utils.normalizeTags(metadata.tags ?? [])
+			},
+			status: row.status as AgentStatus,
+			connectedAt,
+			lastSeen,
+			metrics,
+			config,
+			pendingCommands,
+			recentResults: utils.mergeRecentResults([], results, MAX_RECENT_RESULTS),
+			sharedNotes,
+			operatorNote,
+			fingerprint: row.fingerprint,
+			sharedSecret: row.sharedSecret ? (utils.decryptDatabaseField(row.sharedSecret) ?? undefined) : undefined,
+			optionsState,
+			downloadsCatalogue
+		};
 	}
 }

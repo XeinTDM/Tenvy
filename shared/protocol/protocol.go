@@ -34,6 +34,7 @@ type TenvyProtocol struct {
 	ClipboardCommandPayload      *ClipboardCommandPayload      `json:"clipboardCommandPayload,omitempty"`
 	Command                      *CommandElement               `json:"command,omitempty"`
 	CommandEnvelope              *CommandEnvelope              `json:"commandEnvelope,omitempty"`
+	EncryptedEnvelope            *EncryptedEnvelope            `json:"encryptedEnvelope,omitempty"`
 	CommandOutputEvent           *CommandOutputEvent           `json:"commandOutputEvent,omitempty"`
 	CommandResult                *CommandResult                `json:"commandResult,omitempty"`
 	EnvironmentCommandPayload    *EnvironmentCommandPayload    `json:"environmentCommandPayload,omitempty"`
@@ -75,16 +76,18 @@ type AgentMetadata struct {
 }
 
 type AgentRegistrationRequest struct {
-	Metadata AgentMetadata `json:"metadata"`
-	Token    *string       `json:"token,omitempty"`
+	Metadata  AgentMetadata `json:"metadata"`
+	PublicKey *string       `json:"publicKey,omitempty"`
+	Token     *string       `json:"token,omitempty"`
 }
 
 type AgentRegistrationResponse struct {
-	AgentID    string           `json:"agentId"`
-	AgentKey   string           `json:"agentKey"`
-	Commands   []CommandElement `json:"commands,omitempty"`
-	Config     AgentConfig      `json:"config"`
-	ServerTime time.Time        `json:"serverTime"`
+	AgentID         string           `json:"agentId"`
+	AgentKey        string           `json:"agentKey"`
+	Commands        []CommandElement `json:"commands,omitempty"`
+	Config          AgentConfig      `json:"config"`
+	ServerPublicKey *string          `json:"serverPublicKey,omitempty"`
+	ServerTime      time.Time        `json:"serverTime"`
 }
 
 type CommandElement struct {
@@ -413,6 +416,11 @@ type CommandEnvelope struct {
 	Command     *CommandElement          `json:"command,omitempty"`
 	Input       *RemoteDesktopInputBurst `json:"input,omitempty"`
 	Type        string                   `json:"type"`
+}
+
+type EncryptedEnvelope struct {
+	Type string `json:"type"`
+	Data string `json:"data"`
 }
 
 type AppVNCInputBurst struct {

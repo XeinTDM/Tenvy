@@ -1,0 +1,29 @@
+{
+	"id": "startup-engine",
+	"name": "Startup Manager Engine",
+	"version": "0.1.0",
+	"description": "Standalone autorun persistence inspection and management engine.",
+	"entry": "startup-engine/startup-engine",
+	"author": "Rootbay",
+	"homepage": "https://github.com/rootbay/tenvy-client",
+	"repositoryUrl": "https://github.com/rootbay/tenvy-client",
+	"license": {
+		"spdxId": "MIT",
+		"url": "https://github.com/rootbay/tenvy-client/blob/main/LICENSE"
+	},
+	"capabilities": ["startup.enumerate", "startup.manage"],
+	"requirements": {
+		"minAgentVersion": "0.1.0",
+		"platforms": ["windows", "linux", "macos"],
+		"architectures": ["x86_64", "arm64"],
+		"requiredModules": ["startup-manager"]
+	},
+	"distribution": {
+		"defaultMode": "automatic",
+		"autoUpdate": true,
+		"signature": "ed25519"
+	},
+	"package": {
+		"artifact": "startup-engine.zip"
+	}
+}

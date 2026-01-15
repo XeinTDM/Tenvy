@@ -2,45 +2,12 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { registry, RegistryError } from '$lib/server/rat/store';
 import { requireOperator, requireViewer } from '$lib/server/authorization';
+import { sanitizeAcknowledgement } from '$lib/server/rat/utils';
 import type {
 	CommandAcknowledgementRecord,
 	CommandInput,
 	CommandQueueSnapshot
 } from '../../../../../../../shared/types/messages';
-
-function parseAcknowledgement(value: unknown): CommandAcknowledgementRecord | null {
-	if (!value || typeof value !== 'object') {
-		return null;
-	}
-
-	const source = value as { confirmedAt?: unknown; statements?: unknown };
-	const confirmedAt = typeof source.confirmedAt === 'string' ? source.confirmedAt.trim() : '';
-	if (!confirmedAt) {
-		return null;
-	}
-
-	const statementsSource = Array.isArray(source.statements) ? source.statements : [];
-	const statements = statementsSource
-		.map((entry) => {
-			if (!entry || typeof entry !== 'object') {
-				return null;
-			}
-			const statement = entry as { id?: unknown; text?: unknown };
-			const id = typeof statement.id === 'string' ? statement.id.trim() : '';
-			const text = typeof statement.text === 'string' ? statement.text.trim() : '';
-			if (!id || !text) {
-				return null;
-			}
-			return { id, text };
-		})
-		.filter((entry): entry is { id: string; text: string } => Boolean(entry));
-
-	if (statements.length === 0) {
-		return null;
-	}
-
-	return { confirmedAt, statements };
-}
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const id = params.id;
@@ -73,7 +40,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		payload: rest.payload as CommandInput['payload']
 	};
 
-	let acknowledgement = parseAcknowledgement(acknowledgementRaw);
+	let acknowledgement = sanitizeAcknowledgement(acknowledgementRaw as CommandAcknowledgementRecord);
 
 	if (commandInput.name === 'open-url' && !acknowledgement) {
 		throw error(400, 'Open URL requests require acknowledgement');

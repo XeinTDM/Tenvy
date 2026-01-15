@@ -1,5 +1,5 @@
 import type { AgentSnapshot } from '../../../../shared/types/agent';
-import { registryEventBus, type RegistryEventMessage } from './registry-events';
+import { agentsStore } from './agents.svelte.js';
 
 export type StatusFilter = 'all' | AgentSnapshot['status'];
 export type TagFilter = 'all' | string;
@@ -42,45 +42,14 @@ function matchesQuery(agent: AgentSnapshot, query: string): boolean {
 	return haystack.some((value) => value.includes(query));
 }
 
-function dedupeAgents(agents: AgentSnapshot[]): AgentSnapshot[] {
-	const seen = new Set<string>();
-	const result: AgentSnapshot[] = [];
-	for (let index = agents.length - 1; index >= 0; index -= 1) {
-		const agent = agents[index];
-		if (seen.has(agent.id)) {
-			continue;
-		}
-		seen.add(agent.id);
-		result.unshift(agent);
-	}
-	return result;
-}
-
-function upsertAgent(list: AgentSnapshot[], next: AgentSnapshot): AgentSnapshot[] {
-	const clone = [...list];
-	const index = clone.findIndex((agent) => agent.id === next.id);
-	if (index === -1) {
-		clone.push(next);
-	} else {
-		clone[index] = next;
-	}
-	return clone;
-}
-
 export class ClientsTableStore {
-	agents = $state<AgentSnapshot[]>([]);
 	searchQuery = $state('');
 	statusFilter = $state<StatusFilter>('all');
 	tagFilter = $state<TagFilter>('all');
 	perPage = $state(10);
 	currentPage = $state(1);
 
-	private busUnsubscribe: (() => void) | null = null;
-	private optimisticAgents = new Map<string, AgentSnapshot>();
-
-	constructor(initialAgents: AgentSnapshot[]) {
-		this.agents = dedupeAgents(initialAgents ?? []);
-		
+	constructor() {
 		$effect.root(() => {
 			$effect(() => {
 				// Reset to page 1 when filters change
@@ -95,10 +64,11 @@ export class ClientsTableStore {
 				
 				this.currentPage = 1;
 			});
-
-			this.startBus();
-			return () => this.stopBus();
 		});
+	}
+
+	get agents() {
+		return agentsStore.agents;
 	}
 
 	availableTags = $derived.by(() => {
@@ -175,43 +145,8 @@ export class ClientsTableStore {
 		return items;
 	});
 
-	private applyRegistryEvent = (event: RegistryEventMessage) => {
-		if (!event || typeof event !== 'object') {
-			return;
-		}
-
-		if (event.type === 'agents') {
-			this.optimisticAgents.clear();
-			this.agents = dedupeAgents(event.agents ?? []);
-			return;
-		}
-
-		if (event.type === 'agent') {
-			if (event.optimistic) {
-				this.optimisticAgents.set(event.agent.id, event.agent);
-			} else {
-				this.optimisticAgents.delete(event.agent.id);
-			}
-			this.agents = dedupeAgents(upsertAgent(this.agents, event.agent));
-		}
-	};
-
-	private startBus() {
-		if (this.busUnsubscribe) return;
-		this.busUnsubscribe = registryEventBus.subscribe(this.applyRegistryEvent);
-	}
-
-	private stopBus() {
-		if (this.busUnsubscribe) {
-			this.busUnsubscribe();
-			this.busUnsubscribe = null;
-		}
-		this.optimisticAgents.clear();
-	}
-
 	setAgents(nextAgents: AgentSnapshot[]) {
-		this.optimisticAgents.clear();
-		this.agents = dedupeAgents(nextAgents ?? []);
+		agentsStore.setAgents(nextAgents);
 	}
 
 	setSearchQuery(value: string) {
@@ -243,22 +178,24 @@ export class ClientsTableStore {
 	}
 
 	optimisticUpdateAgent(agent: AgentSnapshot) {
-		registryEventBus.emitOptimistic({
-			type: 'agent',
-			agent
-		} as RegistryEventMessage);
+		agentsStore.emitOptimistic(agent);
 	}
 
 	isOptimistic(agentId: string) {
-		return this.optimisticAgents.has(agentId);
+		return agentsStore.isOptimistic(agentId);
 	}
 
 	clearOptimisticAgent(agentId: string) {
-		this.optimisticAgents.delete(agentId);
+		agentsStore.clearOptimistic(agentId);
 	}
 }
 
 export function createClientsTableStore(initialAgents: AgentSnapshot[]) {
-	return new ClientsTableStore(initialAgents);
+	const store = new ClientsTableStore();
+	if (initialAgents) {
+		store.setAgents(initialAgents);
+	}
+	return store;
 }
+
 

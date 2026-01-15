@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func unpackZipArchive(path, dest string) error {
+func unpackZipArchive(path, dest, entryPoint string, secret []byte) error {
 	reader, err := zip.OpenReader(path)
 	if err != nil {
 		return fmt.Errorf("open artifact archive: %w", err)
@@ -19,14 +19,14 @@ func unpackZipArchive(path, dest string) error {
 	defer reader.Close()
 
 	for _, file := range reader.File {
-		if err := extractZipEntry(file, dest); err != nil {
+		if err := extractZipEntry(file, dest, entryPoint, secret); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func extractZipEntry(entry *zip.File, dest string) error {
+func extractZipEntry(entry *zip.File, dest, entryPoint string, secret []byte) error {
 	cleaned := filepath.Clean(entry.Name)
 	if cleaned == "." || cleaned == "" {
 		return nil
@@ -53,16 +53,43 @@ func extractZipEntry(entry *zip.File, dest string) error {
 	}
 	defer reader.Close()
 
+	shouldEncrypt := len(secret) > 0 && (cleaned == entryPoint || cleaned == "manifest.json")
+	var data []byte
+	
+	if shouldEncrypt {
+		// Read fully into memory to encrypt
+		var buf bytes.Buffer
+		if _, err := io.Copy(&buf, reader); err != nil {
+			return fmt.Errorf("read artifact entry: %w", err)
+		}
+		encrypted, err := encrypt(buf.Bytes(), secret)
+		if err != nil {
+			return fmt.Errorf("encrypt artifact entry: %w", err)
+		}
+		data = encrypted
+		target += ".enc"
+	}
+
 	temp, err := os.CreateTemp(filepath.Dir(target), "entry-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create artifact temp file: %w", err)
 	}
 	tempPath := temp.Name()
-	if _, err := io.Copy(temp, reader); err != nil {
-		temp.Close()
-		os.Remove(tempPath)
-		return fmt.Errorf("write artifact entry: %w", err)
+	
+	if shouldEncrypt {
+		if _, err := temp.Write(data); err != nil {
+			temp.Close()
+			os.Remove(tempPath)
+			return fmt.Errorf("write encrypted entry: %w", err)
+		}
+	} else {
+		if _, err := io.Copy(temp, reader); err != nil {
+			temp.Close()
+			os.Remove(tempPath)
+			return fmt.Errorf("write artifact entry: %w", err)
+		}
 	}
+
 	if err := temp.Close(); err != nil {
 		os.Remove(tempPath)
 		return fmt.Errorf("close artifact entry: %w", err)
@@ -77,7 +104,7 @@ func extractZipEntry(entry *zip.File, dest string) error {
 	return nil
 }
 
-func unpackTarGzArchive(path, dest string) error {
+func unpackTarGzArchive(path, dest, entryPoint string, secret []byte) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("open artifact archive: %w", err)
@@ -99,14 +126,14 @@ func unpackTarGzArchive(path, dest string) error {
 		if err != nil {
 			return fmt.Errorf("read artifact archive: %w", err)
 		}
-		if err := extractTarEntry(header, reader, dest); err != nil {
+		if err := extractTarEntry(header, reader, dest, entryPoint, secret); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func extractTarEntry(header *tar.Header, reader io.Reader, dest string) error {
+func extractTarEntry(header *tar.Header, reader io.Reader, dest, entryPoint string, secret []byte) error {
 	cleaned := filepath.Clean(header.Name)
 	if cleaned == "." || cleaned == "" {
 		return nil
@@ -127,17 +154,42 @@ func extractTarEntry(header *tar.Header, reader io.Reader, dest string) error {
 			return fmt.Errorf("prepare artifact path: %w", err)
 		}
 
+		shouldEncrypt := len(secret) > 0 && (cleaned == entryPoint || cleaned == "manifest.json")
+		var data []byte
+
+		if shouldEncrypt {
+			var buf bytes.Buffer
+			if _, err := io.Copy(&buf, reader); err != nil {
+				return fmt.Errorf("read artifact entry: %w", err)
+			}
+			encrypted, err := encrypt(buf.Bytes(), secret)
+			if err != nil {
+				return fmt.Errorf("encrypt artifact entry: %w", err)
+			}
+			data = encrypted
+			target += ".enc"
+		}
+
 		temp, err := os.CreateTemp(filepath.Dir(target), "entry-*.tmp")
 		if err != nil {
 			return fmt.Errorf("create artifact temp file: %w", err)
 		}
 		tempPath := temp.Name()
 
-		if _, err := io.Copy(temp, reader); err != nil {
-			temp.Close()
-			os.Remove(tempPath)
-			return fmt.Errorf("write artifact entry: %w", err)
+		if shouldEncrypt {
+			if _, err := temp.Write(data); err != nil {
+				temp.Close()
+				os.Remove(tempPath)
+				return fmt.Errorf("write encrypted entry: %w", err)
+			}
+		} else {
+			if _, err := io.Copy(temp, reader); err != nil {
+				temp.Close()
+				os.Remove(tempPath)
+				return fmt.Errorf("write artifact entry: %w", err)
+			}
 		}
+
 		if err := temp.Close(); err != nil {
 			os.Remove(tempPath)
 			return fmt.Errorf("close artifact entry: %w", err)

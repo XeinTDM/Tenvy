@@ -271,7 +271,7 @@ func (a *Agent) reRegister(ctx context.Context) error {
 	}
 
 	metadata := CollectMetadataWithClient(a.buildVersion, a.client)
-	registration, err := registerAgentWithRetry(
+	registration, sharedSecret, err := registerAgentWithRetry(
 		ctx,
 		a.logger,
 		a.client,
@@ -292,6 +292,7 @@ func (a *Agent) reRegister(ctx context.Context) error {
 	a.id = registration.AgentID
 	a.key = registration.AgentKey
 	a.config = registration.Config
+	a.ecdhSharedSecret = sharedSecret
 	a.startTime = time.Now()
 
 	if a.modules != nil {

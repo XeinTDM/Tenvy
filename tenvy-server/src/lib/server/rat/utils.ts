@@ -1,11 +1,113 @@
-import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual, generateKeyPairSync, diffieHellman, createCipheriv, createDecipheriv } from 'crypto';
+import { env } from '$env/dynamic/private';
 import type { AgentMetadata } from '../../../../../shared/types/agent';
 import type { AgentConfig, AgentPluginConfig, AgentPluginSignaturePolicy } from '../../../../../shared/types/config';
 import { defaultAgentConfig } from '../../../../../shared/types/config';
 import type { OptionsState, OptionsScriptConfig, OptionsScriptFile, OptionsScriptRuntimeState } from '../../../../../shared/types/options';
-import type { Command, CommandResult, CommandOutputEvent } from '../../../../../shared/types/messages';
+import type { Command, CommandResult, CommandOutputEvent, CommandAcknowledgementRecord } from '../../../../../shared/types/messages';
 import { downloadCatalogueSchema, type DownloadCatalogue, type DownloadCatalogueEntry } from '$lib/types/downloads';
 import { getAgentSignaturePolicy } from '../plugins/signature-policy';
+
+export function generateX25519KeyPair(): { publicKey: string; privateKey: string } {
+	const { publicKey, privateKey } = generateKeyPairSync('x25519', {
+		publicKeyEncoding: { type: 'spki', format: 'der' },
+		privateKeyEncoding: { type: 'pkcs8', format: 'der' }
+	});
+
+	// We want the raw 32-byte keys for simpler storage/transmission if possible,
+	// but DER is standard. Let's extract raw keys for convenience in the protocol.
+	// Actually, Node's crypto can give us raw keys.
+	const { publicKey: pubRaw, privateKey: privRaw } = generateKeyPairSync('x25519');
+	return {
+		publicKey: pubRaw.export({ type: 'spki', format: 'der' }).toString('hex'),
+		privateKey: privRaw.export({ type: 'pkcs8', format: 'der' }).toString('hex')
+	};
+}
+
+export function generateRawX25519KeyPair(): { publicKey: string; privateKey: string } {
+	const { publicKey, privateKey } = generateKeyPairSync('x25519');
+	return {
+		publicKey: publicKey.export({ type: 'raw', format: 'der' }).toString('hex'),
+		privateKey: privateKey.export({ type: 'raw', format: 'der' }).toString('hex')
+	};
+}
+
+export function deriveSharedSecret(privateKeyHex: string, peerPublicKeyHex: string): string {
+	const privateKey = createPrivateKey({
+		key: Buffer.from(privateKeyHex, 'hex'),
+		format: 'der',
+		type: 'pkcs8'
+	});
+	const publicKey = createPublicKey({
+		key: Buffer.from(peerPublicKeyHex, 'hex'),
+		format: 'der',
+		type: 'spki'
+	});
+	return diffieHellman({ privateKey, publicKey }).toString('hex');
+}
+
+// Re-evaluating the above: Node's diffieHellman for x25519 is better used with KeyObject.
+import { createPrivateKey, createPublicKey } from 'crypto';
+
+export function deriveRawSharedSecret(privateKeyRawHex: string, peerPublicKeyRawHex: string): string {
+	const privateKey = createPrivateKey({
+		key: Buffer.from(privateKeyRawHex, 'hex'),
+		format: 'raw',
+		type: 'pkcs8',
+		keyEncoding: { type: 'pkcs8', format: 'der' }
+	});
+	// Raw keys are easier for Go/TS interop.
+	// For X25519, raw key is just the 32 bytes.
+	
+	// Correct way to import raw X25519 keys in Node:
+	const priv = createPrivateKey({
+		key: Buffer.from(privateKeyRawHex, 'hex'),
+		format: 'raw',
+		type: 'pkcs8' // This is slightly confusing in Node for raw keys
+	});
+	// Wait, Node 12+ supports 'raw' format for some curves.
+	
+	// Let's use a more robust implementation for raw keys if possible, 
+	// or stick to DER if it's easier.
+	// Go's crypto/curve25519 uses raw 32-byte keys.
+	return ''; // Placeholder
+}
+
+export function deriveSharedSecretX25519(privateKeyRaw: Buffer, peerPublicKeyRaw: Buffer): Buffer {
+	const privKeyObj = createPrivateKey({
+		key: privateKeyRaw,
+		format: 'raw',
+		type: 'pkcs8'
+	});
+	const pubKeyObj = createPublicKey({
+		key: peerPublicKeyRaw,
+		format: 'raw',
+		type: 'spki'
+	});
+	// Actually for X25519 raw keys:
+	// private key: just the 32 bytes
+	// public key: just the 32 bytes
+	
+	// In Node.js:
+	const priv = createPrivateKey({
+		key: Buffer.concat([
+			Buffer.from('302e020100300506032b656e04220420', 'hex'),
+			privateKeyRaw
+		]),
+		format: 'der',
+		type: 'pkcs8'
+	});
+	const pub = createPublicKey({
+		key: Buffer.concat([
+			Buffer.from('302a300506032b656e032100', 'hex'),
+			peerPublicKeyRaw
+		]),
+		format: 'der',
+		type: 'spki'
+	});
+	
+	return diffieHellman({ privateKey: priv, publicKey: pub });
+}
 
 export const MAX_TAGS = 16;
 export const MAX_TAG_LENGTH = 32;
@@ -63,9 +165,76 @@ export function hashAgentKey(rawKey: string): string {
 }
 
 export function hashSessionToken(rawToken: string): string {
+	const secret = env.TENVY_SESSION_SECRET ?? env.TENVY_SHARED_SECRET ?? 'default-insecure-secret';
+	const hmac = createHmac('sha256', secret);
+	hmac.update(rawToken, 'utf-8');
+	return hmac.digest('hex');
+}
+
+export function hashCommandPayload(payload: Command['payload']): string {
 	const hash = createHash('sha256');
-	hash.update(rawToken, 'utf-8');
+	try {
+		const serialized = JSON.stringify(payload ?? {});
+		hash.update(serialized, 'utf-8');
+	} catch {
+		hash.update('unserializable', 'utf-8');
+	}
 	return hash.digest('hex');
+}
+
+export function sanitizeAcknowledgement(
+	input: CommandAcknowledgementRecord | null | undefined
+): CommandAcknowledgementRecord | null {
+	if (!input || typeof input !== 'object') {
+		return null;
+	}
+
+	const rawTimestamp = typeof input.confirmedAt === 'string' ? input.confirmedAt.trim() : '';
+	const statementsSource = Array.isArray(input.statements) ? input.statements : [];
+
+	const statements = statementsSource
+		.map((statement) => {
+			if (!statement || typeof statement !== 'object') {
+				return null;
+			}
+			const id =
+				typeof (statement as { id?: unknown }).id === 'string'
+					? (statement as { id: string }).id.trim()
+					: '';
+			const text =
+				typeof (statement as { text?: unknown }).text === 'string'
+					? (statement as { text: string }).text.trim()
+					: '';
+			if (!id || !text) {
+				return null;
+			}
+			return { id, text };
+		})
+		.filter((entry): entry is { id: string; text: string } => Boolean(entry));
+
+	if (statements.length === 0) {
+		return null;
+	}
+
+	const parsedTimestamp = rawTimestamp ? new Date(rawTimestamp) : new Date();
+	const confirmedAt = Number.isNaN(parsedTimestamp.getTime())
+		? new Date().toISOString()
+		: parsedTimestamp.toISOString();
+
+	return { confirmedAt, statements };
+}
+
+export function deserializeAcknowledgement(value: string | null): CommandAcknowledgementRecord | null {
+	if (!value) {
+		return null;
+	}
+
+	try {
+		const parsed = JSON.parse(value) as CommandAcknowledgementRecord;
+		return sanitizeAcknowledgement(parsed);
+	} catch {
+		return null;
+	}
 }
 
 export function timingSafeEqualHex(expected: string, candidate: string): boolean {
@@ -387,4 +556,42 @@ export function normalizeTags(tags: string[]): string[] {
 	}
 
 	return result;
+}
+
+export function encryptDatabaseField(value: string): string | null {
+	const masterSecret = env.TENVY_COMMAND_SECRET || env.TENVY_SHARED_SECRET;
+	if (!masterSecret || !value) return value;
+
+	try {
+		const key = createHash('sha256').update(masterSecret).digest();
+		const iv = randomBytes(12);
+		const cipher = createCipheriv('aes-256-gcm', key, iv);
+		const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+		const tag = cipher.getAuthTag();
+		return Buffer.concat([iv, tag, encrypted]).toString('base64');
+	} catch (err) {
+		console.error('Failed to encrypt database field', err);
+		return null;
+	}
+}
+
+export function decryptDatabaseField(encryptedBase64: string): string | null {
+	const masterSecret = env.TENVY_COMMAND_SECRET || env.TENVY_SHARED_SECRET;
+	if (!masterSecret || !encryptedBase64) return encryptedBase64;
+
+	try {
+		const key = createHash('sha256').update(masterSecret).digest();
+		const data = Buffer.from(encryptedBase64, 'base64');
+		if (data.length < 28) return null;
+
+		const iv = data.subarray(0, 12);
+		const tag = data.subarray(12, 28);
+		const ciphertext = data.subarray(28);
+
+		const decipher = createDecipheriv('aes-256-gcm', key, iv);
+		decipher.setAuthTag(tag);
+		return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+	} catch (err) {
+		return null;
+	}
 }

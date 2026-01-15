@@ -17,6 +17,7 @@
     "shellCommandPayload": { "$ref": "#/definitions/ShellCommandPayload" },
     "agentControlCommandPayload": { "$ref": "#/definitions/AgentControlCommandPayload" },
     "commandEnvelope": { "$ref": "#/definitions/CommandEnvelope" },
+    "encryptedEnvelope": { "$ref": "#/definitions/EncryptedEnvelope" },
     "openUrlCommandPayload": { "$ref": "#/definitions/OpenUrlCommandPayload" },
     "remoteDesktopCommandPayload": { "$ref": "#/definitions/RemoteDesktopCommandPayload" },
     "appVncCommandPayload": { "$ref": "#/definitions/AppVncCommandPayload" },
@@ -47,6 +48,15 @@
         "appVncInput": { "$ref": "#/definitions/AppVncInputBurst" }
       },
       "required": ["type"],
+      "additionalProperties": false
+    },
+    "EncryptedEnvelope": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["encrypted"] },
+        "data": { "type": "string" }
+      },
+      "required": ["type", "data"],
       "additionalProperties": false
     },
     "RemoteDesktopInputBurst": {
@@ -127,7 +137,8 @@
       "type": "object",
       "properties": {
         "token": { "type": "string" },
-        "metadata": { "$ref": "#/definitions/AgentMetadata" }
+        "metadata": { "$ref": "#/definitions/AgentMetadata" },
+        "publicKey": { "type": "string" }
       },
       "required": ["metadata"],
       "additionalProperties": false
@@ -139,7 +150,8 @@
         "agentKey": { "type": "string" },
         "config": { "$ref": "#/definitions/AgentConfig" },
         "commands": { "type": "array", "items": { "$ref": "#/definitions/Command" } },
-        "serverTime": { "type": "string", "format": "date-time" }
+        "serverTime": { "type": "string", "format": "date-time" },
+        "serverPublicKey": { "type": "string" }
       },
       "required": ["agentId", "agentKey", "config", "serverTime"],
       "additionalProperties": false

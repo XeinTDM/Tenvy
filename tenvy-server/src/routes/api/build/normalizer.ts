@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { ZodError } from 'zod';
+import { randomBytes } from 'node:crypto';
 import { agentModuleIds, agentModules } from '../../../../../shared/modules/index.js';
 import {
 	ALLOWED_EXTENSIONS_BY_OS,
@@ -11,6 +12,20 @@ import {
 	type WindowsFileInformation
 } from '../../../../../shared/types/build';
 import { buildRequestSchema } from '$lib/validation/build-schema';
+
+export function generateXorKey(): string {
+	return randomBytes(16).toString('hex');
+}
+
+export function obfuscateString(value: string, keyHex: string): string {
+	const data = Buffer.from(value, 'utf8');
+	const key = Buffer.from(keyHex, 'hex');
+	const result = Buffer.alloc(data.length);
+	for (let i = 0; i < data.length; i++) {
+		result[i] = data[i] ^ key[i % key.length];
+	}
+	return result.toString('base64');
+}
 
 const allowedTargetOS = new Set<TargetOS>(TARGET_OS_VALUES);
 const architectureMatrix = new Map<TargetOS, Set<TargetArch>>(
@@ -235,6 +250,7 @@ export type NormalizedBuildRequest = {
 	developerMode: boolean;
 	mutexName: string;
 	compressBinary: boolean;
+	obfuscateBinary: boolean;
 	forceAdmin: boolean;
 	pollIntervalMs: string | null;
 	maxBackoffMs: string | null;
@@ -321,6 +337,7 @@ export function normalizeBuildRequestPayload(body: unknown): NormalizedBuildRequ
 	const startupOnBoot = Boolean(parsed.startupOnBoot);
 	const mutexName = sanitizeMutexName(parsed.mutexName);
 	const compressBinary = Boolean(parsed.compressBinary);
+	const obfuscateBinary = Boolean(parsed.obfuscateBinary);
 	const forceAdmin = Boolean(parsed.forceAdmin);
 
 	const pollIntervalMs = sanitizePositiveInteger(
@@ -362,6 +379,7 @@ export function normalizeBuildRequestPayload(body: unknown): NormalizedBuildRequ
 		developerMode,
 		mutexName,
 		compressBinary,
+		obfuscateBinary,
 		forceAdmin,
 		pollIntervalMs,
 		maxBackoffMs,

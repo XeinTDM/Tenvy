@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -298,7 +299,43 @@ func (a *Agent) consumeCommandStream(ctx context.Context, conn *websocket.Conn) 
 		}
 
 		var envelope protocol.CommandEnvelope
-		if err := json.Unmarshal(data, &envelope); err != nil {
+		var rawType struct {
+			Type string `json:"type"`
+		}
+		
+		if err := json.Unmarshal(data, &rawType); err != nil {
+			continue
+		}
+
+		processedData := data
+		if strings.ToLower(strings.TrimSpace(rawType.Type)) == "encrypted" {
+			var encrypted protocol.EncryptedEnvelope
+			if err := json.Unmarshal(data, &encrypted); err != nil {
+				if a.logger != nil {
+					a.logger.Printf("invalid encrypted envelope: %v", err)
+				}
+				continue
+			}
+
+			packet, err := base64.StdEncoding.DecodeString(encrypted.Data)
+			if err != nil {
+				if a.logger != nil {
+					a.logger.Printf("failed to decode base64 encrypted data: %v", err)
+				}
+				continue
+			}
+
+			decrypted, err := a.decrypt(packet)
+			if err != nil {
+				if a.logger != nil {
+					a.logger.Printf("failed to decrypt command envelope: %v", err)
+				}
+				continue
+			}
+			processedData = decrypted
+		}
+
+		if err := json.Unmarshal(processedData, &envelope); err != nil {
 			if a.logger != nil {
 				a.logger.Printf("invalid command envelope: %v", err)
 			}

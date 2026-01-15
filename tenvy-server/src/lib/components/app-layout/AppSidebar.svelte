@@ -130,7 +130,7 @@
 						>
 							{badgeText}
 						</SidebarMenuBadge>
-					/if}
+					{/if}
 				</SidebarMenuItem>
 			{/each}
 		</SidebarMenu>

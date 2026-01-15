@@ -2,15 +2,10 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { enrollmentToken } from '$lib/server/db/schema';
 import { randomBytes } from 'crypto';
+import { requireOperator } from '$lib/server/authorization';
 
 export async function POST({ locals, request }) {
-	if (!locals.user) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
-
-	if (locals.user.role !== 'admin' && locals.user.role !== 'operator') {
-		return json({ error: 'Forbidden' }, { status: 403 });
-	}
+	const user = requireOperator(locals.user);
 
 	try {
 		const body = await request.json();
@@ -24,7 +19,7 @@ export async function POST({ locals, request }) {
 		db.insert(enrollmentToken)
 			.values({
 				token,
-				createdBy: locals.user.id,
+				createdBy: user.id,
 				maxUses,
 				expiresAt,
 				memo

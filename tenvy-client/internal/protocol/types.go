@@ -56,6 +56,11 @@ type CommandEnvelope struct {
 	AppVncInput *AppVncInputBurst        `json:"appVncInput,omitempty"`
 }
 
+type EncryptedEnvelope struct {
+	Type string `json:"type"`
+	Data string `json:"data"`
+}
+
 func (e *CommandEnvelope) UnmarshalJSON(data []byte) error {
 	if e == nil {
 		return errors.New("command envelope not initialized")
@@ -88,6 +93,13 @@ func (e *CommandEnvelope) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+func UnmarshalPayload(data []byte, v any) error {
+	if len(data) == 0 {
+		return nil
+	}
+	return json.Unmarshal(data, v)
 }
 
 type CommandResult struct {
@@ -375,16 +387,18 @@ type AgentMetadata struct {
 }
 
 type AgentRegistrationRequest struct {
-	Token    string        `json:"token,omitempty"`
-	Metadata AgentMetadata `json:"metadata"`
+	Token     string        `json:"token,omitempty"`
+	Metadata  AgentMetadata `json:"metadata"`
+	PublicKey *string       `json:"publicKey,omitempty"`
 }
 
 type AgentRegistrationResponse struct {
-	AgentID    string      `json:"agentId"`
-	AgentKey   string      `json:"agentKey"`
-	Config     AgentConfig `json:"config"`
-	Commands   []Command   `json:"commands"`
-	ServerTime string      `json:"serverTime"`
+	AgentID         string      `json:"agentId"`
+	AgentKey        string      `json:"agentKey"`
+	Config          AgentConfig `json:"config"`
+	Commands        []Command   `json:"commands"`
+	ServerTime      string      `json:"serverTime"`
+	ServerPublicKey *string     `json:"serverPublicKey,omitempty"`
 }
 
 type AgentSyncRequest struct {

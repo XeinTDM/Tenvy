@@ -20,7 +20,7 @@
 		type ClientToolId,
 		type DialogToolId
 	} from '$lib/data/client-tools';
-	import { isWorkspaceTool } from '$lib/data/client-tools-workspaces.js';
+	import { isWorkspaceTool } from '$lib/data/client-tool-workspaces';
 	import { notifyToolActivationCommand } from '$lib/utils/agent-commands.js';
 	import type {
 		AgentConnectionAction,

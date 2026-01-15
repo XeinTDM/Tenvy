@@ -64,14 +64,15 @@ type WatchdogConfig struct {
 }
 
 type ExecutionGates struct {
-	Enabled          bool
-	Delay            time.Duration
-	MinUptime        time.Duration
-	AllowedUsernames []string
-	AllowedLocales   []string
-	RequireInternet  bool
-	StartAfter       *time.Time
-	EndBefore        *time.Time
+	Enabled           bool
+	Delay             time.Duration
+	MinUptime         time.Duration
+	AllowedUsernames  []string
+	AllowedLocales    []string
+	RequireInternet   bool
+	RequireNoAnalysis bool
+	StartAfter        *time.Time
+	EndBefore         *time.Time
 }
 
 type CustomHeader struct {

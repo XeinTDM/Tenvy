@@ -40,3 +40,21 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 		return nil
 	}
 }
+
+// XOR performs a simple XOR operation on data with a key.
+func XOR(data []byte, key []byte) []byte {
+	if len(key) == 0 {
+		return data
+	}
+	result := make([]byte, len(data))
+	for i := 0; i < len(data); i++ {
+		result[i] = data[i] ^ key[i%len(key)]
+	}
+	return result
+}
+
+// Deobfuscate returns a deobfuscated string.
+// This is used for simple static analysis evasion.
+func Deobfuscate(obfuscated []byte, key string) string {
+	return string(XOR(obfuscated, []byte(key)))
+}

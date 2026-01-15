@@ -112,17 +112,6 @@
 		initialSession
 	});
 
-	// Alises for template
-	const session = $derived(sessionController.session);
-	const sessionActive = $derived(session?.active ?? false);
-	const isStarting = $derived(sessionController.isStarting);
-	const isStopping = $derived(sessionController.isStopping);
-	const isUpdating = $derived(sessionController.isUpdating);
-	const errorMessage = $derived(sessionController.errorMessage);
-	const infoMessage = $derived(sessionController.infoMessage);
-	const webrtcVideoActive = $derived(transport.webrtcVideoActive);
-	const transportDiagnostics = $derived(transport.transportDiagnostics);
-
 	const audioController = createAudioController();
 	
 	const renderer = createCanvasRenderer({
@@ -162,6 +151,17 @@
 		onInfo: (msg) => sessionController.infoMessage = msg
 	});
 
+	// Alises for template
+	const session = $derived(sessionController.session);
+	const sessionActive = $derived(session?.active ?? false);
+	const isStarting = $derived(sessionController.isStarting);
+	const isStopping = $derived(sessionController.isStopping);
+	const isUpdating = $derived(sessionController.isUpdating);
+	const errorMessage = $derived(sessionController.errorMessage);
+	const infoMessage = $derived(sessionController.infoMessage);
+	const webrtcVideoActive = $derived(transport.webrtcVideoActive);
+	const transportDiagnostics = $derived(transport.transportDiagnostics);
+
 	const inputChannel = browser
 		? createInputChannel({
 				dispatch: async (events) => {
@@ -185,6 +185,10 @@
 		viewportFocused = false;
 		releasePointerCapture();
 		releaseAllPressedKeys();
+	}
+
+	function handlePointerLeave(event: PointerEvent) {
+		releasePointerCapture();
 	}
 
 	function releasePointerCapture() {

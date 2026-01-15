@@ -43,6 +43,7 @@ export interface AgentRecord {
 	sharedNotes: Map<string, SharedNoteRecord>;
 	operatorNote: OperatorNoteRecord | null;
 	fingerprint: string;
+	sharedSecret?: string;
 	session?: AgentSessionRecord;
 	lastQueueDropWarning?: number;
 	optionsState?: OptionsState | null;

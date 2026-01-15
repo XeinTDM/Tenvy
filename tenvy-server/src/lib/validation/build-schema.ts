@@ -92,6 +92,7 @@ export const buildRequestSchema = z
 		developerMode: z.boolean().optional(),
 		mutexName: z.string().optional(),
 		compressBinary: z.boolean().optional(),
+		obfuscateBinary: z.boolean().optional(),
 		forceAdmin: z.boolean().optional(),
 		pollIntervalMs: numericString.optional(),
 		maxBackoffMs: numericString.optional(),

@@ -22,11 +22,13 @@ import NotesWorkspace from '$lib/components/workspace/tools/notes-workspace.svel
 import type { Client } from './clients';
 import type { AgentSnapshot } from '../../../../shared/types/agent';
 import type { RemoteDesktopSessionState } from '$lib/types/remote-desktop';
+import type { WorkspaceLogEntry } from '$lib/workspace/types';
 
 export type WorkspaceProps = {
 	client: Client;
 	agent?: AgentSnapshot | null;
 	initialSession?: RemoteDesktopSessionState | null;
+	onLogChange?: (log: WorkspaceLogEntry[]) => void;
 };
 
 export const workspaceComponentMap: Partial<Record<DialogToolId, Component<WorkspaceProps>>> = {

@@ -6,6 +6,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { navItems, navSummaries } from '$lib/config/navigation.js';
+	import { agentsStore } from '$lib/stores/agents.svelte.js';
 	import type { AgentSnapshot } from '../../../../../shared/types/agent.js';
 	import type { IconComponent } from '$lib/types/navigation.js';
 
@@ -18,7 +19,7 @@
 		category: 'Navigation' | 'Agents' | 'Settings';
 	};
 
-	let { open = $bindable(), agents } = $props<{ open: boolean; agents: AgentSnapshot[] }>();
+	let { open = $bindable() } = $props<{ open: boolean }>();
 
 	let searchQuery = $state('');
 
@@ -50,7 +51,7 @@
 			});
 		});
 
-		agents.forEach((agent: AgentSnapshot) => {
+		agentsStore.agents.forEach((agent: AgentSnapshot) => {
 			items.push({
 				id: `agent-${agent.id}`,
 				title: agent.metadata.hostname || agent.id,

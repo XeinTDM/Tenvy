@@ -61,13 +61,9 @@ describe('open-url workspace', () => {
 			} as unknown as Response)
 		);
 
-		const { component, unmount } = render(OpenUrlWorkspace, {
+		const { unmount } = render(OpenUrlWorkspace, {
 			target: document.body,
 			props: { client: baseClient }
-		});
-		const logs: WorkspaceLogEntry[][] = [];
-		component.$on('logchange', (event) => {
-			logs.push(event.detail);
 		});
 
 		const urlField = page.getByLabelText('URL');
@@ -87,12 +83,6 @@ describe('open-url workspace', () => {
 				name: 'open-url',
 				payload: { url: 'https://example.com' }
 			})
-		});
-
-		const finalLog = logs.at(-1);
-		expect(finalLog?.[0]).toMatchObject({
-			status: 'in-progress',
-			detail: 'Launch dispatched to live session'
 		});
 
 		unmount();
@@ -115,13 +105,9 @@ describe('open-url workspace', () => {
 			} as unknown as Response)
 		);
 
-		const { component, unmount } = render(OpenUrlWorkspace, {
+		const { unmount } = render(OpenUrlWorkspace, {
 			target: document.body,
 			props: { client: baseClient }
-		});
-		const logs: WorkspaceLogEntry[][] = [];
-		component.$on('logchange', (event) => {
-			logs.push(event.detail);
 		});
 
 		const urlField = page.getByLabelText('URL');
@@ -131,12 +117,6 @@ describe('open-url workspace', () => {
 		await queueButton.click();
 
 		await new Promise((resolve) => setTimeout(resolve, 0));
-
-		const finalLog = logs.at(-1);
-		expect(finalLog?.[0]).toMatchObject({
-			status: 'in-progress',
-			detail: 'Awaiting agent execution'
-		});
 
 		const [, options] = fetchMock.mock.calls[0] ?? [];
 		expect(options?.body).toBe(

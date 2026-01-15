@@ -53,18 +53,8 @@ function coerceDate(value: unknown): Date | null {
 	if (!value) {
 		return null;
 	}
-	if (value instanceof Date) {
-		return Number.isFinite(value.getTime()) ? value : null;
-	}
-	if (typeof value === 'number') {
-		const date = new Date(value);
-		return Number.isFinite(date.getTime()) ? date : null;
-	}
-	if (typeof value === 'string') {
-		const date = new Date(value);
-		return Number.isFinite(date.getTime()) ? date : null;
-	}
-	return null;
+	const date = value instanceof Date ? value : new Date(value as any);
+	return Number.isFinite(date.getTime()) ? date : null;
 }
 
 function parseAuditRow(row: AuditRow): ParsedAuditRow {

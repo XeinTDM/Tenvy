@@ -42,7 +42,7 @@
 	}
 
 	const enrichedEvents = $derived(
-		events.map((event) => {
+		events.map((event: AuditEventSummary) => {
 			const parsed = parseResult(event.result);
 			const status: 'pending' | 'success' | 'failure' = !event.executedAt
 				? 'pending'
@@ -68,7 +68,8 @@
 				}
 			}
 
-			const statements = event.acknowledgement?.statements?.map((s) => s.text) ?? [];
+			const statements =
+				event.acknowledgement?.statements?.map((s: { text: string }) => s.text) ?? [];
 
 			return {
 				...event,
@@ -154,7 +155,7 @@
 										{formatOperator(event.operatorId)}
 									</td>
 									<td class="px-4 py-3">
-										<Badge class={statusStyles[event.status]}
+										<Badge class={statusStyles[event.status as 'pending' | 'success' | 'failure']}
 											>{event.status === 'pending'
 												? 'Pending'
 												: event.status === 'success'

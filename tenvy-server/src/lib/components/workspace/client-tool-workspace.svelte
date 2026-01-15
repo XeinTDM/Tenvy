@@ -15,6 +15,7 @@
 	import KeyloggerWorkspace from '$lib/components/workspace/tools/keylogger-workspace.svelte';
 	import { notifyToolActivationCommand } from '$lib/utils/agent-commands.js';
 	import type { AgentSnapshot } from '../../../../../shared/types/agent';
+	import type { WorkspaceLogEntry } from '$lib/workspace/types';
 	import { AlertCircle } from '@lucide/svelte';
 
 	const {
@@ -41,7 +42,7 @@
 			return null;
 		}
 
-		const base: WorkspaceProps = { client };
+		const base: WorkspaceProps = { client, onLogChange };
 		if (dialogToolId === 'cmd' && agent) {
 			base.agent = agent;
 		}
@@ -91,7 +92,7 @@
 	<KeyloggerWorkspace {client} mode={keyloggerMode} {onLogChange} />
 {:else if workspaceComponent && workspaceProps}
 	{@const Component = workspaceComponent}
-	<Component {...workspaceProps} {onLogChange} />
+	<Component {...workspaceProps} />
 {:else}
 	<Alert>
 		<AlertCircle class="h-4 w-4" />
