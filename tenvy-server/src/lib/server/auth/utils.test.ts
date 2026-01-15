@@ -8,7 +8,6 @@ describe('Auth Utils', () => {
 			const token = generateSessionToken();
 			expect(typeof token).toBe('string');
 			expect(token.length).toBeGreaterThan(0);
-			// Verify it can be decoded as base64url
 			expect(() => decodeBase64url(token)).not.toThrow();
 		});
 
@@ -24,7 +23,6 @@ describe('Auth Utils', () => {
 			const code = 'test-code';
 			const hash = hashVoucherCode(code);
 			expect(typeof hash).toBe('string');
-			// SHA256 hex string is 64 chars
 			expect(hash).toHaveLength(64);
 			expect(() => decodeHex(hash)).not.toThrow();
 		});

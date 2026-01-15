@@ -1466,7 +1466,6 @@ func normalizeBaseURL(raw string) string {
 	}
 	parsed.Fragment = ""
 	if parsed.User != nil {
-		// Credentials should never be embedded in the base URL for security reasons.
 		parsed.User = nil
 	}
 	parsed.Path = strings.TrimRight(parsed.Path, "/")

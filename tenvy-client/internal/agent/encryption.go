@@ -32,7 +32,6 @@ func (a *Agent) encrypt(plaintext []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Traffic Camouflage: Add random padding
 	n, err := rand.Int(rand.Reader, big.NewInt(256))
 	if err != nil {
 		return nil, err
@@ -46,12 +45,7 @@ func (a *Agent) encrypt(plaintext []byte) ([]byte, error) {
 	paddingLenBuf := make([]byte, 2)
 	binary.BigEndian.PutUint16(paddingLenBuf, paddingLen)
 
-	// Packet structure: [IV (12)] [Tag (16)] [PaddingLen (2)] [Padding (n)] [Ciphertext (m)]
-	// GCM Seal appends the tag to the ciphertext. We need to re-order to match the server's structure
-	// which puts the tag right after the IV.
-	
 	ciphertext := gcm.Seal(nil, iv, plaintext, nil)
-	// ciphertext is [ActualCiphertext] [Tag (16)]
 	tag := ciphertext[len(ciphertext)-16:]
 	actualCiphertext := ciphertext[:len(ciphertext)-16]
 
@@ -70,7 +64,7 @@ func (a *Agent) decrypt(packet []byte) ([]byte, error) {
 		return nil, errors.New("no shared secret available for decryption")
 	}
 
-	const minHeader = 12 + 16 + 2 // IV + Tag + PaddingLen
+	const minHeader = 12 + 16 + 2
 	if len(packet) < minHeader {
 		return nil, errors.New("packet too short")
 	}
@@ -89,15 +83,14 @@ func (a *Agent) decrypt(packet []byte) ([]byte, error) {
 	iv := packet[:12]
 	tag := packet[12:28]
 	paddingLen := binary.BigEndian.Uint16(packet[28:30])
-	
+
 	ciphertextStart := 30 + int(paddingLen)
 	if len(packet) < ciphertextStart {
 		return nil, errors.New("packet smaller than indicated padding")
 	}
-	
+
 	actualCiphertext := packet[ciphertextStart:]
-	
-	// Reconstruct Seal output: [ActualCiphertext] [Tag]
+
 	combined := make([]byte, len(actualCiphertext)+16)
 	copy(combined, actualCiphertext)
 	copy(combined[len(actualCiphertext):], tag)

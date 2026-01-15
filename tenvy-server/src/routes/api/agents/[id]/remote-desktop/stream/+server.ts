@@ -16,7 +16,7 @@ export const GET: RequestHandler = ({ params, url, request }) => {
 		'abort',
 		() => {
 			stream.cancel().catch(() => {
-				// ignore cancellation errors
+				// ignore
 			});
 		},
 		{ once: true }

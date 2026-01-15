@@ -68,7 +68,6 @@ func (m *Manager) Snapshot() *manifest.SyncPayload {
 		manifestData, err := os.ReadFile(manifestPath)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				// Try encrypted manifest
 				if data, encErr := m.DecryptFile(manifestPath + ".enc"); encErr == nil {
 					manifestData = data
 					err = nil

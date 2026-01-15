@@ -49,7 +49,7 @@ func TestSnapshotSkipsManifestWithUnsupportedSignature(t *testing.T) {
         }`))
 	writeFile(t, artifactPath, []byte("payload"))
 
-	manager, err := plugins.NewManager(root, log.New(io.Discard, "", 0), manifest.VerifyOptions{})
+	manager, err := plugins.NewManager(root, nil, log.New(io.Discard, "", 0), manifest.VerifyOptions{})
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestSnapshotAllowsTrustedSignature(t *testing.T) {
 	opts := manifest.VerifyOptions{
 		Ed25519PublicKeys: map[string]ed25519.PublicKey{"primary": pub},
 	}
-	manager, err := plugins.NewManager(root, log.New(io.Discard, "", 0), opts)
+	manager, err := plugins.NewManager(root, nil, log.New(io.Discard, "", 0), opts)
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestSnapshotHonorsRegistryApproval(t *testing.T) {
 	writeFile(t, filepath.Join(pluginDir, "manifest.json"), []byte(manifestJSON))
 
 	opts := manifest.VerifyOptions{Ed25519PublicKeys: map[string]ed25519.PublicKey{"primary": pub}}
-	manager, err := plugins.NewManager(root, log.New(io.Discard, "", 0), opts)
+	manager, err := plugins.NewManager(root, nil, log.New(io.Discard, "", 0), opts)
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestSnapshotBlocksUnapprovedRegistryPlugin(t *testing.T) {
 	writeFile(t, filepath.Join(pluginDir, "manifest.json"), []byte(manifestJSON))
 
 	opts := manifest.VerifyOptions{Ed25519PublicKeys: map[string]ed25519.PublicKey{"primary": pub}}
-	manager, err := plugins.NewManager(root, log.New(io.Discard, "", 0), opts)
+	manager, err := plugins.NewManager(root, nil, log.New(io.Discard, "", 0), opts)
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
@@ -229,7 +229,6 @@ func TestSnapshotBlocksUnapprovedRegistryPlugin(t *testing.T) {
 		Manifests: []manifest.ManifestDescriptor{{
 			PluginID: "pending",
 			Version:  "1.0.0",
-			// ApprovedAt intentionally empty to simulate pending review.
 		}},
 	})
 
@@ -284,7 +283,7 @@ func TestSnapshotBlocksInvalidSignature(t *testing.T) {
 	opts := manifest.VerifyOptions{
 		Ed25519PublicKeys: map[string]ed25519.PublicKey{"primary": pub},
 	}
-	manager, err := plugins.NewManager(root, log.New(io.Discard, "", 0), opts)
+	manager, err := plugins.NewManager(root, nil, log.New(io.Discard, "", 0), opts)
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
@@ -329,7 +328,7 @@ func TestSnapshotAppliesRecordedStatus(t *testing.T) {
         }`, hashHex)))
 
 	opts := manifest.VerifyOptions{SHA256AllowList: []string{hashHex}}
-	manager, err := plugins.NewManager(root, log.New(io.Discard, "", 0), opts)
+	manager, err := plugins.NewManager(root, nil, log.New(io.Discard, "", 0), opts)
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
@@ -358,7 +357,7 @@ func TestSnapshotWithoutManifestUsesStatus(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 
-	manager, err := plugins.NewManager(root, log.New(io.Discard, "", 0), manifest.VerifyOptions{})
+	manager, err := plugins.NewManager(root, nil, log.New(io.Discard, "", 0), manifest.VerifyOptions{})
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
@@ -451,7 +450,7 @@ func TestSnapshotEmitsDocumentedStatuses(t *testing.T) {
 		SHA256AllowList:   []string{installedHash, errorHash},
 		Ed25519PublicKeys: map[string]ed25519.PublicKey{"primary": pub},
 	}
-	manager, err := plugins.NewManager(root, log.New(io.Discard, "", 0), opts)
+	manager, err := plugins.NewManager(root, nil, log.New(io.Discard, "", 0), opts)
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
@@ -493,7 +492,7 @@ func TestRecordInstallStatusStoresEpochMillis(t *testing.T) {
 
 	root := t.TempDir()
 
-	manager, err := plugins.NewManager(root, log.New(io.Discard, "", 0), manifest.VerifyOptions{})
+	manager, err := plugins.NewManager(root, nil, log.New(io.Discard, "", 0), manifest.VerifyOptions{})
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}
@@ -528,7 +527,7 @@ func TestSnapshotConvertsLegacyTimestamp(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	manager, err := plugins.NewManager(root, log.New(io.Discard, "", 0), manifest.VerifyOptions{})
+	manager, err := plugins.NewManager(root, nil, log.New(io.Discard, "", 0), manifest.VerifyOptions{})
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}

@@ -166,7 +166,6 @@ describe('AudioBridgeManager binary transport', () => {
 		const stream = manager.subscribe('agent-1', session.sessionId);
 		const reader = stream.getReader();
 
-		// initial session event
 		await reader.read();
 
 		const payload = new Uint8Array([0x00, 0x10, 0x7f, 0xff]);

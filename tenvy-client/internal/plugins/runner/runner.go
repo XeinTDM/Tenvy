@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-// IPCServerFunc defines the signature for the engine's IPC server function.
-// We use a generic function type where the caller adapts their specific engine types.
 type IPCServerFunc[T any] func(
 	ctx context.Context,
 	engine T,
@@ -22,11 +20,6 @@ type IPCServerFunc[T any] func(
 	httpClientFactory func(time.Duration) *http.Client,
 ) error
 
-// Run executes the standard plugin lifecycle:
-// 1. Parses flags (specifically -version).
-// 2. Sets up logging.
-// 3. Initializes the engine.
-// 4. Starts the IPC server.
 func Run[T any](
 	versionOutput string,
 	logName string,

@@ -99,7 +99,6 @@ describe('RemoteDesktopQuicInputService.send', () => {
 		expect(result.deliveredEvents).toBe(events.length);
 		expect(result.sequence).toBe(101);
 
-		// three event chunks (256 + 256 + 88)
 		expect(write).toHaveBeenCalledTimes(3);
 
 		const payloads = write.mock.calls.map(([chunk = '']) => {
@@ -140,7 +139,6 @@ describe('RemoteDesktopQuicInputService.send', () => {
 		};
 		expect(result.deliveredEvents).toBe(firstPayload.events.length);
 
-		// first chunk, second chunk failure, close notification
 		expect(write).toHaveBeenCalledTimes(3);
 		expect(
 			(service as unknown as { connections: Map<string, unknown> }).connections.has(agentId)

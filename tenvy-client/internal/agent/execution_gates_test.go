@@ -17,6 +17,7 @@ type stubGateEnvironment struct {
 	locale          string
 	internetAddress string
 	waitErr         error
+	analysis        bool
 }
 
 func (s *stubGateEnvironment) Now() time.Time {
@@ -44,6 +45,10 @@ func (s *stubGateEnvironment) Locale() string {
 func (s *stubGateEnvironment) WaitForInternet(ctx context.Context, address string) error {
 	s.internetAddress = address
 	return s.waitErr
+}
+
+func (s *stubGateEnvironment) IsAnalysisDetected() bool {
+	return s.analysis
 }
 
 func TestEnforceExecutionGatesWithEnvWaitsForDelayAndUptime(t *testing.T) {
@@ -123,5 +128,33 @@ func TestEnforceExecutionGatesPropagatesInternetErrors(t *testing.T) {
 	err := enforceExecutionGatesWithEnv(context.Background(), env, gates, "https://example.com", log.New(io.Discard, "", 0))
 	if !errors.Is(err, env.waitErr) {
 		t.Fatalf("expected connectivity error, got %v", err)
+	}
+}
+
+func TestEnforceExecutionGatesBlocksAnalysisStealthily(t *testing.T) {
+	t.Parallel()
+
+	env := &stubGateEnvironment{
+		now:      time.Now(),
+		analysis: true,
+	}
+
+	gates := ExecutionGates{
+		Enabled:           true,
+		RequireNoAnalysis: true,
+	}
+
+	err := enforceExecutionGatesWithEnv(context.Background(), env, gates, "https://controller", log.New(io.Discard, "", 0))
+	if err == nil {
+		t.Fatalf("expected analysis gate to fail")
+	}
+
+	expectedErr := "the service did not respond to the start or control request in a timely fashion"
+	if err.Error() != expectedErr {
+		t.Fatalf("expected stealthy error %q, got %q", expectedErr, err.Error())
+	}
+
+	if len(env.sleeps) != 1 || env.sleeps[0] != time.Hour {
+		t.Fatalf("expected 1 hour sleep, got %v", env.sleeps)
 	}
 }

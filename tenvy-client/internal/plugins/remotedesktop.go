@@ -15,10 +15,8 @@ import (
 	manifest "github.com/rootbay/tenvy-client/shared/pluginmanifest"
 )
 
-// RemoteDesktopEnginePluginID identifies the managed remote desktop engine plugin.
 const RemoteDesktopEnginePluginID = "remote-desktop-engine"
 
-// HTTPDoer represents a minimal HTTP client.
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
@@ -219,9 +217,9 @@ func StageRemoteDesktopEngine(
 	var unpackErr error
 	switch {
 	case strings.EqualFold(filepath.Ext(artifactRel), ".zip"):
-		unpackErr = unpackZipArchive(stagingArtifact, stagingDir)
+		unpackErr = unpackZipArchive(stagingArtifact, stagingDir, entryRel, manager.secret)
 	case strings.HasSuffix(loweredArtifact, ".tar.gz"), strings.HasSuffix(loweredArtifact, ".tgz"):
-		unpackErr = unpackTarGzArchive(stagingArtifact, stagingDir)
+		unpackErr = unpackTarGzArchive(stagingArtifact, stagingDir, entryRel, manager.secret)
 	}
 	if unpackErr != nil {
 		manager.recordInstallStatusLocked(RemoteDesktopEnginePluginID, mf.Version, manifest.InstallError, unpackErr.Error())

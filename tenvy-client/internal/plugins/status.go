@@ -192,9 +192,6 @@ func (m *Manager) clearInstallStatusLocked(pluginID string) error {
 	return removeInstallationStatus(dir)
 }
 
-// RecordInstallStatus persists a plugin installation status update to disk so that
-// telemetry snapshots can surface the latest failure or health state to the
-// controller.
 func RecordInstallStatus(m *Manager, pluginID, version string, status manifest.PluginInstallStatus, message string) error {
 	if m == nil {
 		return errors.New("plugins manager not initialized")
@@ -204,7 +201,6 @@ func RecordInstallStatus(m *Manager, pluginID, version string, status manifest.P
 	return m.recordInstallStatusLocked(pluginID, version, status, message)
 }
 
-// ClearInstallStatus removes any persisted status overrides for the provided plugin.
 func ClearInstallStatus(m *Manager, pluginID string) error {
 	if m == nil {
 		return nil

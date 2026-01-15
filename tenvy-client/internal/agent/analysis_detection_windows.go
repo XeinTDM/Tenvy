@@ -30,7 +30,6 @@ const (
 	cNoUSB
 )
 
-// DetectAnalysis returns a comma-separated list of analysis indicators.
 func DetectAnalysis() string {
 	bits := CheckSystemIntegrity()
 	if bits == 0 {
@@ -92,7 +91,6 @@ func CheckSystemIntegrity() int32 {
 			found, err := USBCheck.PluggedIn()
 			return (err == nil && !found), nil
 		}},
-		// Decoy tasks to confuse behavioral analysis
 		{0, func() (bool, error) {
 			time.Sleep(time.Duration(rand.Intn(30)) * time.Millisecond)
 			return false, nil
@@ -103,7 +101,6 @@ func CheckSystemIntegrity() int32 {
 		}},
 	}
 
-	// Polymorphic logic: Randomize execution order to evade pattern-based behavioral detection
 	rand.Shuffle(len(tasks), func(i, j int) {
 		tasks[i], tasks[j] = tasks[j], tasks[i]
 	})
@@ -117,11 +114,9 @@ func CheckSystemIntegrity() int32 {
 		}) {
 			defer wg.Done()
 
-			// Polymorphic logic: Random jitter before each check to break timing signatures
 			jitter := time.Duration(rand.Intn(250)) * time.Millisecond
 			time.Sleep(jitter)
 
-			// Opaque predicate: dynamic condition that is always true but adds complexity to static analysis
 			if time.Now().Unix() > 0 || rand.Intn(100) >= 0 {
 				if ok, _ := task.fn(); ok && task.flag != 0 {
 					atomic.OrInt32(&result, task.flag)

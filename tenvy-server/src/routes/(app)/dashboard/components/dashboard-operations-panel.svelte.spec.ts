@@ -68,9 +68,6 @@ describe('dashboard-operations-panel', () => {
 		await page.getByRole('button', { name: 'Logs' }).click();
 
 		await expect.element(page.getByText('Client connected')).toBeInTheDocument();
-
-		// We cannot easily change the prop from the test after render in Svelte 5 with vitest-browser-svelte
-		// unless we wrap it or use a different approach. But we can at least fix the type error.
 		unmount();
 	});
 });

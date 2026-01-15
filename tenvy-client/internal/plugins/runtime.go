@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -118,7 +119,6 @@ func launchProcessRuntime(ctx context.Context, entryPath string, opts RuntimeOpt
 		return nil, fmt.Errorf("resolve entry path: %w", err)
 	}
 
-	// Check if encrypted
 	info, err := os.Stat(resolved)
 	if errors.Is(err, fs.ErrNotExist) {
 		encInfo, encErr := os.Stat(resolved + ".enc")
@@ -134,27 +134,24 @@ func launchProcessRuntime(ctx context.Context, entryPath string, opts RuntimeOpt
 			if decErr != nil {
 				return nil, fmt.Errorf("decrypt binary: %w", decErr)
 			}
-			
-			// Create temp file for execution
+
 			tmpFile, tempErr := os.CreateTemp(filepath.Dir(resolved), "run-*.exe")
 			if tempErr != nil {
 				return nil, fmt.Errorf("create temp binary: %w", tempErr)
 			}
-			defer tmpFile.Close() // Best effort close
-			
+			defer tmpFile.Close()
+
 			if _, writeErr := tmpFile.Write(decrypted); writeErr != nil {
 				os.Remove(tmpFile.Name())
 				return nil, fmt.Errorf("write temp binary: %w", writeErr)
 			}
 			tmpFile.Close()
 			if chmodErr := os.Chmod(tmpFile.Name(), 0700); chmodErr != nil {
-				// Continue, windows permissions are different
 			}
-			
+
 			resolved = tmpFile.Name()
 			info, _ = os.Stat(resolved)
-			
-			// Schedule cleanup on context done or exit
+
 			defer func() {
 				// This defer runs when launchProcessRuntime returns, not when process exits.
 				// We need to cleanup after process exit.
@@ -167,7 +164,7 @@ func launchProcessRuntime(ctx context.Context, entryPath string, opts RuntimeOpt
 	} else if err != nil {
 		return nil, fmt.Errorf("locate plugin entry: %w", err)
 	}
-	
+
 	if info.IsDir() {
 		return nil, fmt.Errorf("plugin entry %s is a directory", resolved)
 	}
@@ -259,7 +256,6 @@ func launchProcessRuntime(ctx context.Context, entryPath string, opts RuntimeOpt
 		done:            make(chan struct{}),
 	}
 
-	// If resolved is a temp file we created, track it for cleanup
 	if strings.Contains(filepath.Base(resolved), "run-") && strings.HasSuffix(filepath.Base(resolved), ".exe") {
 		// Use a better check or track the variable from the encryption block
 		// Ideally we'd return the temp path from the block above

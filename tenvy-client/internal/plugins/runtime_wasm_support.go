@@ -30,8 +30,6 @@ const (
 	wasmStopTimeoutFallback = 500 * time.Millisecond
 )
 
-// WasmHostAPIVersion identifies the host API version exposed to sandboxed WASM
-// plugins.
 const WasmHostAPIVersion = "1.0"
 
 type wasmRuntimeHandle struct {
@@ -90,13 +88,13 @@ func launchWasmRuntime(ctx context.Context, entryPath string, opts RuntimeOption
 	wasmRuntime := wazero.NewRuntimeWithConfig(runtimeCtx, runtimeConfig)
 	if _, err := wasi_snapshot_preview1.Instantiate(runtimeCtx, wasmRuntime); err != nil {
 		cancel()
-		wasmRuntime.Close(runtimeCtx) //nolint:errcheck // best effort cleanup
+		wasmRuntime.Close(runtimeCtx) //nolint:errcheck
 		return nil, fmt.Errorf("instantiate wasi: %w", err)
 	}
 
 	if _, err := instantiateWasmHost(runtimeCtx, wasmRuntime, opts); err != nil {
 		cancel()
-		wasmRuntime.Close(runtimeCtx) //nolint:errcheck // best effort cleanup
+		wasmRuntime.Close(runtimeCtx) //nolint:errcheck
 		return nil, err
 	}
 
@@ -106,7 +104,7 @@ func launchWasmRuntime(ctx context.Context, entryPath string, opts RuntimeOption
 		wasmRuntime.Close(runtimeCtx) //nolint:errcheck
 		return nil, fmt.Errorf("compile wasm module: %w", err)
 	}
-	defer compiled.Close(runtimeCtx) //nolint:errcheck // release compilation artifacts when instantiated
+	defer compiled.Close(runtimeCtx) //nolint:errcheck
 
 	name := strings.TrimSpace(opts.Name)
 	if name == "" {

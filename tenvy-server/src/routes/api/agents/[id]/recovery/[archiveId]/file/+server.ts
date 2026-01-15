@@ -9,7 +9,7 @@ import {
 } from '$lib/server/recovery/storage';
 import { normalizeArchiveEntryPath } from '$lib/server/recovery/validation';
 
-const MAX_PREVIEW_BYTES = 2 * 1024 * 1024; // 2 MiB
+const MAX_PREVIEW_BYTES = 2 * 1024 * 1024;
 
 function isLikelyText(buffer: Uint8Array): boolean {
 	if (buffer.length === 0) {

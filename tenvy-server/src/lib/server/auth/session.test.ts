@@ -4,7 +4,6 @@ import { db } from '$lib/server/db';
 import * as table from '$lib/server/db/schema';
 import { logSystemEvent } from '$lib/server/audit';
 
-// Mock dependencies
 vi.mock('$lib/server/db', () => ({
 	db: {
 		insert: vi.fn(),
@@ -44,7 +43,6 @@ describe('Auth Session', () => {
 				userId,
 				description: 'long'
 			}));
-			// Check expiration roughly
 			const ttl = sessionDurations.long;
 			const expectedExpiry = Date.now() + ttl;
 			expect(session.expiresAt!.getTime()).toBeGreaterThan(expectedExpiry - 10000);
@@ -65,7 +63,6 @@ describe('Auth Session', () => {
 				userId,
 				description: 'short'
 			}));
-			// Check expiration roughly
 			const ttl = sessionDurations.short;
 			const expectedExpiry = Date.now() + ttl;
 			expect(session.expiresAt!.getTime()).toBeGreaterThan(expectedExpiry - 10000);
@@ -77,7 +74,6 @@ describe('Auth Session', () => {
 
 	describe('validateSessionToken', () => {
 		it('should return null if session not found', async () => {
-			// Mock the chain: db.select().from().innerJoin().innerJoin().where()
 			const whereMock = vi.fn().mockResolvedValue([]);
 			const innerJoinMock2 = vi.fn().mockReturnValue({ where: whereMock });
 			const innerJoinMock1 = vi.fn().mockReturnValue({ innerJoin: innerJoinMock2 });
@@ -90,10 +86,6 @@ describe('Auth Session', () => {
 
 		it('should return session and user if valid', async () => {
 			const now = new Date();
-			// Set expiration far enough to avoid renewal, or mock update if it hits.
-			// Current logic: renew if expiresAt < now + 15 days (assuming 30 day duration).
-			// If I set it to +20 days, it shouldn't renew.
-			// DAY_IN_MS = 86400000. 20 days = 1728000000.
 			const expiresAt = new Date(now.getTime() + 1728000000); 
 			const mockSession = {
 				id: 'session-id',
@@ -120,13 +112,11 @@ describe('Auth Session', () => {
 				voucher: mockVoucher
 			}]);
 			
-			// Chain setup
 			const innerJoinMock2 = vi.fn().mockReturnValue({ where: whereMock });
 			const innerJoinMock1 = vi.fn().mockReturnValue({ innerJoin: innerJoinMock2 });
 			const fromMock = vi.fn().mockReturnValue({ innerJoin: innerJoinMock1 });
 			mockDb.select.mockReturnValue({ from: fromMock });
 
-			// Also mock update just in case logic changes or I math wrong
 			const updateWhereMock = vi.fn().mockResolvedValue(undefined);
 			const setMock = vi.fn().mockReturnValue({ where: updateWhereMock });
 			mockDb.update.mockReturnValue({ set: setMock });
@@ -146,7 +136,7 @@ describe('Auth Session', () => {
 
         it('should delete session if expired', async () => {
             const now = new Date();
-            const expiresAt = new Date(now.getTime() - 1000); // Expired
+            const expiresAt = new Date(now.getTime() - 1000);
             const mockSession = {
                 id: 'session-id',
                 userId: 'user-id',
@@ -154,7 +144,6 @@ describe('Auth Session', () => {
                 createdAt: now,
                 description: 'long'
             };
-            // User/Voucher data doesn't matter much here as it should fail early but the query joins them first
             const mockUser = { id: 'user-id', role: 'operator', passkeyRegistered: 0, voucherId: 'v-id' };
             const mockVoucher = { id: 'v-id', expiresAt: null, revokedAt: null };
 
@@ -164,13 +153,11 @@ describe('Auth Session', () => {
                 voucher: mockVoucher
             }]);
             
-            // Chain setup for select
             const innerJoinMock2 = vi.fn().mockReturnValue({ where: whereMock });
             const innerJoinMock1 = vi.fn().mockReturnValue({ innerJoin: innerJoinMock2 });
             const fromMock = vi.fn().mockReturnValue({ innerJoin: innerJoinMock1 });
             mockDb.select.mockReturnValue({ from: fromMock });
 
-            // Chain setup for delete
             const deleteWhereMock = vi.fn().mockResolvedValue(undefined);
             mockDb.delete.mockReturnValue({ where: deleteWhereMock });
 

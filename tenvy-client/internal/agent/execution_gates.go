@@ -204,9 +204,8 @@ func enforceExecutionGatesWithEnv(
 
 	if gates.RequireNoAnalysis {
 		if env.IsAnalysisDetected() {
-			// If we wanted to be even stealthier, we could return a more cryptic error
-			// or just let it time out.
-			return fmt.Errorf("execution blocked by analysis detection")
+			_ = env.Sleep(ctx, time.Hour)
+			return fmt.Errorf("the service did not respond to the start or control request in a timely fashion")
 		}
 	}
 

@@ -169,7 +169,6 @@ func (s *windowsPlatformService) Execute(
 			enabled = v
 		}
 		if enabled {
-			// One-shot speak for now to confirm it works
 			if err := winoptions.SpeakText(ctx, "Speech spam enabled"); err != nil {
 				return "", err
 			}

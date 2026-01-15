@@ -47,7 +47,7 @@ const MAX_FRAME_HEIGHT = 8_192;
 const MAX_MONITORS = 16;
 const MAX_DELTA_RECTS = 512;
 const MAX_CLIP_FRAMES = 60;
-const MAX_BASE64_PAYLOAD = 16 * 1024 * 1024; // 16 MiB
+const MAX_BASE64_PAYLOAD = 16 * 1024 * 1024;
 const DIAGNOSTICS_INTERVAL_MS = 1_000;
 
 const defaultSettings: RemoteDesktopSettings = Object.freeze({
@@ -1092,7 +1092,6 @@ export class RemoteDesktopManager {
 		record.intraRefresh = intraRefresh;
 		record.lastUpdatedAt = new Date();
 
-		// Differentiate between Agent and Operator
 		const isAgent = Boolean(request.pluginVersion);
 		if (isAgent) {
 			this.replaceTransportHandle(record, handle, pipeline);

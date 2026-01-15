@@ -17,7 +17,6 @@ func NewTriggerEngine(cfg Config) Engine {
 }
 
 func (e *triggerEngine) Configure(cfg Config) error {
-	// No specific configuration for trigger manager currently
 	return nil
 }
 

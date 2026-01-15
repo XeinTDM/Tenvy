@@ -25,9 +25,9 @@ func FindWindowForPID(pid uint32) win.HWND {
 		visible, _, _ := procIsWindowVisible.Call(uintptr(h))
 		if windowPid == pid && visible != 0 {
 			hwnd = h
-			return 0 // stop
+			return 0
 		}
-		return 1 // continue
+		return 1
 	})
 	procEnumWindows.Call(cb, 0)
 	return hwnd

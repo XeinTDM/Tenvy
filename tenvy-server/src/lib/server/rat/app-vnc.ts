@@ -22,7 +22,7 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 const HISTORY_LIMIT = 24;
 const MAX_FRAME_WIDTH = 4_096;
 const MAX_FRAME_HEIGHT = 4_096;
-const MAX_BASE64_SIZE = 8 * 1024 * 1024; // 8 MiB
+const MAX_BASE64_SIZE = 8 * 1024 * 1024;
 
 const defaultSettings: AppVncSessionSettings = Object.freeze({
 	monitor: 'Primary',

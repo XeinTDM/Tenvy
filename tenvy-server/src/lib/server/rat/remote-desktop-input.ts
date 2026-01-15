@@ -15,7 +15,7 @@ const mouseButtons = new Set<RemoteDesktopMouseButton>(['left', 'middle', 'right
 const DEFAULT_ALPN = 'tenvy.remote-desktop.input.v1';
 const DEFAULT_ADDRESS = process.env.TENVY_QUIC_INPUT_ADDRESS ?? '0.0.0.0';
 const DEFAULT_PORT = Number.parseInt(process.env.TENVY_QUIC_INPUT_PORT ?? '0', 10) || 9543;
-const MAX_INPUT_BUFFER = 1_048_576; // 1 MiB
+const MAX_INPUT_BUFFER = 1_048_576;
 const MAX_EVENT_BATCH = 256;
 
 const parseTokenValue = (token: unknown): string => {
@@ -318,7 +318,7 @@ export class RemoteDesktopQuicInputService {
 		try {
 			await startOperation;
 		} catch {
-			// initialization failure already logged
+			// ignore
 		}
 	}
 
@@ -670,7 +670,6 @@ export class RemoteDesktopQuicInputService {
 				break;
 			}
 			case 'ack': {
-				// acknowledgements are currently informational only
 				break;
 			}
 			case 'ping': {

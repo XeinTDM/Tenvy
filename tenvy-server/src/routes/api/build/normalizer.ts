@@ -57,7 +57,7 @@ type NormalizedAudioStreaming = 'enabled' | 'disabled' | 'unset';
 
 const minWatchdogIntervalSeconds = 5;
 const maxWatchdogIntervalSeconds = 86_400;
-const maxFilePumperBytes = 10 * 1024 * 1024 * 1024; // 10 GiB
+const maxFilePumperBytes = 10 * 1024 * 1024 * 1024;
 
 export type NormalizedWatchdog = { enabled: true; intervalSeconds: number } | null;
 export type NormalizedFilePumper = { enabled: true; targetBytes: number } | null;

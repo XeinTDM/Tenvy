@@ -83,7 +83,6 @@ func (e *externalWebcamEngine) Shutdown() {
 	_ = e.enc.Encode(ipcRequest{ID: e.nextID, Method: methodShutdown})
 	e.nextID++
 
-	// Force kill if it doesn't exit
 	done := make(chan struct{})
 	go func() {
 		e.cmd.Wait()
@@ -127,7 +126,7 @@ func (e *externalWebcamEngine) call(ctx context.Context, method string, params a
 
 	ch := make(chan *ipcResponse, 1)
 	e.pending[id] = ch
-	
+
 	err = e.enc.Encode(req)
 	e.mu.Unlock()
 

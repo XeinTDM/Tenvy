@@ -10,20 +10,15 @@ import (
 	"strings"
 )
 
-// DetectAnalysis attempts to identify if the agent is running in an analysis or virtualized environment.
 func DetectAnalysis() string {
 	var indicators []string
 
-	// Check MAC addresses for common VM vendors
 	if mac := getAnalysisMACIndicator(); mac != "" {
 		indicators = append(indicators, fmt.Sprintf("mac:%s", mac))
 	}
-
-	// Check for common analysis files/directories
 	if file := getAnalysisFileIndicator(); file != "" {
 		indicators = append(indicators, fmt.Sprintf("file:%s", file))
 	}
-
 	if len(indicators) == 0 {
 		return ""
 	}
@@ -43,19 +38,15 @@ func getAnalysisMACIndicator() string {
 			continue
 		}
 
-		// VMware
 		if strings.HasPrefix(mac, "00:05:69") || strings.HasPrefix(mac, "00:0C:29") || strings.HasPrefix(mac, "00:50:56") {
 			return "vmware"
 		}
-		// VirtualBox
 		if strings.HasPrefix(mac, "08:00:27") {
 			return "vbox"
 		}
-		// Hyper-V
 		if strings.HasPrefix(mac, "00:03:FF") {
 			return "hyperv"
 		}
-		// QEMU/KVM
 		if strings.HasPrefix(mac, "52:54:00") {
 			return "qemu"
 		}

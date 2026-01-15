@@ -64,7 +64,7 @@ export class SessionManager {
 		try {
 			session.socket.close(options.code ?? 1000, options.reason);
 		} catch {
-			// Ignore close failures.
+			// Ignore
 		}
 	}
 }

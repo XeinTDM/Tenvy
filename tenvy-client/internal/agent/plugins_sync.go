@@ -718,7 +718,7 @@ func selectPreferredDescriptor(descriptors []manifest.ManifestDescriptor) int {
 				ambiguous = true
 			}
 		case bestValid && !valid:
-			// keep current best
+			// Ignore
 		default:
 			ambiguous = true
 		}
@@ -884,7 +884,6 @@ func (a *Agent) handlePluginRemoval(ctx context.Context, pluginIDs []string) err
 			continue
 		}
 
-		// Instant update logic: if a plugin is removed/updated, reset its engine
 		switch {
 		case strings.EqualFold(id, plugins.RemoteDesktopEnginePluginID):
 			if err := a.resetModuleEngine(ctx, "remote-desktop", id); err != nil {
@@ -1167,7 +1166,6 @@ func (a *Agent) removePluginManifestEntries(pluginIDs []string) {
 		}
 	}
 }
-
 
 func combineErrors(a, b error) error {
 	if a == nil {

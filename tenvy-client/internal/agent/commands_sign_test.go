@@ -35,14 +35,12 @@ func TestVerifyCommandSignature(t *testing.T) {
 		cmd.CreatedAt,
 	}, "|")
 
-	// Test Ed25519
 	sig := ed25519.Sign(priv, []byte(data))
 	cmd.Signature = "ed25519:" + hex.EncodeToString(sig)
 	if !a.verifyCommandSignature(cmd) {
 		t.Errorf("Ed25519 signature verification failed")
 	}
 
-	// Test HMAC
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(data))
 	cmd.Signature = "hmac:" + hex.EncodeToString(mac.Sum(nil))
@@ -50,19 +48,16 @@ func TestVerifyCommandSignature(t *testing.T) {
 		t.Errorf("HMAC signature verification failed")
 	}
 
-	// Test HMAC (legacy no prefix)
 	cmd.Signature = hex.EncodeToString(mac.Sum(nil))
 	if !a.verifyCommandSignature(cmd) {
 		t.Errorf("Legacy HMAC signature verification failed")
 	}
 
-	// Test invalid Ed25519
 	cmd.Signature = "ed25519:" + hex.EncodeToString(make([]byte, 64))
 	if a.verifyCommandSignature(cmd) {
 		t.Errorf("Invalid Ed25519 signature should have failed")
 	}
 
-	// Test invalid HMAC
 	cmd.Signature = "hmac:" + hex.EncodeToString(make([]byte, 32))
 	if a.verifyCommandSignature(cmd) {
 		t.Errorf("Invalid HMAC signature should have failed")

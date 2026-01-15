@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { AgentRegistry, RegistryError } from '../src/lib/server/rat/store.js';
 
-// Mock DB
 const mocks = vi.hoisted(() => ({
     mockGet: vi.fn(),
     mockRun: vi.fn(),
@@ -47,7 +46,6 @@ vi.mock('../src/lib/server/logger', () => ({
     }
 }));
 
-// Mock PluginTelemetryStore
 vi.mock('../src/lib/server/plugins/telemetry-store.js', () => {
     return {
         PluginTelemetryStore: class {
@@ -63,7 +61,6 @@ describe('AgentRegistry token validation', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         process.env.TENVY_SHARED_SECRET = 'global-secret';
-        // We need to prevent the constructor from loading from DB or at least mock it
         registry = new AgentRegistry();
     });
 

@@ -659,10 +659,9 @@
 			try {
 				await audioContext.resume();
 			} catch {
-				// ignore resume errors
+				// ignore
 			}
 		}
-		// AudioBuffer resamples automatically to the context sample rate.
 		void sampleRate;
 		return true;
 	}

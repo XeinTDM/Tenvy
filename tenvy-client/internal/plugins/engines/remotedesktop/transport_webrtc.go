@@ -282,7 +282,6 @@ func (t *webrtcFrameTransport) Send(ctx context.Context, frame RemoteDesktopFram
 	if payload == nil {
 		return errors.New("remote desktop: empty webrtc payload")
 	}
-	// encodeFrame may disable binary support if serialization fails.
 	useBinary = useBinary && t.binaryEnabled.Load()
 
 	select {

@@ -71,6 +71,12 @@ type FileManagerCommandPayload struct {
 	RequestID     string       `json:"requestId,omitempty"`
 }
 
+type Engine interface {
+	Configure(cfg Config) error
+	HandleCommand(ctx context.Context, cmd protocol.Command) protocol.CommandResult
+	Shutdown()
+}
+
 type Resource interface {
 	isFileManagerResource()
 }

@@ -13,8 +13,6 @@ var (
 
 func ensureVideoToolboxRuntime() error {
 	videoToolboxOnce.Do(func() {
-		// VideoToolbox is a system framework on Darwin, usually linked via CGO.
-		// If we are in !cgo mode, we can't easily load frameworks.
 		videoToolboxErr = ErrNativeEncoderUnavailable
 	})
 	return videoToolboxErr

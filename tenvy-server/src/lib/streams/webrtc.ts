@@ -135,7 +135,7 @@ export class WebRTCPipeline {
 			return false;
 		}
 		try {
-			this.channel.send(data as string); // types are tricky with wrtc
+			this.channel.send(data as string);
 			return true;
 		} catch (err) {
 			console.warn('Failed to send data over WebRTC data channel', err);

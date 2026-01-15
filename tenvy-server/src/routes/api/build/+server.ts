@@ -4,7 +4,7 @@ import { mkdtemp, rm, mkdir, copyFile, chmod, cp, writeFile, stat, open } from '
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
-import type { SpawnOptionsWithoutStdio } from 'node:child_process';
+import type { SpawnOptions } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { type BuildRequest, type BuildResponse } from '../../../../../shared/types/build';
 import {
@@ -21,7 +21,6 @@ import {
 
 const maxIconBytes = 512 * 1024;
 
-// Shared Go packages required during agent builds. Update this list when new shared modules are introduced.
 const sharedGoPackages = ['pluginmanifest'] as const;
 
 function encodeBase64(value: string): string {
@@ -122,7 +121,7 @@ function buildVersionInfoConfig(
 async function runCommand(
 	command: string,
 	args: readonly string[],
-	options: SpawnOptionsWithoutStdio,
+	options: SpawnOptions,
 	output: string[]
 ): Promise<number> {
 	return await new Promise((resolveCommand, rejectCommand) => {

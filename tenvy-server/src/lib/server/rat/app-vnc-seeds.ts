@@ -22,7 +22,7 @@ interface SeedManifestSchema {
 	bundles: AppVncSeedBundleMetadata[];
 }
 
-const MAX_SEED_ARCHIVE_SIZE = 512 * 1024 * 1024; // 512 MiB safety limit
+const MAX_SEED_ARCHIVE_SIZE = 512 * 1024 * 1024;
 
 const seedDirectory = process.env.TENVY_APP_VNC_RESOURCE_DIR
 	? resolve(process.env.TENVY_APP_VNC_RESOURCE_DIR)

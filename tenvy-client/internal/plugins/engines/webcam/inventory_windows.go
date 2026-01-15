@@ -16,9 +16,9 @@ import (
 var (
 	modMfPlat = windows.NewLazySystemDLL("mfplat.dll")
 
-	procMFCreateAttributes = modMfPlat.NewProc("MFCreateAttributes")
+	procMFCreateAttributes  = modMfPlat.NewProc("MFCreateAttributes")
 	procMFEnumDeviceSources = modMfPlat.NewProc("MFEnumDeviceSources")
-	procMFCreateMediaType = modMfPlat.NewProc("MFCreateMediaType")
+	procMFCreateMediaType   = modMfPlat.NewProc("MFCreateMediaType")
 
 	mfInventoryOnce sync.Once
 	mfInventoryErr  error
@@ -30,8 +30,6 @@ func ensureMFInventoryRuntime() error {
 			mfInventoryErr = err
 			return
 		}
-		// MFStartup is called in video_encoder_mf.go if needed, but we should ensure it here too if used standalone.
-		// However, MFEnumDeviceSources usually doesn't strictly require MFStartup(MF_VERSION) but it's good practice.
 		hr, _, _ := modMfPlat.NewProc("MFStartup").Call(0x0002, 0)
 		if int32(hr) < 0 {
 			mfInventoryErr = fmt.Errorf("MFStartup failed: 0x%x", hr)
@@ -107,7 +105,6 @@ func platformCaptureWebcamInventory() ([]protocol.WebcamDevice, string, error) {
 			device.Label = "Webcam"
 		}
 
-		// Try to get capabilities
 		if caps := getDeviceCapabilities(activate); caps != nil {
 			device.Capabilities = caps
 		}
@@ -230,11 +227,11 @@ func getDeviceCapabilities(activate *winutil.IUnknown) *protocol.WebcamDeviceCap
 }
 
 const (
-	imfActivateActivateObject = 3
-	imfMediaSourceCreatePresentationDescriptor = 7
-	imfPresentationDescriptorGetStreamDescriptorCount = 3
+	imfActivateActivateObject                           = 3
+	imfMediaSourceCreatePresentationDescriptor          = 7
+	imfPresentationDescriptorGetStreamDescriptorCount   = 3
 	imfPresentationDescriptorGetStreamDescriptorByIndex = 4
-	imfStreamDescriptorGetMediaTypeHandler = 5
-	imfMediaTypeHandlerGetMediaTypeCount = 3
-	imfMediaTypeHandlerGetMediaTypeByIndex = 4
+	imfStreamDescriptorGetMediaTypeHandler              = 5
+	imfMediaTypeHandlerGetMediaTypeCount                = 3
+	imfMediaTypeHandlerGetMediaTypeByIndex              = 4
 )

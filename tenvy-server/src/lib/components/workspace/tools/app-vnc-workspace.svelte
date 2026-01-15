@@ -389,7 +389,7 @@
 			const target = event.currentTarget as HTMLElement | null;
 			target?.setPointerCapture?.(event.pointerId);
 		} catch {
-			// ignore capture failures
+			// ignore
 		}
 		const position = pointerPosition(event);
 		if (position) {
@@ -423,7 +423,7 @@
 				const target = event.currentTarget as HTMLElement | null;
 				target?.releasePointerCapture?.(event.pointerId);
 			} catch {
-				// ignore release failure
+				// ignore
 			}
 		}
 	}

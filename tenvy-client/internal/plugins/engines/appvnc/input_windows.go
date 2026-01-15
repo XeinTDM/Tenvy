@@ -18,10 +18,7 @@ func processAppVncInput(ctx context.Context, session *sessionState, events []pro
 	}
 
 	hwnd := winutil.FindWindowForPID(uint32(session.processID))
-	
-	// If window-specific input is preferred but window not found, 
-	// we still try to inject it globally.
-	
+
 	var rect win.RECT
 	if hwnd != 0 {
 		win.GetWindowRect(hwnd, &rect)
@@ -84,7 +81,7 @@ func injectPointerButton(event protocol.AppVncInputEvent) {
 func injectPointerScroll(event protocol.AppVncInputEvent) {
 	var flag uint32
 	var data uint32
-	
+
 	if event.DeltaY != 0 {
 		flag = win.MOUSEEVENTF_WHEEL
 		data = uint32(int32(event.DeltaY * 120))
@@ -118,7 +115,7 @@ func injectKeyEvent(event protocol.AppVncInputEvent) {
 	if !event.Pressed {
 		flags |= win.KEYEVENTF_KEYUP
 	}
-	
+
 	input := win.KEYBD_INPUT{
 		Type: win.INPUT_KEYBOARD,
 		Ki: win.KEYBDINPUT{

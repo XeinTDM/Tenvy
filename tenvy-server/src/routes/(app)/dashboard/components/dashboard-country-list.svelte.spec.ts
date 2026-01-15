@@ -41,9 +41,6 @@ describe('dashboard-country-list', () => {
 		await expect.element(page.getByText('21.7%')).toBeInTheDocument();
 
 		await page.getByRole('button', { name: /Canada/ }).click();
-		// Since we're using render without bind, the local variable won't update
-		// but the component state will change. 
-		// If we want to verify it changed in the component, we'd need to check the UI.
 		await expect.element(page.getByRole('button', { name: /Canada/ })).toHaveClass(/bg-primary\/10/);
 
 		unmount();

@@ -3,7 +3,6 @@ import { issueRecoveryCodes } from './recovery';
 import { db } from '$lib/server/db';
 import * as table from '$lib/server/db/schema';
 
-// Mock DB
 vi.mock('$lib/server/db', () => ({
 	db: {
 		transaction: vi.fn()

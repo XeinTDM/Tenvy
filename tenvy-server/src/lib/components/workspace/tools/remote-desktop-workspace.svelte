@@ -80,7 +80,6 @@
 		onLogChange?.(log);
 	});
 
-	// UI State synced with session
 	let quality = $state<RemoteDesktopSettings['quality']>('auto');
 	let encoder = $state<RemoteDesktopSettings['encoder']>('auto');
 	let transportPreference = $state<RemoteDesktopTransport>('webrtc');
@@ -90,8 +89,6 @@
 	let monitor = $state(0);
 	let mouseEnabled = $state(false);
 	let keyboardEnabled = $state(false);
-	
-	// Metrics & Diagnostics
 	let fps = $state<number | null>(null);
 	let bandwidth = $state<number | null>(null);
 	let streamWidth = $state<number | null>(null);
@@ -99,13 +96,13 @@
 	let latencyMs = $state<number | null>(null);
 	let encoderHardware = $state<string | null>(null);
 	let monitors = $state<RemoteDesktopMonitor[]>(fallbackMonitors);
-
 	let viewportEl = $state<HTMLDivElement | null>(null);
 	let webrtcVideoEl = $state<HTMLVideoElement | null>(null);
 	let canvasEl = $state<HTMLCanvasElement | null>(null);
 	let viewportFocused = $state(false);
 	let pointerCaptured = $state(false);
 	let activePointerId: number | null = null;
+	const pressedKeys = new SvelteMap<string, { keyCode: number; key: string }>();
 
 	const sessionController = createSessionController({
 		agentId: client.id,
@@ -151,7 +148,6 @@
 		onInfo: (msg) => sessionController.infoMessage = msg
 	});
 
-	// Alises for template
 	const session = $derived(sessionController.session);
 	const sessionActive = $derived(session?.active ?? false);
 	const isStarting = $derived(sessionController.isStarting);
@@ -250,6 +246,11 @@
 	function handleKeyDown(event: KeyboardEvent) {
 		if (!keyboardEnabled || !sessionActive || !viewportFocused) return;
 		const keyCode = event.keyCode || event.which;
+
+		if (!event.repeat) {
+			pressedKeys.set(event.code, { keyCode, key: event.key });
+		}
+
 		event.preventDefault();
 		queueInput({
 			type: 'key',
@@ -269,6 +270,9 @@
 	function handleKeyUp(event: KeyboardEvent) {
 		if (!keyboardEnabled || !sessionActive) return;
 		const keyCode = event.keyCode || event.which;
+
+		pressedKeys.delete(event.code);
+
 		event.preventDefault();
 		queueInput({
 			type: 'key',
@@ -285,8 +289,20 @@
 	}
 
 	function releaseAllPressedKeys() {
-		// Simplified for now
 		inputChannel?.clear();
+		if (pressedKeys.size > 0) {
+			for (const [code, info] of pressedKeys) {
+				queueInput({
+					type: 'key',
+					pressed: false,
+					keyCode: info.keyCode,
+					key: info.key,
+					code: code,
+					capturedAt: Date.now()
+				});
+			}
+			pressedKeys.clear();
+		}
 	}
 
 	function queueInput(event: RemoteDesktopInputEvent) {

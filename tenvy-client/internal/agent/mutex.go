@@ -56,7 +56,7 @@ func acquireInstanceMutex(rawKey string) (*instanceLock, error) {
 		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
 		if err == nil {
 			if _, writeErr := file.WriteString(fmt.Sprintf("pid=%d\n", os.Getpid())); writeErr != nil {
-				// best effort
+				// ignore
 			}
 			return &instanceLock{file: file, path: lockPath, name: key, recovered: recovered}, nil
 		}

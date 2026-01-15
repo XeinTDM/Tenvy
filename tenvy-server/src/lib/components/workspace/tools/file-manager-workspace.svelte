@@ -423,7 +423,7 @@
 			}
 			await loadDirectory(segment.path).catch(() => {});
 		} catch {
-			// errors handled by load helpers
+			// ignore
 		}
 	}
 
@@ -982,7 +982,7 @@
 			await loadDirectory(target, { fromHistory: true });
 			historyIndex = targetIndex;
 		} catch {
-			// errors handled inside loadDirectory
+			// ignore
 		}
 	}
 
@@ -999,7 +999,7 @@
 			await loadDirectory(target, { fromHistory: true });
 			historyIndex = targetIndex;
 		} catch {
-			// errors handled inside loadDirectory
+			// ignore
 		}
 	}
 
@@ -1015,7 +1015,7 @@
 		try {
 			await loadDirectory(target);
 		} catch {
-			// errors handled internally
+			// ignore
 		}
 	}
 
@@ -1061,7 +1061,7 @@
 		try {
 			await loadDirectory();
 		} catch {
-			// errors handled internally
+			// ignore
 		}
 	});
 

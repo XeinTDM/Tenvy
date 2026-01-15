@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 )
 
 func (a *Agent) resetModuleEngine(ctx context.Context, moduleID string, pluginID string) error {
@@ -19,13 +18,8 @@ func (a *Agent) resetModuleEngine(ctx context.Context, moduleID string, pluginID
 		return nil
 	}
 
-	// We need a common interface or type switch to handle different modules.
-	// Since we refactored them to have mu, engine, and requiredVersion, 
-	// we can try to access those via reflection or add a method to the Module interface.
-	
-	// For now, let's use a type switch for the ones we just refactored.
 	var resultErr error
-	
+
 	switch m := entry.module.(type) {
 	case *webcamModule:
 		m.mu.Lock()
@@ -52,7 +46,7 @@ func (a *Agent) resetModuleEngine(ctx context.Context, moduleID string, pluginID
 		m.requiredVersion = ""
 		m.mu.Unlock()
 		if previous != nil {
-			previous.Shutdown(ctx)
+			previous.Shutdown()
 		}
 	case *appVncModule:
 		m.mu.Lock()
@@ -79,7 +73,7 @@ func (a *Agent) resetModuleEngine(ctx context.Context, moduleID string, pluginID
 		m.requiredVersion = ""
 		m.mu.Unlock()
 		if previous != nil {
-			previous.Shutdown(ctx)
+			previous.Shutdown()
 		}
 	case *tcpConnectionsModule:
 		m.mu.Lock()
@@ -88,7 +82,7 @@ func (a *Agent) resetModuleEngine(ctx context.Context, moduleID string, pluginID
 		m.requiredVersion = ""
 		m.mu.Unlock()
 		if previous != nil {
-			previous.Shutdown(context.Background())
+			previous.Shutdown()
 		}
 	case *registryModule:
 		m.mu.Lock()
@@ -97,7 +91,7 @@ func (a *Agent) resetModuleEngine(ctx context.Context, moduleID string, pluginID
 		m.requiredVersion = ""
 		m.mu.Unlock()
 		if previous != nil {
-			previous.Shutdown(context.Background())
+			previous.Shutdown()
 		}
 	case *startupModule:
 		m.mu.Lock()
@@ -106,7 +100,7 @@ func (a *Agent) resetModuleEngine(ctx context.Context, moduleID string, pluginID
 		m.requiredVersion = ""
 		m.mu.Unlock()
 		if previous != nil {
-			previous.Shutdown(context.Background())
+			previous.Shutdown()
 		}
 	case *triggerMonitorModule:
 		m.mu.Lock()
@@ -141,6 +135,6 @@ func (a *Agent) resetModuleEngine(ctx context.Context, moduleID string, pluginID
 	if err := entry.module.UpdateConfig(runtime); err != nil {
 		resultErr = combineErrors(resultErr, err)
 	}
-	
+
 	return resultErr
 }

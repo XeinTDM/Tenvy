@@ -52,7 +52,6 @@ export class ClientsTableStore {
 	constructor() {
 		$effect.root(() => {
 			$effect(() => {
-				// Reset to page 1 when filters change
 				// eslint-disable-next-line @typescript-eslint/no-unused-expressions
 				this.searchQuery;
 				// eslint-disable-next-line @typescript-eslint/no-unused-expressions

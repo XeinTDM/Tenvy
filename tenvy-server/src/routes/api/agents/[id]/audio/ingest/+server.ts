@@ -24,12 +24,6 @@ export const GET: RequestHandler = ({ request, params }) => {
 		throw error(401, 'Missing audio stream token');
 	}
 
-	// For Node.js/SvelteKit environments that support the 'upgrade' property in the Response.
-	// If this is running under a SvelteKit adapter that doesn't support this directly,
-	// it might need an adapter-specific hook (like in hooks.server.ts for handleHotUpdate or similar).
-	// However, many modern adapters and environments (like Bun, or some Node adapters)
-	// expect a 101 Switching Protocols response with a webSocket property.
-
 	const pairFactory = (
 		globalThis as unknown as {
 			WebSocketPair: new () => { 0: WebSocket; 1: WebSocket };
@@ -44,7 +38,7 @@ export const GET: RequestHandler = ({ request, params }) => {
 		try {
 			server.close(1011, 'Audio stream rejected');
 		} catch {
-			// ignore close errors
+			// ignore
 		}
 		if (err instanceof AudioBridgeError) {
 			throw error(err.status, err.message);

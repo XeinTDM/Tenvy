@@ -36,7 +36,8 @@ import type {
 	CommandQueueAuditRecord,
 	CommandQueueResponse,
 	CommandResult,
-	CommandOutputEvent
+	CommandOutputEvent,
+	CommandAcknowledgementRecord
 } from '../../../../../shared/types/messages';
 import type {
 	OptionsState,
@@ -416,6 +417,48 @@ export class AgentRegistry {
 		return base * INACTIVITY_TIMEOUT_MULTIPLIER;
 	}
 
+	private verifyAgentKey(record: AgentRecord, key: string | undefined): boolean {
+		if (!key) {
+			return false;
+		}
+		return record.keyHash === utils.hashAgentKey(key);
+	}
+
+	private consumeSessionToken(record: AgentRecord, token: string | undefined): void {
+		if (!token) {
+			throw new RegistryError('Missing session token', 401);
+		}
+
+		const sessionToken = this.sessionTokens.get(record.id);
+		if (!sessionToken) {
+			throw new RegistryError('Invalid session token', 401);
+		}
+
+		if (Date.now() > sessionToken.expiresAt) {
+			this.sessionTokens.delete(record.id);
+			throw new RegistryError('Session token expired', 401);
+		}
+
+		if (sessionToken.hash !== utils.hashSessionToken(token)) {
+			throw new RegistryError('Invalid session token', 401);
+		}
+
+		this.sessionTokens.delete(record.id);
+	}
+
+	private notifyCommand(
+		record: AgentRecord,
+		command: Command,
+		delivery: CommandDeliveryMode
+	): void {
+		this.broadcast({
+			type: 'command',
+			agentId: record.id,
+			command,
+			delivery
+		});
+	}
+
 	subscribe(listener: AgentRegistrySubscriber): () => void {
 		const id = randomUUID();
 		this.subscribers.set(id, listener);
@@ -734,9 +777,6 @@ export class AgentRegistry {
 		}
 
 		if (!requestToken) {
-			// If no expected shared secret and no request token, we might allow it
-			// depending on whether enrollment tokens are mandatory.
-			// The original code allowed it if expected was not set.
 			if (!expected) return;
 			throw new RegistryError('Missing registration token', 401);
 		}
@@ -937,7 +977,7 @@ export class AgentRegistry {
 			try {
 				acceptingSocket.accept({ protocol: COMMAND_STREAM_SUBPROTOCOL });
 			} catch {
-				// Ignore accept failures; send will surface errors later.
+				// Ignore
 			}
 		}
 
@@ -949,7 +989,6 @@ export class AgentRegistry {
 			socket.addEventListener('close', closeListener);
 			socket.addEventListener('error', closeListener);
 		} else {
-			// Bun exposes onclose/onerror; fall back to direct assignment when listeners are unavailable.
 			(socket as unknown as { onclose?: () => void }).onclose = closeListener;
 			(socket as unknown as { onerror?: () => void }).onerror = closeListener;
 		}

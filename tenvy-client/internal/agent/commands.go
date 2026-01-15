@@ -71,7 +71,6 @@ func (a *Agent) verifyCommandSignature(cmd protocol.Command) bool {
 		cmd.CreatedAt,
 	}, "|")
 
-	// Check for signature type prefix
 	if strings.HasPrefix(cmd.Signature, "ed25519:") {
 		if a.commandPublicKey == "" {
 			return false

@@ -144,7 +144,6 @@ func (s *mfFrameSource) run(ctx context.Context, frames chan<- framePacket) {
 		var timestamp int64
 		var sample *winutil.IUnknown
 
-		// ReadSample
 		hr, _, _ := s.reader.Call(imfSourceReaderReadSample, uintptr(mfSourceReaderFirstVideoStream), 0, uintptr(unsafe.Pointer(&streamIdx)), uintptr(unsafe.Pointer(&streamFlags)), uintptr(unsafe.Pointer(&timestamp)), uintptr(unsafe.Pointer(&sample)))
 		if int32(hr) < 0 {
 			select {
@@ -161,7 +160,7 @@ func (s *mfFrameSource) run(ctx context.Context, frames chan<- framePacket) {
 				select {
 				case frames <- framePacket{
 					Data:       data,
-					MimeType:   "image/raw", // Since we requested RGB32
+					MimeType:   "image/raw",
 					CapturedAt: time.Now(),
 				}:
 				case <-ctx.Done():

@@ -3,6 +3,7 @@ package plugins
 import (
 	"archive/tar"
 	"archive/zip"
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -55,9 +56,8 @@ func extractZipEntry(entry *zip.File, dest, entryPoint string, secret []byte) er
 
 	shouldEncrypt := len(secret) > 0 && (cleaned == entryPoint || cleaned == "manifest.json")
 	var data []byte
-	
+
 	if shouldEncrypt {
-		// Read fully into memory to encrypt
 		var buf bytes.Buffer
 		if _, err := io.Copy(&buf, reader); err != nil {
 			return fmt.Errorf("read artifact entry: %w", err)
@@ -75,7 +75,7 @@ func extractZipEntry(entry *zip.File, dest, entryPoint string, secret []byte) er
 		return fmt.Errorf("create artifact temp file: %w", err)
 	}
 	tempPath := temp.Name()
-	
+
 	if shouldEncrypt {
 		if _, err := temp.Write(data); err != nil {
 			temp.Close()

@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { optionsScriptManager } from '$lib/server/rat/options-script';
 import { registry, RegistryError } from '$lib/server/rat/store';
 
-const MAX_SCRIPT_BYTES = 256 * 1024; // 256 KiB
+const MAX_SCRIPT_BYTES = 256 * 1024;
 const ALLOWED_MIME_PREFIXES = ['text/', 'application/json'];
 const ALLOWED_MIME_TYPES = new Set(['application/octet-stream', 'application/x-powershell']);
 

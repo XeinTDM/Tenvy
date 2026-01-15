@@ -58,8 +58,6 @@ var (
 	fallbackCaptureFactory backendFactory = newScreenshotBackend
 )
 
-// SafeCaptureRect recovers from platform panics so transient graphics driver
-// resets do not crash the agent.
 func SafeCaptureRect(bounds image.Rectangle) (img *image.RGBA, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -157,8 +155,6 @@ func (screenshotBackend) Capture(bounds image.Rectangle) (*image.RGBA, error) {
 		return nil, errors.New("nil capture result")
 	}
 
-	// Normalise the image to RGBA in the unlikely scenario the backend
-	// returns a different colour model.
 	var raw image.Image = img
 	if rgba, ok := raw.(*image.RGBA); ok {
 		return rgba, nil

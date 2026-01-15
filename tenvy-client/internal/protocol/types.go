@@ -77,7 +77,6 @@ func (e *CommandEnvelope) UnmarshalJSON(data []byte) error {
 	e.Input = aux.Input
 	e.AppVncInput = aux.AppVncInput
 
-	// Handle legacy 'input' field that might be shared
 	if e.Input == nil && e.AppVncInput == nil {
 		var raw struct {
 			Input json.RawMessage `json:"input,omitempty"`

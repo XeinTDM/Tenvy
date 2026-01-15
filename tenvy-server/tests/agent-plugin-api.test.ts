@@ -154,7 +154,6 @@ describe('agent plugin API', () => {
 		const sharedModule = await import('../src/routes/api/agents/[id]/plugins/_shared.js');
 		sharedModule.telemetryStore.reset();
 
-		// Insert required records for foreign keys
 		const { voucher, user, agent } = await import('../src/lib/server/db/schema.js');
 		db.insert(voucher)
 			.values({ id: 'voucher-1', codeHash: 'hash', createdAt: new Date() })

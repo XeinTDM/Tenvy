@@ -95,7 +95,6 @@ func TestRefreshMonitorsLocked_DetectsMultiGPUChanges(t *testing.T) {
 		t.Fatal("expected monitors to be marked dirty after initial refresh")
 	}
 
-	// Force the refresh interval to elapse.
 	session.lastMonitorRefresh = time.Time{}
 	session.monitorsDirty = false
 	session.Settings.Monitor = 0

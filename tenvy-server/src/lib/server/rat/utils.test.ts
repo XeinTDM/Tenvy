@@ -24,7 +24,7 @@ describe('RAT Utils', () => {
 				version: '1.0.0'
 			};
 			const fp1 = computeFingerprint(metadata);
-			const fp2 = computeFingerprint({ ...metadata, hostname: ' test-pc ' }); // case and trim
+			const fp2 = computeFingerprint({ ...metadata, hostname: ' test-pc ' });
 			expect(fp1).toHaveLength(64);
 			expect(fp1).toBe(fp2);
 		});
@@ -47,16 +47,16 @@ describe('RAT Utils', () => {
 	describe('mergeRecentResults', () => {
 		it('should merge and sort results by timestamp desc', () => {
 			const existing = [
-				{ commandId: 'c1', success: true, completedAt: '2024-01-01T10:00:00Z' }
+				{ commandId: 'c1', success: true, completedAt: '2025-01-01T10:00:00Z' }
 			];
 			const incoming = [
-				{ commandId: 'c2', success: true, completedAt: '2024-01-01T11:00:00Z' },
-				{ commandId: 'c1', success: false, completedAt: '2024-01-01T12:00:00Z' } // newer c1
+				{ commandId: 'c2', success: true, completedAt: '2025-01-01T11:00:00Z' },
+				{ commandId: 'c1', success: false, completedAt: '2025-01-01T12:00:00Z' }
 			];
 			
 			const merged = mergeRecentResults(existing as any, incoming as any, 10);
 			expect(merged).toHaveLength(2);
-			expect(merged[0].commandId).toBe('c1'); // newest
+			expect(merged[0].commandId).toBe('c1');
 			expect(merged[0].success).toBe(false);
 			expect(merged[1].commandId).toBe('c2');
 		});

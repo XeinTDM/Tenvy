@@ -41,7 +41,6 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// XOR performs a simple XOR operation on data with a key.
 func XOR(data []byte, key []byte) []byte {
 	if len(key) == 0 {
 		return data
@@ -53,8 +52,6 @@ func XOR(data []byte, key []byte) []byte {
 	return result
 }
 
-// Deobfuscate returns a deobfuscated string.
-// This is used for simple static analysis evasion.
 func Deobfuscate(obfuscated []byte, key string) string {
 	return string(XOR(obfuscated, []byte(key)))
 }

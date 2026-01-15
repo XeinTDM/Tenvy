@@ -41,11 +41,7 @@ export class CommandManager {
 			const data = [command.id, command.name, payloadString, command.createdAt].join('|');
 
 			if (privateKeyHex) {
-				// Ed25519 signing using tweetnacl
 				const privateKey = Buffer.from(privateKeyHex, 'hex');
-				// tweetnacl expects a 64-byte secret key (seed + public key)
-				// Node's crypto usually provides just the 32-byte seed.
-				// If it's 32 bytes, we need to expand it.
 				let fullKey: Uint8Array = privateKey;
 				if (privateKey.length === 32) {
 					fullKey = sign.keyPair.fromSeed(privateKey).secretKey;
@@ -53,7 +49,6 @@ export class CommandManager {
 				const signature = sign.detached(Buffer.from(data), fullKey);
 				return `ed25519:${Buffer.from(signature).toString('hex')}`;
 			} else if (secret) {
-				// Fallback to HMAC
 				const hmac = createHmac('sha256', secret);
 				hmac.update(data);
 				return `hmac:${hmac.digest('hex')}`;

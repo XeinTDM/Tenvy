@@ -43,7 +43,6 @@ describe('IP Geolocation', () => {
 
 		mockRegistry.queueCommand.mockReturnValue({ command: { id: commandId } });
 
-		// Mock getAgent to return result immediately (or on first call)
 		mockRegistry.getAgent.mockReturnValue({
 			recentResults: [
 				{
@@ -113,12 +112,9 @@ describe('IP Geolocation', () => {
 		mockRegistry.queueCommand.mockReturnValue({ command: { id: commandId } });
 		mockRegistry.getAgent.mockReturnValue({ recentResults: [] });
 
-		// STATUS_TIMEOUT_MS is 6000, which is the baseline.
 		const promise = dispatchGeoCommand(agentId, { action: 'status' } as any, { timeoutMs: 1000 });
-
 		const validation = expect(promise).rejects.toThrow('Timed out waiting');
 
-		// Advance time past timeout (needs to be > 6000)
 		await vi.advanceTimersByTimeAsync(7000);
 
 		await validation;

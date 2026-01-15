@@ -12,7 +12,7 @@ import {
 } from '$lib/types/trigger-monitor';
 import { ZodError } from 'zod';
 
-export const _MAX_TRIGGER_MONITOR_REQUEST_BYTES = 16 * 1024; // 16 KiB
+export const _MAX_TRIGGER_MONITOR_REQUEST_BYTES = 16 * 1024;
 
 function formatValidationError(err: ZodError) {
 	const issue = err.issues[0];

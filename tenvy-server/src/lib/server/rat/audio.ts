@@ -404,7 +404,7 @@ export class AudioBridgeManager {
 				await unlink(path);
 			}
 		} catch {
-			// ignore missing file errors
+			// ignore
 		}
 		uploads.delete(uploadId);
 		if (uploads.size === 0) {
@@ -550,7 +550,7 @@ export class AudioBridgeManager {
 		try {
 			socket.close(options.code ?? 1011, options.reason ?? 'Audio stream closed');
 		} catch {
-			// ignore close errors
+			// ignore
 		}
 	}
 
@@ -663,7 +663,7 @@ export class AudioBridgeManager {
 					protocol: record.transport?.protocol ?? AUDIO_STREAM_SUBPROTOCOL
 				});
 			} catch {
-				// ignore accept failures
+				// ignore
 			}
 		}
 
@@ -684,7 +684,7 @@ export class AudioBridgeManager {
 				try {
 					socket.close(1011, reason);
 				} catch {
-					// ignore close errors
+					// ignore
 				}
 			}
 		};

@@ -14,13 +14,11 @@ export class EncryptionManager {
 		const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
 		const tag = cipher.getAuthTag();
 
-		// Traffic Camouflage: Add random padding
 		const paddingLen = Math.floor(Math.random() * this.maxPadding) + 1;
 		const padding = randomBytes(paddingLen);
 		const paddingLenBuf = Buffer.alloc(2);
 		paddingLenBuf.writeUInt16BE(paddingLen, 0);
 
-		// Packet structure: [IV (12)] [Tag (16)] [PaddingLen (2)] [Padding (n)] [Ciphertext (m)]
 		return Buffer.concat([iv, tag, paddingLenBuf, padding, encrypted]);
 	}
 

@@ -199,7 +199,6 @@ export function createTransportController(options: TransportControllerOptions) {
 				} else if (event.track.kind === 'audio') {
 					webrtcAudioStream = stream;
 					webrtcAudioActive = true;
-					// Note: Audio playback context handling should be done in audio controller
 				}
 			};
 
@@ -325,7 +324,7 @@ export function createTransportController(options: TransportControllerOptions) {
 		});
 
 		source.onerror = () => {
-			// Error handling logic...
+			// TODO: Error handling
 		};
 	}
 

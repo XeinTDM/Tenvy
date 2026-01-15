@@ -100,7 +100,6 @@ export class KeyloggerManager {
 		const now = new Date();
 
 		try {
-			// Deactivate any existing sessions for this agent
 			db.update(keyloggerSession)
 				.set({ active: false, updatedAt: now })
 				.where(and(eq(keyloggerSession.agentId, agentId), eq(keyloggerSession.active, true)))

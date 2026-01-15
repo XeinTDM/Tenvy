@@ -294,7 +294,7 @@ export class AgentPersistence {
 			try {
 				config = utils.normalizeConfig(JSON.parse(row.config) as Partial<AgentConfig>);
 			} catch {
-				// use default
+				// ignore
 			}
 		}
 

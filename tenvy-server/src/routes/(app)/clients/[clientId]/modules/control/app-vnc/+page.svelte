@@ -193,7 +193,7 @@
 		try {
 			target?.setPointerCapture?.(event.pointerId);
 		} catch {
-			// ignore capture failures
+			// ignore
 		}
 		const position = pointerPosition(event);
 		if (position) {
@@ -227,7 +227,7 @@
 			try {
 				target?.releasePointerCapture?.(event.pointerId);
 			} catch {
-				// ignore release failure
+				// ignore
 			}
 		}
 	}

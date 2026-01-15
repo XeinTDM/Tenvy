@@ -7,7 +7,7 @@ describe('FileManagerStore', () => {
 	const agentId = 'agent-1';
 
 	beforeEach(() => {
-		store = new FileManagerStore({ expirationMs: -1 }); // Disable pruning for most tests
+		store = new FileManagerStore({ expirationMs: -1 });
 	});
 
 	describe('ingestResource', () => {
@@ -75,22 +75,18 @@ describe('FileManagerStore', () => {
 			const chunk1 = Buffer.from('hello');
 			const chunk2 = Buffer.from('world');
 
-			// Ingest first chunk
 			store.ingestResource(agentId, {
 				...baseFile,
 				stream: { id: 's1', part: 'p1', index: 0, count: 2, offset: 0, length: 5 }
 			}, chunk1);
 
-			// Should not be available yet
 			expect(() => store.getResource(agentId, 'C:/stream.bin')).toThrow(FileManagerError);
 
-			// Ingest second chunk
 			store.ingestResource(agentId, {
 				...baseFile,
 				stream: { id: 's1', part: 'p2', index: 1, count: 2, offset: 5, length: 5 }
 			}, chunk2);
 
-			// Now it should be available
 			const retrieved = store.getResource(agentId, 'C:/stream.bin') as FileContent;
 			expect(retrieved.content).toBe(Buffer.from('helloworld').toString('base64'));
 		});
@@ -127,10 +123,7 @@ describe('FileManagerStore', () => {
 			shortStore.ingestResource(agentId, listing);
 			expect(shortStore.getResource(agentId, 'C:/')).toBeDefined();
 
-			// Wait for expiration
 			await new Promise(resolve => setTimeout(resolve, 20));
-
-			// getResource calls pruneAgent
 			expect(() => shortStore.getResource(agentId, 'C:/')).toThrow('not found');
 		});
 	});

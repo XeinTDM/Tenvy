@@ -29,7 +29,6 @@ func (e *webcamEngine) HandleCommand(ctx context.Context, cmd protocol.Command) 
 }
 
 func (e *webcamEngine) Shutdown() {
-	// Manager cleanup logic if needed
 	e.manager.mu.Lock()
 	sessions := make([]*streamSession, 0, len(e.manager.sessions))
 	for _, s := range e.manager.sessions {

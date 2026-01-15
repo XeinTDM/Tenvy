@@ -9,27 +9,24 @@ import { downloadCatalogueSchema, type DownloadCatalogue, type DownloadCatalogue
 import { getAgentSignaturePolicy } from '../plugins/signature-policy';
 
 export function generateX25519KeyPair(): { publicKey: string; privateKey: string } {
-	const { publicKey, privateKey } = generateKeyPairSync('x25519', {
-		publicKeyEncoding: { type: 'spki', format: 'der' },
-		privateKeyEncoding: { type: 'pkcs8', format: 'der' }
-	});
+	const { publicKey, privateKey } = generateKeyPairSync('x25519');
+	const pubDer = publicKey.export({ type: 'spki', format: 'der' });
+	const privDer = privateKey.export({ type: 'pkcs8', format: 'der' });
+	
+	// X25519 SPKI header is 12 bytes: 30 2a 30 05 06 03 2b 65 6e 03 21 00
+	const pubRaw = pubDer.subarray(12);
+	
+	// X25519 PKCS8 header is 16 bytes: 30 2e 02 01 00 30 05 06 03 2b 65 6e 04 22 04 20
+	const privRaw = privDer.subarray(16);
 
-	// We want the raw 32-byte keys for simpler storage/transmission if possible,
-	// but DER is standard. Let's extract raw keys for convenience in the protocol.
-	// Actually, Node's crypto can give us raw keys.
-	const { publicKey: pubRaw, privateKey: privRaw } = generateKeyPairSync('x25519');
 	return {
-		publicKey: pubRaw.export({ type: 'spki', format: 'der' }).toString('hex'),
-		privateKey: privRaw.export({ type: 'pkcs8', format: 'der' }).toString('hex')
+		publicKey: pubRaw.toString('hex'),
+		privateKey: privRaw.toString('hex')
 	};
 }
 
 export function generateRawX25519KeyPair(): { publicKey: string; privateKey: string } {
-	const { publicKey, privateKey } = generateKeyPairSync('x25519');
-	return {
-		publicKey: publicKey.export({ type: 'raw', format: 'der' }).toString('hex'),
-		privateKey: privateKey.export({ type: 'raw', format: 'der' }).toString('hex')
-	};
+	return generateX25519KeyPair();
 }
 
 export function deriveSharedSecret(privateKeyHex: string, peerPublicKeyHex: string): string {
@@ -46,49 +43,16 @@ export function deriveSharedSecret(privateKeyHex: string, peerPublicKeyHex: stri
 	return diffieHellman({ privateKey, publicKey }).toString('hex');
 }
 
-// Re-evaluating the above: Node's diffieHellman for x25519 is better used with KeyObject.
 import { createPrivateKey, createPublicKey } from 'crypto';
 
 export function deriveRawSharedSecret(privateKeyRawHex: string, peerPublicKeyRawHex: string): string {
-	const privateKey = createPrivateKey({
-		key: Buffer.from(privateKeyRawHex, 'hex'),
-		format: 'raw',
-		type: 'pkcs8',
-		keyEncoding: { type: 'pkcs8', format: 'der' }
-	});
-	// Raw keys are easier for Go/TS interop.
-	// For X25519, raw key is just the 32 bytes.
-	
-	// Correct way to import raw X25519 keys in Node:
-	const priv = createPrivateKey({
-		key: Buffer.from(privateKeyRawHex, 'hex'),
-		format: 'raw',
-		type: 'pkcs8' // This is slightly confusing in Node for raw keys
-	});
-	// Wait, Node 12+ supports 'raw' format for some curves.
-	
-	// Let's use a more robust implementation for raw keys if possible, 
-	// or stick to DER if it's easier.
-	// Go's crypto/curve25519 uses raw 32-byte keys.
-	return ''; // Placeholder
+	return deriveSharedSecretX25519(
+		Buffer.from(privateKeyRawHex, 'hex'),
+		Buffer.from(peerPublicKeyRawHex, 'hex')
+	).toString('hex');
 }
 
 export function deriveSharedSecretX25519(privateKeyRaw: Buffer, peerPublicKeyRaw: Buffer): Buffer {
-	const privKeyObj = createPrivateKey({
-		key: privateKeyRaw,
-		format: 'raw',
-		type: 'pkcs8'
-	});
-	const pubKeyObj = createPublicKey({
-		key: peerPublicKeyRaw,
-		format: 'raw',
-		type: 'spki'
-	});
-	// Actually for X25519 raw keys:
-	// private key: just the 32 bytes
-	// public key: just the 32 bytes
-	
-	// In Node.js:
 	const priv = createPrivateKey({
 		key: Buffer.concat([
 			Buffer.from('302e020100300506032b656e04220420', 'hex'),
